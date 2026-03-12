@@ -132,7 +132,9 @@ class IsaacLabSimulator(Simulator):
             env_ids)
     
     def update_sensors(self):
-        return super().update_sensors()
+        if self._cfg.sensor.add_depth:
+            raise NotImplementedError("Depth sensors are not implemented for IsaacLabSimulator")
+        return None
     
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
         self._terrain_levels[env_ids] += 1 * move_up - 1 * move_down

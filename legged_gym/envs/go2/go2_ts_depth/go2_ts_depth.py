@@ -4,7 +4,6 @@ import torch
 
 from legged_gym.envs.base.legged_robot import LeggedRobot
 from legged_gym.utils.math_utils import wrap_to_pi, quat_apply, torch_rand_float
-from legged_gym.utils.helpers import class_to_dict
 from collections import deque
 
 class Go2TSDepth(LeggedRobot):
@@ -154,9 +153,6 @@ class Go2TSDepth(LeggedRobot):
                     device=self.device,
                 )
             )
-        # update counter for depth images
-        self.depth_image_update_counter = 0
-
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)
         # clear obs history for the envs that are reset
@@ -192,14 +188,8 @@ class Go2TSDepth(LeggedRobot):
         self.num_history_obs = self.cfg.env.num_history_obs
         self.num_latent_dims = self.cfg.env.num_latent_dims
         self.num_critic_obs = self.cfg.env.num_critic_obs
-        if self.cfg.sensor.add_depth:
-            self.depth_image_update_decimation = self.cfg.sensor.depth_camera_config.decimation
-        # if debug_cstr_violation exists in cfg, use it; otherwise, set to False
-        if hasattr(self.cfg.env, 'debug_cstr_violation'):
-            self.debug_cstr = self.cfg.env.debug_cstr_violation
-            self.cstr_violation = {}
-        else:
-            self.debug_cstr = False
+        self.debug_cstr = self.cfg.env.debug_cstr_violation
+        self.cstr_violation = {}
         
     def post_physics_step(self):
         """ check terminations, compute observations and rewards
@@ -221,9 +211,7 @@ class Go2TSDepth(LeggedRobot):
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
         if self.cfg.sensor.add_depth:
-            if self.depth_image_update_counter == self.depth_image_update_decimation + 1:
-                self.simulator.update_depth_images()
-                self.depth_image_update_counter = 0
+            self.simulator.update_depth_images()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         self.llast_actions[:] = self.last_actions[:]
@@ -231,12 +219,9 @@ class Go2TSDepth(LeggedRobot):
         self.simulator.last_dof_vel[:] = self.simulator.dof_vel[:]
         
         if self.debug:
-            # self.simulator.draw_debug_vis()
+            self.simulator.draw_debug_vis()
             if self.cfg.sensor.add_depth:
                 self.simulator.draw_debug_depth_images()
-        
-        if self.cfg.sensor.add_depth:
-            self.depth_image_update_counter += 1
     
     def _log_constraint_violations(self):
         """Compute various constraints for constraints as terminations. Constraints violations are asssessed then
@@ -316,7 +301,7 @@ class Go2TSDepth(LeggedRobot):
             if self.cfg.terrain.obtain_terrain_info_around_feet:
                 self.simulator.calc_terrain_info_around_feet()
         if self.cfg.domain_rand.push_robots and (self.common_step_counter % self.cfg.domain_rand.push_interval == 0):
-            self.simulator._push_robots()
+            self.simulator.push_robots()
     
     def _get_noise_scale_vec(self):
         """ Sets a vector used to scale the noise added to the observations.

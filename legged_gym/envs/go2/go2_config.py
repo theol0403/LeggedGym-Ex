@@ -1,6 +1,6 @@
 from legged_gym import *
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
-from legged_gym.envs.base.common_cfgs import Go2FlatCommonCfg
+from legged_gym.envs.base.common_cfgs import Go2DepthSensorCfg, Go2FlatCommonCfg
 
 class GO2Cfg( LeggedRobotCfg ):
     
@@ -72,6 +72,9 @@ class GO2Cfg( LeggedRobotCfg ):
         com_pos_x_range = [-0.01, 0.01]
         com_pos_y_range = [-0.01, 0.01]
         com_pos_z_range = [-0.01, 0.01]
+
+    class sensor(Go2DepthSensorCfg):
+        pass
 
 class GO2CfgPPO( LeggedRobotCfgPPO ):
     class runner( LeggedRobotCfgPPO.runner ):

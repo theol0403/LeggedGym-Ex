@@ -16,6 +16,7 @@ class LeggedRobotCfg(BaseConfig):
         debug_draw_height_points_around_feet = False # obtain height measurements around the feet (9 points around each foot, see terrain.measured_points_x/y)
         debug_draw_terrain_height_points = False # draw all height points of the terrain
         debug_draw_key_body_points = False # draw key body points for mimic tasks
+        debug_cstr_violation = False
         max_projected_gravity = -0.1 # max allowed projected gravity in z axis
         
     class terrain:

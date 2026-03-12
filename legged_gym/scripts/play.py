@@ -10,18 +10,25 @@ import numpy as np
 import torch
 from legged_gym.scripts.joystick import Joystick
     
-def override_configs(env_cfg, args):
+def override_configs(env_cfg, train_cfg, args):
     """Override some environment configuration parameters for testing
 
     Args:
         env_cfg: environment configuration
         args: command line arguments
     """
-    task_name = args.task
+    depth_debug = args.depth_debug
+    if depth_debug and SIMULATOR == "isaaclab":
+        raise NotImplementedError("Depth debug rendering is not implemented for Isaac Lab")
     # override some parameters for testing
     # number of environments
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 16)
-    if "cts" in task_name:  # cts specific
+    if depth_debug:
+        env_cfg.sensor.add_depth = True
+    env_cfg.env.debug = args.debug or depth_debug
+    if env_cfg.sensor.add_depth and env_cfg.env.debug:
+        env_cfg.env.num_envs = 1
+    if train_cfg.runner_class_name == "CTSRunner":
         env_cfg.env.num_teacher = 1
     env_cfg.viewer.rendered_envs_idx = list(range(env_cfg.env.num_envs))
     # adjust parameters according to terrain type
@@ -66,8 +73,6 @@ def override_configs(env_cfg, args):
         #                                   "depth": 0.2, "platform_size": 3.0}
         
         
-    env_cfg.env.debug = True
-    
     if args.use_joystick:
         env_cfg.commands.heading_command = False
 
@@ -87,7 +92,7 @@ def print_debug_info(env, robot_index):
     # print(f"actions: {env.simulator.dof_pos[robot_index].cpu().numpy()}")
     pass
 
-def interaction_loop(env, policy, args):
+def interaction_loop(env, policy, args, train_cfg):
     """Run interaction loop between environment and policy
 
     Args:
@@ -103,21 +108,23 @@ def interaction_loop(env, policy, args):
     stop_rew_log = env.max_episode_length + 1 # number of steps before print average episode rewards
         
     # Get initial observations according to task type
-    task_name = args.task
-    if "ts" in task_name or "cat" in task_name:  # teacher-student
+    runner_class_name = train_cfg.runner_class_name
+    if runner_class_name == "TSRunner":
         obs_buf, privileged_obs_buf, obs_history, critic_obs = env.get_observations()
-    elif "ee" in task_name:  # explicit estimator
+    elif runner_class_name == "EERunner":
         estimator_features, _, _ = env.get_observations()
-    elif "dreamwaq" in task_name:  # dreamwaq
+    elif runner_class_name == "DreamWaQRunner":
         obs_buf, privileged_obs_buf, obs_history, explicit_labels, next_states = env.get_observations()
-    else: # vanilla
+    elif runner_class_name == "CTSRunner":
+        obs_buf, privileged_obs_buf, obs_history, critic_obs = env.get_observations()
+    else:
         obs = env.get_observations()
     
     # Setup joystick if needed
     if args.use_joystick:
         joystick = Joystick(joystick_type=args.joystick_type)
     
-    frame_dt = 1 / 60.0 # 30Hz
+    frame_dt = 1 / 60.0  # 60 Hz
     # interaction loop
     for i in range(10*int(env.max_episode_length)):
         
@@ -136,15 +143,18 @@ def interaction_loop(env, policy, args):
             env.set_viewer_camera(pos, lookat)
         
         # Step the environment according to task type
-        if "ts" in task_name or "cat" in task_name:
+        if runner_class_name == "TSRunner":
             actions = policy(obs_buf, obs_history)
             obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
-        elif "ee" in task_name:
+        elif runner_class_name == "EERunner":
             actions = policy(estimator_features.detach())
             estimator_features, estimator_labels, _, rews, dones, infos = env.step(actions.detach())
-        elif "waq" in task_name:
+        elif runner_class_name == "DreamWaQRunner":
             actions = policy(obs_buf, obs_history)
             obs_buf, privileged_obs_buf, obs_history, explicit_labels, next_states, rews, dones, infos = env.step(actions.detach())
+        elif runner_class_name == "CTSRunner":
+            actions = policy(obs_buf, obs_history)
+            obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
         else:
             actions = policy(obs.detach())
             obs, _, rews, dones, infos = env.step(actions.detach())
@@ -197,19 +207,16 @@ def export_policy(alg_runner, path: str, args, env_cfg, train_cfg):
         env_cfg: environment configuration
         train_cfg: training configuration
     """
-    task_name = args.task
-    if "ts" in task_name or "cat" in task_name:
+    policy_class_name = train_cfg.runner.policy_class_name
+    if policy_class_name == "ActorCriticTS":
         exporter = PolicyExporterTS(alg_runner.alg.actor_critic)
-        exporter.export(path, env_cfg, args.export_onnx, train_cfg)
-    elif "ee" in task_name:
+    elif policy_class_name == "ActorCriticEE":
         exporter = PolicyExporterEE(alg_runner.alg.actor_critic)
-        exporter.export(path, env_cfg, args.export_onnx, train_cfg)
-    elif "dreamwaq" in task_name:
+    elif policy_class_name == "ActorCriticDreamWaQ":
         exporter = PolicyExporterWaQ(alg_runner.alg.actor_critic)
-        exporter.export(path, env_cfg, args.export_onnx, train_cfg)
     else:
         exporter = PolicyExporter(alg_runner.alg.actor_critic)
-        exporter.export(path, env_cfg, args.export_onnx, train_cfg)
+    exporter.export(path, env_cfg, args.export_onnx, train_cfg)
     
     print('Exported policy as jit script to: ', path)
     if args.export_onnx:
@@ -228,21 +235,27 @@ def play(args):
             logging_level='warning',
         )
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
-    override_configs(env_cfg, args)
+    override_configs(env_cfg, train_cfg, args)
 
     # prepare environment
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
     # load policy
-    train_cfg.runner.resume = True
+    train_cfg.runner.resume = args.resume
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
     
     # export policy as a jit module (used to run it from C++ or python)
-    path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 
-                            train_cfg.runner.load_run, 'exported')
-    export_policy(ppo_runner, path, args, env_cfg, train_cfg)
+    if args.resume:
+        path = os.path.join(
+            LEGGED_GYM_ROOT_DIR,
+            'logs',
+            train_cfg.runner.experiment_name,
+            str(train_cfg.runner.load_run),
+            'exported',
+        )
+        export_policy(ppo_runner, path, args, env_cfg, train_cfg)
 
-    interaction_loop(env, policy, args)
+    interaction_loop(env, policy, args, train_cfg)
     
     
 if __name__ == '__main__':

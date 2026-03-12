@@ -81,21 +81,22 @@ class LeggedRobotNavCfg(BaseConfig):
         name = None
         file = ""
         foot_name = "None"     # name of the feet bodies, used to index body state and contact force tensors
+        key_bodies = []        # list of important bodies to be tracked in mimic-style tasks
         penalize_contacts_on = []
         terminate_after_contacts_on = []
         fix_base_link = False    # fix base link to the world
         obtain_link_contact_states = False
         contact_state_link_names = ["thigh", "calf", "foot"]
+        base_link_name = ""      # full name of the base link
         # For Genesis
         links_to_keep = []          # links that are not merged because of fixed joints
         dof_names = ["joint_a", "joint_b"]
         dof_vel_limits = [20.0, 20.0] # [rad/s], corresponds to dof_names order
-        self_collisions_gs = True   # enable self collisions by default
-        # For IsaacGym
+        self_collisions = 0         # 1 to disable, 0 to enable
+        # For IsaacGym and IsaacLab
         disable_gravity = False
         collapse_fixed_joints = True # merge bodies connected by fixed joints. Specific fixed joints can be kept by adding " <... dont_collapse="true">
         default_dof_drive_mode = 3   # see GymDofDriveModeFlags (0 is none, 1 is pos tgt, 2 is vel tgt, 3 effort)
-        self_collisions_gym = 0      # 1 to disable, 0 to enable...bitwise filter
         replace_cylinder_with_capsule = True # replace collision cylinders with capsules, leads to faster/more stable simulation
         flip_visual_attachments = False # Some .obj meshes must be flipped from y-up to z-up
         density = 0.001
@@ -206,7 +207,7 @@ class LeggedRobotNavCfg(BaseConfig):
             near_plane = 0.1
             far_plane = 10.0
             resolution = (80, 60)
-            fov_horizontal = 75
+            horizontal_fov_deg = 75
             pos = (0.3, 0.0, 0.1)
             euler = (0.0, 0.0, 0.0)
             decimation = 5

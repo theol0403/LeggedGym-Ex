@@ -1,6 +1,5 @@
 from legged_gym import *
 from legged_gym.simulator.simulator import Simulator
-from PIL import Image as im
 import cv2 as cv
 import torch
 import numpy as np
@@ -27,6 +26,11 @@ class GenesisSimulator(Simulator):
             self._robot.control_dofs_force(
                 self._torques, self._dof_indices)
             self._scene.step()
+            if self._cfg.sensor.add_depth and self._debug and not self._headless:
+                # Refresh the native Genesis sensor overlay every rendered substep so
+                # the projected debug points remain stable instead of blinking at the
+                # control-step cadence.
+                self.depth_camera.read_image()
             self._dof_pos[:] = self._robot.get_dofs_position(
                 self._dof_indices)
             self._dof_vel[:] = self._robot.get_dofs_velocity(
@@ -142,9 +146,7 @@ class GenesisSimulator(Simulator):
         self._base_ang_vel[env_ids] = quat_rotate_inverse(self._base_quat[env_ids], self._robot.get_ang()[env_ids])
 
     def update_sensors(self):
-        # Genesis currently exposes depth update via `update_depth_images`
-        if self._cfg.sensor.add_depth:
-            return self._update_depth_images()
+        return super().update_sensors()
 
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
         self._terrain_levels[env_ids] += 1 * move_up - 1 * move_down
@@ -236,6 +238,8 @@ class GenesisSimulator(Simulator):
         # self._scene.draw_debug_spheres(height_points[0, :], radius=0.02, color=(1, 0, 0, 0.7))  # only draw for the first env
 
     def set_viewer_camera(self, eye: np.ndarray, target: np.ndarray):
+        if self._scene.viewer is None:
+            return
         self._scene.viewer.set_camera_pose(pos=eye, lookat=target)
     
     #----- Protected methods -----#
@@ -245,15 +249,20 @@ class GenesisSimulator(Simulator):
         self._batch_dofs_links_info = self._cfg.domain_rand.randomize_joint_armature or \
                 self._cfg.domain_rand.randomize_joint_friction or \
                 self._cfg.domain_rand.randomize_joint_damping
-        if self._cfg.sensor.add_depth:
-            self.frame_count = 0
-    
+        if not self._headless:
+            rendered_envs_idx = list(self._cfg.viewer.rendered_envs_idx)
+            rendered_envs_idx = [
+                env_idx for env_idx in rendered_envs_idx if 0 <= env_idx < self._cfg.env.num_envs
+            ]
+            if not rendered_envs_idx and self._cfg.env.num_envs > 0:
+                rendered_envs_idx = [0]
+            self._cfg.viewer.rendered_envs_idx = rendered_envs_idx
+            self._cfg.viewer.ref_env = min(
+                max(int(self._cfg.viewer.ref_env), 0),
+                max(self._cfg.env.num_envs - 1, 0),
+            )
     def _create_sim(self):
-        asset_self_collisions = getattr(self._cfg.asset, "self_collisions", None)
-        if asset_self_collisions is None:
-            enable_self_collision = getattr(self._cfg.asset, "self_collisions_gs", True)
-        else:
-            enable_self_collision = not asset_self_collisions
+        enable_self_collision = not self._cfg.asset.self_collisions
 
         # create scene
         self._scene = gs.Scene(
@@ -361,30 +370,26 @@ class GenesisSimulator(Simulator):
         
         # find indices of links specified in the config
         def find_link_indices(names):
-            link_indices = list()
-            for link in self._robot.links:
-                flag = False
-                for name in names:
-                    if name in link.name:
-                        flag = True
-                if flag:
-                    link_indices.append(link.idx - self._robot.link_start)
-            return link_indices
+            return [
+                link.idx - self._robot.link_start
+                for link in self._robot.links
+                if any(name in link.name for name in names)
+            ]
 
         self._termination_contact_indices = find_link_indices(
-            getattr(self._cfg.asset, "terminate_after_contacts_on", []))
+            self._cfg.asset.terminate_after_contacts_on)
         all_link_names = [link.name for link in self._robot.links]
         print(f"all link names: {all_link_names}")
         print("termination link indices:", self._termination_contact_indices)
         self._penalized_contact_indices = find_link_indices(
-            getattr(self._cfg.asset, "penalize_contacts_on", []))
+            self._cfg.asset.penalize_contacts_on)
         print(f"penalized link indices: {self._penalized_contact_indices}")
         self._feet_names = [
             link.name for link in self._robot.links if self._cfg.asset.foot_name in link.name]
         self._feet_indices = find_link_indices(self._feet_names)
         print(f"feet names: {self._feet_names}, feet link indices: {self._feet_indices}")
         assert len(self._feet_indices) > 0
-        self._key_body_indices = find_link_indices(getattr(self._cfg.asset, "key_bodies", []))
+        self._key_body_indices = find_link_indices(self._cfg.asset.key_bodies)
         print(f"key body link indices: {self._key_body_indices}")
         self._base_link_index = self._robot.base_link_idx - self._robot.link_start
         print(f"base link index: {self._base_link_index}")
@@ -398,8 +403,15 @@ class GenesisSimulator(Simulator):
         self._dof_pos_limits = torch.stack(
             self._robot.get_dofs_limit(self._dof_indices), dim=1)
         # Genesis don't provide api for accessing vel limits, so we set it here
-        if hasattr(self._cfg.asset, "dof_vel_limits"):
-            self._dof_vel_limits = torch.tensor(self._cfg.asset.dof_vel_limits, device=self._device).unsqueeze(0)
+        if len(self._cfg.asset.dof_vel_limits) != self._num_dof:
+            raise ValueError(
+                "Genesis requires cfg.asset.dof_vel_limits to match cfg.asset.dof_names. "
+                f"Got {len(self._cfg.asset.dof_vel_limits)} limits for {self._num_dof} DOFs."
+            )
+        self._dof_vel_limits = torch.tensor(
+            self._cfg.asset.dof_vel_limits,
+            device=self._device,
+        ).unsqueeze(0)
         self._torque_limits = self._robot.get_dofs_force_range(self._dof_indices)[
             1]
         for i in range(self._dof_pos_limits.shape[0]):
@@ -483,7 +495,7 @@ class GenesisSimulator(Simulator):
         self._last_feet_vel = torch.zeros_like(self._feet_vel)
         # depth images
         if self._cfg.sensor.add_depth:
-            self.depth_images = torch.zeros(
+            self._depth_images = torch.zeros(
                 (self._num_envs, 
                  self._cfg.sensor.depth_camera_config.num_history,
                  self._cfg.sensor.depth_camera_config.resolution[1], 
@@ -785,26 +797,40 @@ class GenesisSimulator(Simulator):
                 f"Unexpected Genesis depth image shape: {tuple(latest_frame.shape)}"
             )
 
-        if self.depth_images.shape[1] > 1:
-            self.depth_images[:, 1:] = self.depth_images[:, :-1].clone()
-        self.depth_images[:, 0].copy_(latest_frame)
+        if self._depth_images.shape[1] > 1:
+            self._depth_images[:, 1:] = self._depth_images[:, :-1].clone()
+        self._depth_images[:, 0].copy_(latest_frame)
 
         near_clip = self._cfg.sensor.depth_camera_config.near_clip
         far_clip = self._cfg.sensor.depth_camera_config.far_clip
         # clip the depth images to be within near and far clip
-        self.depth_images.clamp_(near_clip, far_clip)
+        self._depth_images.clamp_(near_clip, far_clip)
         # normalize the depth images to be within 0-1
-        self.depth_images.sub_(near_clip).div_(far_clip - near_clip).sub_(0.5)
+        self._depth_images.sub_(near_clip).div_(far_clip - near_clip).sub_(0.5)
     
     def _draw_debug_depth_images(self):
-        depth = self.depth_images[0, 0]
+        if self._headless:
+            return
+        depth = self._depth_images[0, 0]
         if self._cfg.sensor.depth_camera_config.calculate_depth:
-            pixel_values = ((depth + 0.5) * 255.0).cpu().numpy().astype(np.uint8)
-            image = im.fromarray(pixel_values, mode='L')
-            image.save("debug_depth_images/depth_frame%d.jpg" % self.frame_count)
-            # cv.imshow("Depth Camera", (255 * normalized_depth.cpu().numpy()).astype(np.uint8))
-            # cv.waitKey(1)
-            self.frame_count += 1
+            near_clip = self._cfg.sensor.depth_camera_config.near_clip
+            far_clip = self._cfg.sensor.depth_camera_config.far_clip
+            pixel_values = ((depth + 0.5) * 255.0).clamp(0, 255).cpu().numpy().astype(np.uint8)
+            depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
+            min_depth = float(depth.min().item() + 0.5) * (far_clip - near_clip) + near_clip
+            max_depth = float(depth.max().item() + 0.5) * (far_clip - near_clip) + near_clip
+            cv.putText(
+                depth_vis,
+                f"depth[m] min {min_depth:.2f} max {max_depth:.2f}",
+                (8, 18),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv.LINE_AA,
+            )
+            cv.imshow("Genesis Depth Camera", depth_vis)
+            cv.waitKey(1)
     
     def _draw_key_body_points(self, ref_key_body_pos=None):
         """ Draws key body points for debugging
@@ -858,7 +884,7 @@ class GenesisSimulator(Simulator):
         '''
         depth_pattern = gs.sensors.DepthCameraPattern(
             res=self._cfg.sensor.depth_camera_config.resolution,
-            fov_horizontal=self._cfg.sensor.depth_camera_config.fov_horizontal,
+            fov_horizontal=self._cfg.sensor.depth_camera_config.horizontal_fov_deg,
         )
         sensor_kwargs = dict(
             entity_idx=self._robot.idx,

@@ -1,6 +1,6 @@
 from legged_gym import *
 from legged_gym.envs.base.legged_robot_ee_config import LeggedRobotEECfg, LeggedRobotEECfgPPO
-from legged_gym.envs.base.common_cfgs import Go2RoughCommonCfg
+from legged_gym.envs.base.common_cfgs import Go2DepthSensorCfg, Go2RoughCommonCfg
 
 class Go2EECfg( LeggedRobotEECfg ):
     class env( LeggedRobotEECfg.env ):
@@ -63,6 +63,9 @@ class Go2EECfg( LeggedRobotEECfg ):
         joint_armature_range = [0.015, 0.025]  # [N*m*s/rad]
         joint_friction_range = [0.01, 0.02]
         joint_damping_range = [0.25, 0.3]
+
+    class sensor(Go2DepthSensorCfg):
+        pass
 
 class Go2EECfgPPO( LeggedRobotEECfgPPO ):
     class policy( LeggedRobotEECfgPPO.policy ):

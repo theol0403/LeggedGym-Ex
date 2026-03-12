@@ -155,23 +155,23 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
     class sensor( LeggedRobotCfg.sensor ):
         add_depth = True
         class depth_camera_config( LeggedRobotCfg.sensor.depth_camera_config ):
-            near_clip = 0.0
+            near_clip = 0.1
             far_clip = 5.0
             near_plane = 0.1
             far_plane = 5.0
             resolution = (80, 60)
-            fov_horizontal = 75
+            horizontal_fov_deg = 75
             pos = (0.3, 0.0, 0.1)
             euler = (0.0, 1.57, 0.0)
-            # Warp only
-            calculate_depth = False
+            decimation = 1
+            calculate_depth = True
             segmentation_camera = False
-            return_pointcloud = True
-            pointcloud_in_world_frame = True
+            return_pointcloud = False
+            pointcloud_in_world_frame = False
 
 class Go2TSDepthCfgPPO( LeggedRobotCfgPPO ):
     seed = 1
-    runner_class_name = "TSRunner" # Teacher-Student Runner
+    runner_class_name = "TSRunner"
     class policy( LeggedRobotCfgPPO.policy ):
         critic_hidden_dims = [1024, 256, 128]
         privilege_encoder_hidden_dims = [256, 128]
@@ -191,6 +191,6 @@ class Go2TSDepthCfgPPO( LeggedRobotCfgPPO ):
         run_name = ''
         experiment_name = 'go2_depth'
         save_interval = 500
-        load_run = "Jan14_10-22-04_"
+        load_run = -1
         checkpoint = -1
         max_iterations = 2500

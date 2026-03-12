@@ -4,29 +4,32 @@ import torch
 import numpy as np
 import random
 import argparse
+import re
 
 from legged_gym import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 
 def class_to_dict(obj) -> dict:
-    if not hasattr(obj,"__dict__"):
+    if isinstance(obj, (str, int, float, bool, type(None), np.ndarray, torch.Tensor)):
         return obj
+    if isinstance(obj, tuple):
+        return tuple(class_to_dict(item) for item in obj)
+    if isinstance(obj, dict):
+        return {key: class_to_dict(val) for key, val in obj.items()}
+    if isinstance(obj, list):
+        return [class_to_dict(item) for item in obj]
     result = {}
     for key in dir(obj):
         if key.startswith("_"):
             continue
-        element = []
         val = getattr(obj, key)
-        if isinstance(val, list):
-            for item in val:
-                element.append(class_to_dict(item))
-        else:
-            element = class_to_dict(val)
-        result[key] = element
+        if callable(val):
+            continue
+        result[key] = class_to_dict(val)
     return result
 
 def update_class_from_dict(obj, dict):
     for key, val in dict.items():
-        attr = getattr(obj, key, None)
+        attr = getattr(obj, key)
         if isinstance(attr, type):
             update_class_from_dict(attr, val)
         else:
@@ -45,58 +48,51 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def get_load_path(root, load_run=-1, checkpoint=-1):
-    try:
-        runs = os.listdir(root)
-        #TODO sort by date to handle change of month
-        runs.sort()
-        if 'exported' in runs: runs.remove('exported')
-        last_run = os.path.join(root, runs[-1])
-    except:
+def _get_load_run_dir(root, load_run):
+    runs = sorted(run for run in os.listdir(root) if run != "exported")
+    if not runs:
         raise ValueError("No runs in this directory: " + root)
-    if load_run==-1:
-        load_run = last_run
-    else:
-        load_run = os.path.join(root, load_run)
+    if load_run == -1:
+        return os.path.join(root, runs[-1])
+    run_dir = os.path.join(root, load_run)
+    if not os.path.isdir(run_dir):
+        raise ValueError("Run directory does not exist: " + run_dir)
+    return run_dir
 
-    if checkpoint==-1:
-        models = [file for file in os.listdir(load_run) if 'model' in file]
-        models.sort(key=lambda m: '{0:0>15}'.format(m))
-        model = models[-1]
-    else:
-        model = "model_{}.pt".format(checkpoint) 
+def _get_latest_checkpoint(load_run, prefix):
+    pattern = re.compile(rf"^{re.escape(prefix)}_(\d+)\.pt$")
+    candidates = []
+    for file_name in os.listdir(load_run):
+        match = pattern.match(file_name)
+        if match:
+            candidates.append((int(match.group(1)), file_name))
+    if not candidates:
+        raise ValueError(f"No {prefix} checkpoints found in: {load_run}")
+    return max(candidates)[1]
 
+def get_load_path(root, load_run=-1, checkpoint=-1):
+    load_run = _get_load_run_dir(root, load_run)
+    model = _get_latest_checkpoint(load_run, "model") if checkpoint == -1 else f"model_{checkpoint}.pt"
     load_path = os.path.join(load_run, model)
+    if not os.path.isfile(load_path):
+        raise ValueError("Checkpoint does not exist: " + load_path)
     return load_path
 
 def get_load_path_ee(root, load_run=-1, checkpoint=-1):
-    try:
-        runs = os.listdir(root)
-        #TODO sort by date to handle change of month
-        runs.sort()
-        if 'exported' in runs: runs.remove('exported')
-        last_run = os.path.join(root, runs[-1])
-    except:
-        raise ValueError("No runs in this directory: " + root)
-    if load_run==-1:
-        load_run = last_run
+    load_run = _get_load_run_dir(root, load_run)
+    if checkpoint == -1:
+        model = _get_latest_checkpoint(load_run, "model")
+        estimator = _get_latest_checkpoint(load_run, "estimator")
     else:
-        load_run = os.path.join(root, load_run)
-
-    if checkpoint==-1:
-        models = [file for file in os.listdir(load_run) if 'model' in file]
-        models.sort(key=lambda m: '{0:0>15}'.format(m))
-        model = models[-1]
-        # estimator
-        estimators = [file for file in os.listdir(load_run) if 'estimator' in file]
-        estimators.sort(key=lambda m: '{0:0>15}'.format(m))
-        estimator = estimators[-1]
-    else:
-        model = "model_{}.pt".format(checkpoint)
-        estimator = "estimator_{}.pt".format(checkpoint)
+        model = f"model_{checkpoint}.pt"
+        estimator = f"estimator_{checkpoint}.pt"
 
     actor_load_path = os.path.join(load_run, model)
     estimator_load_path = os.path.join(load_run, estimator)
+    if not os.path.isfile(actor_load_path):
+        raise ValueError("Checkpoint does not exist: " + actor_load_path)
+    if not os.path.isfile(estimator_load_path):
+        raise ValueError("Checkpoint does not exist: " + estimator_load_path)
     return actor_load_path, estimator_load_path
 
 def update_cfg_from_args(env_cfg, cfg_train, args):
@@ -154,6 +150,7 @@ def get_args():
     parser.add_argument('--sync_wandb',     action='store_true', default=False, help="synchronize training log with wandb")
     parser.add_argument('--export_onnx',    action='store_true', default=False, help="export policy as onnx (besides jit)")
     parser.add_argument('--debug',          action='store_true', default=False, help="enable debug mode")
+    parser.add_argument('--depth_debug',    action='store_true', default=False, help="enable depth camera debug rendering when supported")
     parser.add_argument('--load_run',       type=str, default=None, help="run to load, default: last run")
     parser.add_argument('--ckpt',           type=int, default=-1, help="checkpoint to load, -1 means latest")
     parser.add_argument('--use_joystick',   action='store_true', default=False, help="use joystick to provide commands")
@@ -165,18 +162,6 @@ def get_args():
 
     return parser.parse_args()
 
-# def export_policy_as_jit(actor_critic, path, prefix=None):
-#     if hasattr(actor_critic, 'memory_a'):
-#         exporter = PolicyExporterLSTM(actor_critic)
-#         exporter.export(path)
-#     else: 
-#         os.makedirs(path, exist_ok=True)
-#         filename = prefix + "_policy.pt" if prefix != None else "policy.pt"
-#         path = os.path.join(path, filename)
-#         model = copy.deepcopy(actor_critic.actor).to('cpu')
-#         traced_script_module = torch.jit.script(model)
-#         traced_script_module.save(path)
-
 class PolicyExporter(torch.nn.Module):
     def __init__(self, actor_critic):
         super().__init__()
@@ -187,7 +172,7 @@ class PolicyExporter(torch.nn.Module):
     
     def export(self, path, env_cfg, export_onnx=False, train_cfg=None):
         os.makedirs(path, exist_ok=True)
-        filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
+        filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
         path_pt = os.path.join(path, filename)
         self.to('cpu')
         traced_script_module = torch.jit.script(self)
@@ -195,7 +180,7 @@ class PolicyExporter(torch.nn.Module):
         
         # export onnx model if needed
         if export_onnx:
-            filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
+            filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
             path_onnx = os.path.join(path, filename)
             input_names = ["nn_input"]
             output_names = ["nn_output"]
@@ -217,23 +202,26 @@ class PolicyExporterTS(torch.nn.Module):
         super().__init__()
         self.actor = copy.deepcopy(actor_critic.actor)
         self.encoder = copy.deepcopy(actor_critic.history_encoder)
+        self.history_encoder_type = actor_critic.history_encoder_type
     
     def forward(self, obs, history):
+        if self.history_encoder_type == "TCN":
+            history = history.unsqueeze(1)
         latent = self.encoder(history)
         x = torch.cat([obs, latent], dim=-1)
         return self.actor(x)
  
     def export(self, path, env_cfg, export_onnx=False, train_cfg=None):
         os.makedirs(path, exist_ok=True)
-        filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
-        path = os.path.join(path, filename)
+        filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
+        path_pt = os.path.join(path, filename)
         self.to('cpu')
         traced_script_module = torch.jit.script(self)
-        traced_script_module.save(path)
+        traced_script_module.save(path_pt)
         
         # export onnx model if needed
         if export_onnx:
-            filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
+            filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
             path_onnx = os.path.join(path, filename)
             input_names = ["obs_input", "obs_history_input"]
             output_names = ["nn_output"]
@@ -245,6 +233,7 @@ class PolicyExporterTS(torch.nn.Module):
                               input_names=input_names,
                               output_names=output_names,
                               opset_version=11)
+
 
 class PolicyExporterEE(torch.nn.Module):
     """Policy exporter for explicit estimator policies
@@ -264,7 +253,7 @@ class PolicyExporterEE(torch.nn.Module):
  
     def export(self, path, env_cfg, export_onnx=False, train_cfg=None):
         os.makedirs(path, exist_ok=True)
-        filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
+        filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
         pt_path = os.path.join(path, filename)
         self.to('cpu')
         traced_script_module = torch.jit.script(self)
@@ -272,7 +261,7 @@ class PolicyExporterEE(torch.nn.Module):
         
         # export onnx model if needed
         if export_onnx:
-            filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
+            filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
             onnx_path = os.path.join(path, filename)
             input_names = ["nn_input"]
             output_names = ["nn_output"]
@@ -302,15 +291,15 @@ class PolicyExporterWaQ(torch.nn.Module):
  
     def export(self, path, env_cfg, export_onnx=False, train_cfg=None):
         os.makedirs(path, exist_ok=True)
-        filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
-        path = os.path.join(path, filename)
+        filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
+        path_pt = os.path.join(path, filename)
         self.to('cpu')
         traced_script_module = torch.jit.script(self)
-        traced_script_module.save(path)
+        traced_script_module.save(path_pt)
         
         # export onnx model if needed
         if export_onnx:
-            filename = train_cfg.runner.load_run + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
+            filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
             path_onnx = os.path.join(path, filename)
             input_names = ["obs_input", "obs_history_input"]
             output_names = ["nn_output"]

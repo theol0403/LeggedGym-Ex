@@ -49,7 +49,6 @@ class RolloutStorageTS(RolloutStorage):
 
         self.obs_history_shape = obs_history_shape
         self.critic_obs_shape = critic_obs_shape
-
         # Core
         # privileged observations are necessary
         if self.privileged_observations is None:

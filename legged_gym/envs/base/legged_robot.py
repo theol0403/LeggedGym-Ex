@@ -74,6 +74,8 @@ class LeggedRobot(BaseTask):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+            if self.cfg.sensor.add_depth:
+                self.simulator.draw_debug_depth_images()
 
     def check_termination(self):
         """ Check if environments need to be reset

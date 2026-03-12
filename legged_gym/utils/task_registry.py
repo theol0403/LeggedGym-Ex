@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Tuple
 import torch
 import numpy as np
+import re
 
 from rsl_rl.env import VecEnv
 from rsl_rl.runners import OnPolicyRunner
@@ -121,16 +122,21 @@ class TaskRegistry():
         #save resume path before creating a new log_dir
         resume = train_cfg.runner.resume
         if resume:
-            if train_cfg.runner_class_name == "OnPolicyRunnerEE":
+            if train_cfg.runner_class_name == "EERunner":
                 model_resume_path, estimator_resume_path = get_load_path_ee(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
                 print(f"Loading model from: {model_resume_path}")
                 print(f'Loading estimator from: {estimator_resume_path}')
                 runner.load(model_resume_path, estimator_resume_path)
+                train_cfg.runner.load_run = os.path.basename(os.path.dirname(model_resume_path))
             else:
                 # load previously trained model
                 resume_path = get_load_path(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
                 print(f"Loading model from: {resume_path}")
                 runner.load(resume_path)
+                train_cfg.runner.load_run = os.path.basename(os.path.dirname(resume_path))
+                checkpoint_match = re.search(r"model_(\d+)\.pt$", os.path.basename(resume_path))
+                if checkpoint_match:
+                    train_cfg.runner.checkpoint = int(checkpoint_match.group(1))
         return runner, train_cfg
 
 # make global task registry

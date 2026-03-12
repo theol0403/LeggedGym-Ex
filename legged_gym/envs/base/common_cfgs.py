@@ -70,6 +70,25 @@ class Go2FlatCommonCfg(LeggedRobotCfg):
                           30.1, 30.1, 15.7, 
                           30.1, 30.1, 15.7]
 
+
+class Go2DepthSensorCfg(LeggedRobotCfg.sensor):
+    add_depth = False
+
+    class depth_camera_config(LeggedRobotCfg.sensor.depth_camera_config):
+        near_clip = 0.1
+        far_clip = 5.0
+        near_plane = 0.1
+        far_plane = 5.0
+        resolution = (80, 60)
+        horizontal_fov_deg = 75
+        pos = (0.3, 0.0, 0.1)
+        euler = (0.0, 0.0, 0.0)
+        decimation = 1
+        calculate_depth = True
+        segmentation_camera = False
+        return_pointcloud = False
+        pointcloud_in_world_frame = False
+
 #----- Common configuration for Unitree Go2 on rough terrain -----#
 class Go2RoughCommonCfg(Go2FlatCommonCfg):
     class terrain( LeggedRobotCfg.terrain ):

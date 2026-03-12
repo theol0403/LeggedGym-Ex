@@ -6,6 +6,7 @@ import numpy as np
 class Simulator(ABC):
     def __init__(self, cfg, sim_params: dict, sim_device: str = "cuda:0", headless: bool = False):
         self._height_samples = None
+        self._terrain = None
         self._device = sim_device
         self._headless = headless
         self._cfg = cfg
@@ -68,15 +69,20 @@ class Simulator(ABC):
         """
         return
     
-    @abstractmethod
     def update_sensors(self):
         """Updates the sensor readings, such as depth image sensors and lidar sensors.
         """
-        return
+        if self._cfg.sensor.add_depth:
+            return self._update_depth_images()
+        return None
 
     def update_depth_images(self):
         """Backward-compatible wrapper for envs that update depth cameras directly."""
         return self.update_sensors()
+
+    def get_depth_images(self):
+        """Returns the latest normalized depth image tensor."""
+        return self._depth_images
     
     @abstractmethod
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
@@ -134,6 +140,11 @@ class Simulator(ABC):
     def calc_terrain_info_around_feet(self):
         """Public wrapper for refreshing terrain samples and normals around each foot."""
         self._calc_terrain_info_around_feet()
+
+    def draw_debug_depth_images(self):
+        """Public wrapper for depth debug rendering when implemented by a backend."""
+        if self._cfg.sensor.add_depth:
+            return self._draw_debug_depth_images()
     
     @abstractmethod
     def set_viewer_camera(self, eye: np.ndarray, target: np.ndarray):
@@ -157,6 +168,12 @@ class Simulator(ABC):
         """Creates the simulation environment, including the physics engine and any necessary components.
         """
         return
+
+    def _update_depth_images(self):
+        raise NotImplementedError("Depth image updates are not implemented for this simulator")
+
+    def _draw_debug_depth_images(self):
+        return None
 
     @abstractmethod
     def _create_envs(self):
@@ -366,7 +383,7 @@ class Simulator(ABC):
     @property
     def terrain(self):
         """Returns the terrain helper used by rough-terrain tasks, when present."""
-        return getattr(self, "_terrain", None)
+        return self._terrain
 
     @property
     def dof_names(self):
