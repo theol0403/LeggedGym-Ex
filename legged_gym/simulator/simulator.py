@@ -73,6 +73,10 @@ class Simulator(ABC):
         """Updates the sensor readings, such as depth image sensors and lidar sensors.
         """
         return
+
+    def update_depth_images(self):
+        """Backward-compatible wrapper for envs that update depth cameras directly."""
+        return self.update_sensors()
     
     @abstractmethod
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
@@ -102,6 +106,34 @@ class Simulator(ABC):
         """Draws debug visualizations, such as the sampling points around the robot.
         """
         return
+
+    def get_height_at(self, pos_xy: Tensor):
+        """Get terrain height at specific ``(x, y)`` world locations.
+
+        Args:
+            pos_xy (Tensor): Sample locations with shape ``(N, 2)``.
+
+        Returns:
+            Tensor: Terrain heights with shape ``(N,)``.
+        """
+        if self._cfg.terrain.mesh_type == "plane":
+            return pos_xy[:, 0].new_zeros(pos_xy.shape[0], requires_grad=False)
+        if self._cfg.terrain.mesh_type == "none":
+            raise NameError("Can't measure height with terrain mesh type 'none'")
+
+        points = pos_xy + self._cfg.terrain.border_size
+        points = (points / self._cfg.terrain.horizontal_scale).long()
+        px = points[:, 0].clip(0, self._height_samples.shape[0] - 2)
+        py = points[:, 1].clip(0, self._height_samples.shape[1] - 2)
+        return self._height_samples[px, py] * self._cfg.terrain.vertical_scale
+
+    def update_surrounding_heights(self):
+        """Public wrapper for refreshing terrain samples around the robot."""
+        self._update_surrounding_heights()
+
+    def calc_terrain_info_around_feet(self):
+        """Public wrapper for refreshing terrain samples and normals around each foot."""
+        self._calc_terrain_info_around_feet()
     
     @abstractmethod
     def set_viewer_camera(self, eye: np.ndarray, target: np.ndarray):
@@ -156,6 +188,11 @@ class Simulator(ABC):
         
         The sampling grid is defined in LeggedRobotCfg.terrain.measured_points_x/y.
         """
+        return
+
+    @abstractmethod
+    def _calc_terrain_info_around_feet(self):
+        """Updates terrain heights and surface normals in the neighborhood of each foot."""
         return
     
     @abstractmethod
@@ -307,6 +344,34 @@ class Simulator(ABC):
             Tensor((num_envs,)): Terrain levels of all environments.
         """
         return self._terrain_levels
+
+    @property
+    def terrain_origins(self):
+        """Returns the terrain origins grid used for curriculum terrains.
+
+        Returns:
+            Tensor: Terrain origins indexed by terrain level and type.
+        """
+        return self._terrain_origins
+
+    @property
+    def max_terrain_level(self):
+        """Returns the number of terrain curriculum levels.
+
+        Returns:
+            int: Maximum terrain level index bound.
+        """
+        return self._max_terrain_level
+
+    @property
+    def terrain(self):
+        """Returns the terrain helper used by rough-terrain tasks, when present."""
+        return getattr(self, "_terrain", None)
+
+    @property
+    def dof_names(self):
+        """Returns the simulator's DOF names in simulator-native order."""
+        return self._dof_names
     
     @property
     def dof_pos_limits(self):
@@ -433,6 +498,21 @@ class Simulator(ABC):
             Tensor((num_envs, num_feet, 3)): Velocities of the feet in the world frame in the last simulation step.
         """
         return self._last_feet_vel
+
+    @property
+    def rigid_body_states(self):
+        """Returns rigid-body states in the Isaac Gym layout ``(pos, quat, lin vel, ang vel)``."""
+        return self._rigid_body_states
+
+    @property
+    def last_base_lin_vel(self):
+        """Returns the base linear velocity from the previous simulation step."""
+        return self._last_base_lin_vel
+
+    @property
+    def last_base_ang_vel(self):
+        """Returns the base angular velocity from the previous simulation step."""
+        return self._last_base_ang_vel
     
     @property
     def base_pos(self):

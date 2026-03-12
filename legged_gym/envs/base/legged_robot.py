@@ -567,6 +567,10 @@ class LeggedRobot(BaseTask):
         # Penalize motion at zero commands
         return torch.sum(torch.abs(self.simulator.dof_vel), dim=1) * (torch.norm(self.commands[:, :3], dim=1) < 0.1)
 
+    def _reward_stand_still(self):
+        # Backward-compatible alias for configs that use a single stand_still penalty.
+        return self._reward_dof_vel_stand_still()
+
     def _reward_dof_pos_stand_still(self):
         # Penalize position deviation at zero commands
         return torch.sum(torch.square(self.simulator.dof_pos - self.simulator.default_dof_pos), dim=1) * (torch.norm(self.commands[:, :3], dim=1) < 0.1)

@@ -60,3 +60,4 @@ wandb
 build
 *debug*
 resources/terrains/*.stl
+.cache

@@ -188,29 +188,6 @@ class IsaacGymSimulator(Simulator):
         cam_target = gymapi.Vec3(target[0], target[1], target[2])
         self._gym.viewer_camera_look_at(self._viewer, None, cam_pos, cam_target)
     
-    def get_height_at(self, pos_xy):
-        """ Get height of the terrain at specific (x, y) location
-
-        Args:
-            pos_xy (torch.tensor): (x, y) locations to sample heights at, shape: (len(env_ids), 2)
-        Returns:
-            torch.tensor: heights at the specified (x, y) locations, shape: (len(env_ids),)
-        """
-        if self._cfg.terrain.mesh_type == 'plane':
-            return torch.zeros_like(pos_xy[:, 0], device=self._device, requires_grad=False)
-        elif self._cfg.terrain.mesh_type == 'none':
-            raise NameError(
-                "Can't measure height with terrain mesh type 'none'")
-
-        points = pos_xy + self._cfg.terrain.border_size # add border size to align the origin with heightfield raw
-        points = (points/self._cfg.terrain.horizontal_scale).long()
-        px = points[:, 0]
-        py = points[:, 1]
-        px = torch.clip(px, 0, self._height_samples.shape[0]-2)
-        py = torch.clip(py, 0, self._height_samples.shape[1]-2)
-        
-        return self._height_samples[px, py] * self._cfg.terrain.vertical_scale
-    
     #----- Protected methods -----#
     def _parse_cfg(self):
         self._debug = self._cfg.env.debug

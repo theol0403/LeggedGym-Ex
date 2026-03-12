@@ -47,9 +47,18 @@ class GenesisSimulator(Simulator):
         self._dof_pos[:] = self._robot.get_dofs_position(self._dof_indices)
         self._dof_vel[:] = self._robot.get_dofs_velocity(self._dof_indices)
         self._link_contact_forces[:] = self._robot.get_links_net_contact_force()
-        self._feet_pos[:] = self._robot.get_links_pos()[:, self._feet_indices, :]
-        self._feet_vel[:] = self._robot.get_links_vel()[:, self._feet_indices, :]
-        self._key_body_pos[:] = self._robot.get_links_pos()[:, self._key_body_indices, :]
+        links_pos = self._robot.get_links_pos()
+        links_quat_gs = self._robot.get_links_quat()
+        links_vel = self._robot.get_links_vel()
+        links_ang = self._robot.get_links_ang()
+        self._rigid_body_states[:, :, :3] = links_pos
+        self._rigid_body_states[:, :, 3:6] = links_quat_gs[:, :, 1:4]
+        self._rigid_body_states[:, :, 6] = links_quat_gs[:, :, 0]
+        self._rigid_body_states[:, :, 7:10] = links_vel
+        self._rigid_body_states[:, :, 10:13] = links_ang
+        self._feet_pos[:] = links_pos[:, self._feet_indices, :]
+        self._feet_vel[:] = links_vel[:, self._feet_indices, :]
+        self._key_body_pos[:] = links_pos[:, self._key_body_indices, :]
         # Link contact state
         if self._cfg.asset.obtain_link_contact_states:
             self._link_contact_states = 1. * (torch.norm(
@@ -240,6 +249,12 @@ class GenesisSimulator(Simulator):
             self.frame_count = 0
     
     def _create_sim(self):
+        asset_self_collisions = getattr(self._cfg.asset, "self_collisions", None)
+        if asset_self_collisions is None:
+            enable_self_collision = getattr(self._cfg.asset, "self_collisions_gs", True)
+        else:
+            enable_self_collision = not asset_self_collisions
+
         # create scene
         self._scene = gs.Scene(
             sim_options=gs.options.SimOptions(
@@ -260,7 +275,7 @@ class GenesisSimulator(Simulator):
                 constraint_solver=gs.constraint_solver.Newton,
                 enable_collision=True,
                 enable_joint_limit=True,
-                enable_self_collision=not self._cfg.asset.self_collisions,
+                enable_self_collision=enable_self_collision,
                 max_collision_pairs=self._cfg.sim.max_collision_pairs,
                 IK_max_targets=self._cfg.sim.IK_max_targets,
                 batch_dofs_info=self._batch_dofs_links_info,
@@ -275,7 +290,8 @@ class GenesisSimulator(Simulator):
             self._gs_terrain = self._scene.add_entity(
                 gs.morphs.URDF(
                     file="urdf/plane/plane.urdf", 
-                    fixed=True)
+                    fixed=True,
+                    visualization=not self._headless)
                 )
         elif mesh_type == 'heightfield':
             self._terrain = Terrain(self._cfg.terrain)
@@ -321,6 +337,7 @@ class GenesisSimulator(Simulator):
                 pos=np.array(self._cfg.init_state.pos),
                 quat=np.array([1.0, 0.0, 0.0, 0.0]),  # wxyz
                 fixed=self._cfg.asset.fix_base_link,
+                visualization=not self._headless,
             ),
             # visualize_contact=self._debug,
         )
@@ -355,19 +372,19 @@ class GenesisSimulator(Simulator):
             return link_indices
 
         self._termination_contact_indices = find_link_indices(
-            self._cfg.asset.terminate_after_contacts_on)
+            getattr(self._cfg.asset, "terminate_after_contacts_on", []))
         all_link_names = [link.name for link in self._robot.links]
         print(f"all link names: {all_link_names}")
         print("termination link indices:", self._termination_contact_indices)
         self._penalized_contact_indices = find_link_indices(
-            self._cfg.asset.penalize_contacts_on)
+            getattr(self._cfg.asset, "penalize_contacts_on", []))
         print(f"penalized link indices: {self._penalized_contact_indices}")
         self._feet_names = [
             link.name for link in self._robot.links if self._cfg.asset.foot_name in link.name]
         self._feet_indices = find_link_indices(self._feet_names)
         print(f"feet names: {self._feet_names}, feet link indices: {self._feet_indices}")
         assert len(self._feet_indices) > 0
-        self._key_body_indices = find_link_indices(self._cfg.asset.key_bodies)
+        self._key_body_indices = find_link_indices(getattr(self._cfg.asset, "key_bodies", []))
         print(f"key body link indices: {self._key_body_indices}")
         self._base_link_index = self._robot.base_link_idx - self._robot.link_start
         print(f"base link index: {self._base_link_index}")
@@ -450,6 +467,9 @@ class GenesisSimulator(Simulator):
             (self._num_envs, 3), device=self._device, dtype=torch.float)
         self._link_contact_forces = torch.zeros(
             (self._num_envs, self._robot.n_links, 3), device=self._device, dtype=torch.float
+        )
+        self._rigid_body_states = torch.zeros(
+            (self._num_envs, self._robot.n_links, 13), device=self._device, dtype=torch.float
         )
         self._feet_pos = torch.zeros(
             (self._num_envs, len(self._feet_indices), 3), device=self._device, dtype=torch.float
@@ -759,19 +779,25 @@ class GenesisSimulator(Simulator):
     def _update_depth_images(self):
         """ Renders the depth camera and retrieves the depth images
         """
-        self.depth_images[:] = self.depth_camera.read_image()[:]
+        latest_frame = self.depth_camera.read_image()
+        if latest_frame.ndim != 3:
+            raise RuntimeError(
+                f"Unexpected Genesis depth image shape: {tuple(latest_frame.shape)}"
+            )
+
+        if self.depth_images.shape[1] > 1:
+            self.depth_images[:, 1:] = self.depth_images[:, :-1].clone()
+        self.depth_images[:, 0].copy_(latest_frame)
+
         near_clip = self._cfg.sensor.depth_camera_config.near_clip
         far_clip = self._cfg.sensor.depth_camera_config.far_clip
         # clip the depth images to be within near and far clip
-        self.depth_images = torch.clip(self.depth_images, near_clip, far_clip)
+        self.depth_images.clamp_(near_clip, far_clip)
         # normalize the depth images to be within 0-1
-        self.depth_images = (self.depth_images - near_clip) / (far_clip - near_clip) - 0.5
+        self.depth_images.sub_(near_clip).div_(far_clip - near_clip).sub_(0.5)
     
     def _draw_debug_depth_images(self):
-        if self._num_envs == 1:
-            depth = self.depth_images
-        else:
-            depth = self.depth_images[0]
+        depth = self.depth_images[0, 0]
         if self._cfg.sensor.depth_camera_config.calculate_depth:
             pixel_values = ((depth + 0.5) * 255.0).cpu().numpy().astype(np.uint8)
             image = im.fromarray(pixel_values, mode='L')
@@ -787,7 +813,7 @@ class GenesisSimulator(Simulator):
             self._scene.draw_debug_spheres(ref_key_body_pos.view(-1, 3), radius=0.03, color=(1, 0, 0, 1))
         else:
             pass
-            
+
     def _create_heightfield(self):
         """ Adds a heightfield terrain to the simulation, sets parameters based on the cfg.
         """
@@ -798,6 +824,7 @@ class GenesisSimulator(Simulator):
                 horizontal_scale=self._cfg.terrain.horizontal_scale,
                 vertical_scale=self._cfg.terrain.vertical_scale,
                 height_field=self._terrain.height_field_raw,
+                visualization=not self._headless,
             ),
         )
         self._height_samples = torch.tensor(self._terrain.heightsamples).view(
