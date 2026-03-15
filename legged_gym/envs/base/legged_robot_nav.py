@@ -76,8 +76,7 @@ class LeggedRobotNav(BaseTask):
         self.compute_reward()
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
-        if self.cfg.sensor.add_depth:
-            self.simulator.update_depth_images()
+        self.simulator.update_sensors()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         self.llast_actions[:] = self.last_actions[:]
@@ -88,6 +87,7 @@ class LeggedRobotNav(BaseTask):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+            self.simulator.draw_debug_sensor_images()
 
     def check_termination(self):
         """ Check if environments need to be reset
@@ -122,7 +122,8 @@ class LeggedRobotNav(BaseTask):
         # if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length ==0):
         #     self.update_command_curriculum(env_ids)
 
-        self._resample_commands(env_ids)
+        if not self.external_command_source_enabled:
+            self._resample_commands(env_ids)
         self._reset_dofs(env_ids)
         self._reset_root_states(env_ids)
         self.simulator.reset_idx(env_ids)

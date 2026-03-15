@@ -136,10 +136,15 @@ class TRON1SF(LeggedRobot):
         if self.cfg.terrain.curriculum:
             self._update_terrain_curriculum(env_ids)
         # avoid updating command curriculum at each step since the maximum command is common to all envs
-        if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length ==0):
+        if (
+            not self.external_command_source_enabled
+            and self.cfg.commands.curriculum
+            and (self.common_step_counter % self.max_episode_length == 0)
+        ):
             self._update_command_curriculum(env_ids)
 
-        self._resample_commands(env_ids)
+        if not self.external_command_source_enabled:
+            self._resample_commands(env_ids)
         _ = np.random.random() # initialize the env at sit pose randomly
         if _ < self.cfg.init_state.sit_init_percent:
             self._reset_dofs_sit_pose(env_ids)

@@ -72,17 +72,32 @@ class Simulator(ABC):
     def update_sensors(self):
         """Updates the sensor readings, such as depth image sensors and lidar sensors.
         """
+        sensor_frames = {}
+        if self._cfg.sensor.add_depth:
+            sensor_frames["depth"] = self._update_depth_images()
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            sensor_frames["rgb"] = self._update_rgb_images()
+        return sensor_frames or None
+
+    def update_depth_images(self):
+        """Backward-compatible wrapper for envs that update depth cameras directly."""
         if self._cfg.sensor.add_depth:
             return self._update_depth_images()
         return None
 
-    def update_depth_images(self):
-        """Backward-compatible wrapper for envs that update depth cameras directly."""
-        return self.update_sensors()
-
     def get_depth_images(self):
         """Returns the latest normalized depth image tensor."""
         return self._depth_images
+
+    def update_rgb_images(self):
+        """Backward-compatible wrapper for envs that update RGB cameras directly."""
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            return self._update_rgb_images()
+        return None
+
+    def get_rgb_images(self):
+        """Returns the latest RGB image tensor if available."""
+        return getattr(self, "_rgb_images", None)
     
     @abstractmethod
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
@@ -141,10 +156,14 @@ class Simulator(ABC):
         """Public wrapper for refreshing terrain samples and normals around each foot."""
         self._calc_terrain_info_around_feet()
 
+    def draw_debug_sensor_images(self):
+        """Public wrapper for debug rendering of image sensors when implemented by a backend."""
+        if self._cfg.sensor.add_depth or getattr(self._cfg.sensor, "add_rgb", False):
+            return self._draw_debug_sensor_images()
+
     def draw_debug_depth_images(self):
-        """Public wrapper for depth debug rendering when implemented by a backend."""
-        if self._cfg.sensor.add_depth:
-            return self._draw_debug_depth_images()
+        """Backward-compatible wrapper for sensor debug rendering."""
+        return self.draw_debug_sensor_images()
     
     @abstractmethod
     def set_viewer_camera(self, eye: np.ndarray, target: np.ndarray):
@@ -171,6 +190,12 @@ class Simulator(ABC):
 
     def _update_depth_images(self):
         raise NotImplementedError("Depth image updates are not implemented for this simulator")
+
+    def _update_rgb_images(self):
+        raise NotImplementedError("RGB image updates are not implemented for this simulator")
+
+    def _draw_debug_sensor_images(self):
+        return self._draw_debug_depth_images()
 
     def _draw_debug_depth_images(self):
         return None

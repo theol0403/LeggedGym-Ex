@@ -210,8 +210,7 @@ class Go2TSDepth(LeggedRobot):
         
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
-        if self.cfg.sensor.add_depth:
-            self.simulator.update_depth_images()
+        self.simulator.update_sensors()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         self.llast_actions[:] = self.last_actions[:]
@@ -220,8 +219,7 @@ class Go2TSDepth(LeggedRobot):
         
         if self.debug:
             self.simulator.draw_debug_vis()
-            if self.cfg.sensor.add_depth:
-                self.simulator.draw_debug_depth_images()
+            self.simulator.draw_debug_sensor_images()
     
     def _log_constraint_violations(self):
         """Compute various constraints for constraints as terminations. Constraints violations are asssessed then
@@ -287,10 +285,10 @@ class Go2TSDepth(LeggedRobot):
         """ Callback called before computing terminations, rewards, and observations
             Default behaviour: Compute ang vel command based on target and heading, compute measured terrain heights and randomly push robots
         """
-        #
-        env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt) == 0).nonzero(as_tuple=False).flatten()
-        self._resample_commands(env_ids)
-        if self.cfg.commands.heading_command:
+        if not self.external_command_source_enabled:
+            env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt) == 0).nonzero(as_tuple=False).flatten()
+            self._resample_commands(env_ids)
+        if self.cfg.commands.heading_command and not self.external_command_source_enabled:
             forward = quat_apply(self.simulator.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
             self.commands[:, 2] = torch.clip(

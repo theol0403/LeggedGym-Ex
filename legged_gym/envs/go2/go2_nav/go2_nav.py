@@ -66,8 +66,7 @@ class GO2Nav(LeggedRobotNav):
         self.compute_reward()
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
-        if self.cfg.sensor.add_depth:
-            self.simulator.update_depth_images()
+        self.simulator.update_sensors()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         self.llast_actions[:] = self.last_actions[:]
@@ -81,6 +80,7 @@ class GO2Nav(LeggedRobotNav):
             self.simulator.draw_debug_boxes(self.target_pos_world, quat_from_euler_xyz(torch.zeros_like(self.target_orientation_world), 
                                                                                        torch.zeros_like(self.target_orientation_world), 
                                                                                        self.target_orientation_world))
+            self.simulator.draw_debug_sensor_images()
 
     def _init_buffers(self):
         super()._init_buffers()

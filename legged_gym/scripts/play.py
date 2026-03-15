@@ -8,7 +8,7 @@ from legged_gym.utils import *
 
 import numpy as np
 import torch
-from legged_gym.scripts.joystick import Joystick
+from legged_gym.scripts.play_commands import PlayCommandController, resolve_command_mode, supports_manual_velocity_commands
     
 def override_configs(env_cfg, train_cfg, args):
     """Override some environment configuration parameters for testing
@@ -17,17 +17,32 @@ def override_configs(env_cfg, train_cfg, args):
         env_cfg: environment configuration
         args: command line arguments
     """
+    command_mode = resolve_command_mode(args)
     depth_debug = args.depth_debug
-    if depth_debug and SIMULATOR == "isaaclab":
-        raise NotImplementedError("Depth debug rendering is not implemented for Isaac Lab")
+    rgb_debug = args.rgb_debug
+    sensor_debug = depth_debug or rgb_debug
+    enable_depth_debug = depth_debug and not args.disable_depth_debug
+    enable_rgb_debug = (rgb_debug or (SIMULATOR == "genesis" and depth_debug)) and not args.disable_rgb_debug
+    if sensor_debug and not (enable_depth_debug or enable_rgb_debug):
+        raise ValueError("At least one debug camera stream must remain enabled.")
+    if sensor_debug and SIMULATOR == "isaaclab":
+        raise NotImplementedError("Camera debug rendering is not implemented for Isaac Lab")
+    if enable_rgb_debug and SIMULATOR != "genesis":
+        raise NotImplementedError("RGB camera debug rendering is currently implemented only for Genesis")
     # override some parameters for testing
     # number of environments
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 16)
-    if depth_debug:
+    if enable_depth_debug:
         env_cfg.sensor.add_depth = True
-    env_cfg.env.debug = args.debug or depth_debug
-    if env_cfg.sensor.add_depth and env_cfg.env.debug:
-        env_cfg.env.num_envs = 1
+    if enable_rgb_debug:
+        env_cfg.sensor.add_rgb = True
+        for attr in ("resolution", "horizontal_fov_deg", "link_idx_local", "pos", "euler", "near_plane", "far_plane"):
+            setattr(
+                env_cfg.sensor.rgb_camera_config,
+                attr,
+                getattr(env_cfg.sensor.depth_camera_config, attr),
+            )
+    env_cfg.env.debug = args.debug or sensor_debug
     if train_cfg.runner_class_name == "CTSRunner":
         env_cfg.env.num_teacher = 1
     env_cfg.viewer.rendered_envs_idx = list(range(env_cfg.env.num_envs))
@@ -73,7 +88,11 @@ def override_configs(env_cfg, train_cfg, args):
         #                                   "depth": 0.2, "platform_size": 3.0}
         
         
-    if args.use_joystick:
+    if command_mode != "auto":
+        if not supports_manual_velocity_commands(env_cfg):
+            raise NotImplementedError(
+                f"Manual command mode '{command_mode}' is only implemented for velocity-command tasks."
+            )
         env_cfg.commands.heading_command = False
 
 def print_debug_info(env, robot_index):
@@ -92,7 +111,7 @@ def print_debug_info(env, robot_index):
     # print(f"actions: {env.simulator.dof_pos[robot_index].cpu().numpy()}")
     pass
 
-def interaction_loop(env, policy, args, train_cfg):
+def interaction_loop(env, policy, args, train_cfg, command_controller):
     """Run interaction loop between environment and policy
 
     Args:
@@ -120,21 +139,13 @@ def interaction_loop(env, policy, args, train_cfg):
     else:
         obs = env.get_observations()
     
-    # Setup joystick if needed
-    if args.use_joystick:
-        joystick = Joystick(joystick_type=args.joystick_type)
-    
     frame_dt = 1 / 60.0  # 60 Hz
     # interaction loop
     for i in range(10*int(env.max_episode_length)):
         
         t_start = time.perf_counter()
-        # update commands from joystick
-        if args.use_joystick:
-            joystick.update()
-            env.commands[:, 0] = -joystick.ly
-            env.commands[:, 1] = -joystick.lx
-            env.commands[:, 2] = -joystick.rx
+        if not command_controller.update(env):
+            break
         
         # set the viewer camera to follow the first environment by default
         if args.follow_robot:
@@ -229,16 +240,23 @@ def play(args):
     Args:
         args (_type_): command line arguments
     """
+    args.resume = args.resume or args.load_run is not None or (
+        args.ckpt is not None and args.ckpt >= 0
+    )
     if SIMULATOR == "genesis":
         gs.init(
             backend=gs.cpu if args.cpu else gs.gpu,
             logging_level='warning',
         )
+    args.command_mode = resolve_command_mode(args)
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     override_configs(env_cfg, train_cfg, args)
+    command_controller = PlayCommandController(args, env_cfg)
 
     # prepare environment
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
+    env.external_command_source_enabled = command_controller.requires_external_command_source
+    command_controller.initialize_env_commands(env)
     # load policy
     train_cfg.runner.resume = args.resume
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
@@ -255,7 +273,10 @@ def play(args):
         )
         export_policy(ppo_runner, path, args, env_cfg, train_cfg)
 
-    interaction_loop(env, policy, args, train_cfg)
+    try:
+        interaction_loop(env, policy, args, train_cfg, command_controller)
+    finally:
+        command_controller.close()
     
     
 if __name__ == '__main__':

@@ -122,6 +122,7 @@ class Go2CaT(LeggedRobotTS):
         
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
+        self.simulator.update_sensors()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         self.llast_actions[:] = self.last_actions[:]
@@ -131,6 +132,7 @@ class Go2CaT(LeggedRobotTS):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+            self.simulator.draw_debug_sensor_images()
     
     def compute_constraints_cat(self):
         """Compute various constraints for constraints as terminations. Constraints violations are asssessed then

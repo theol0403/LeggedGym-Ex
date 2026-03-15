@@ -120,11 +120,14 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             
     # training parameters
     if cfg_train is not None:
+        resume_requested = args.resume or args.load_run is not None or (
+            args.ckpt is not None and args.ckpt >= 0
+        )
         # alg runner parameters
         if args.max_iterations is not None:
             cfg_train.runner.max_iterations = args.max_iterations
-        if args.resume:
-            cfg_train.runner.resume = args.resume
+        if resume_requested:
+            cfg_train.runner.resume = True
         if args.sync_wandb:
             cfg_train.runner.sync_wandb = args.sync_wandb
         if args.ckpt is not None:
@@ -150,9 +153,16 @@ def get_args():
     parser.add_argument('--sync_wandb',     action='store_true', default=False, help="synchronize training log with wandb")
     parser.add_argument('--export_onnx',    action='store_true', default=False, help="export policy as onnx (besides jit)")
     parser.add_argument('--debug',          action='store_true', default=False, help="enable debug mode")
-    parser.add_argument('--depth_debug',    action='store_true', default=False, help="enable depth camera debug rendering when supported")
+    parser.add_argument('--depth_debug',    action='store_true', default=False, help="enable debug camera rendering; on Genesis this enables depth and RGB by default")
+    parser.add_argument('--rgb_debug',      action='store_true', default=False, help="enable RGB camera debug rendering when supported")
+    parser.add_argument('--disable_depth_debug', action='store_true', default=False, help="disable the depth debug camera stream")
+    parser.add_argument('--disable_rgb_debug',   action='store_true', default=False, help="disable the RGB debug camera stream")
     parser.add_argument('--load_run',       type=str, default=None, help="run to load, default: last run")
     parser.add_argument('--ckpt',           type=int, default=-1, help="checkpoint to load, -1 means latest")
+    parser.add_argument('--command_mode',   type=str, default='auto', choices=['auto', 'keyboard', 'joystick'],
+                        help="play command source: auto uses the task command sampler, keyboard opens a teleop window, joystick reads a gamepad")
+    parser.add_argument('--command_scale',  type=float, default=1.0,
+                        help="fraction of the task command range used by keyboard/joystick teleop")
     parser.add_argument('--use_joystick',   action='store_true', default=False, help="use joystick to provide commands")
     parser.add_argument('--joystick_type',  type=str, default='xbox', help="type of joystick: xbox, switch")
     parser.add_argument('--follow_robot',   action='store_true', default=False, help="whether the camera follows the robot during play")

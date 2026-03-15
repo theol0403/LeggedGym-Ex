@@ -8,11 +8,13 @@ from legged_gym.utils.terrain import Terrain
 from legged_gym.utils.math_utils import *
 if SIMULATOR == "genesis":
     import genesis as gs
+    import genesis.utils.geom as gu
 
 """ ********** Genesis Simulator ********** """
 class GenesisSimulator(Simulator):
     def __init__(self, cfg, sim_params: dict, device, headless):
         self._sim_params = sim_params
+        self._debug_vis_objects = []
         super().__init__(cfg, sim_params, device, headless)
     
     #----- Public methods -----#
@@ -187,7 +189,7 @@ class GenesisSimulator(Simulator):
         # # draw height points
         # if not self._cfg.terrain.measure_heights:
         #     return
-        self._scene.clear_debug_objects()
+        self._clear_debug_vis_objects()
         if self._cfg.env.debug_draw_key_body_points:
             self._draw_key_body_points(ref_key_body_pos)
         # # Height points around feet
@@ -261,6 +263,7 @@ class GenesisSimulator(Simulator):
                 max(int(self._cfg.viewer.ref_env), 0),
                 max(self._cfg.env.num_envs - 1, 0),
             )
+        self._rendered_env_indices = list(self._cfg.viewer.rendered_envs_idx)
     def _create_sim(self):
         enable_self_collision = not self._cfg.asset.self_collisions
 
@@ -354,9 +357,13 @@ class GenesisSimulator(Simulator):
         # add camera if needed
         if self._cfg.sensor.add_depth:
             self._setup_depth_camera()
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            self._setup_rgb_cameras()
         
         # build
         self._scene.build(n_envs=self._num_envs)
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            self._attach_rgb_cameras()
 
         self._get_env_origins()
 
@@ -502,6 +509,17 @@ class GenesisSimulator(Simulator):
                  self._cfg.sensor.depth_camera_config.resolution[0]), 
                 device=self._device, 
                 dtype=torch.float
+            )
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            self._rgb_images = torch.zeros(
+                (
+                    self._num_envs,
+                    self._cfg.sensor.rgb_camera_config.resolution[1],
+                    self._cfg.sensor.rgb_camera_config.resolution[0],
+                    3,
+                ),
+                device=self._device,
+                dtype=torch.uint8,
             )
         
         # Terrain information around feet
@@ -807,38 +825,64 @@ class GenesisSimulator(Simulator):
         self._depth_images.clamp_(near_clip, far_clip)
         # normalize the depth images to be within 0-1
         self._depth_images.sub_(near_clip).div_(far_clip - near_clip).sub_(0.5)
-    
-    def _draw_debug_depth_images(self):
+
+    def _update_rgb_images(self):
+        """Render the RGB camera only when the RGB stream is enabled."""
+        self._rgb_images.zero_()
+        expected_frame_shape = (
+            self._cfg.sensor.rgb_camera_config.resolution[1],
+            self._cfg.sensor.rgb_camera_config.resolution[0],
+            3,
+        )
+        for env_idx, rgb_camera in self.rgb_cameras.items():
+            rgb_camera.move_to_attach()
+            latest_frame, _, _, _ = rgb_camera.render(rgb=True, depth=False, segmentation=False, normal=False)
+            latest_frame = self._as_torch_frame(latest_frame)
+            if latest_frame.ndim != 3 or tuple(latest_frame.shape) != expected_frame_shape:
+                raise RuntimeError(
+                    f"Unexpected Genesis RGB image shape for env {env_idx}: {tuple(latest_frame.shape)}"
+                )
+            self._rgb_images[env_idx].copy_(self._convert_rgb_frame_to_uint8(latest_frame))
+        return self._rgb_images
+
+    def _draw_debug_sensor_images(self):
         if self._headless:
             return
-        depth = self._depth_images[0, 0]
-        if self._cfg.sensor.depth_camera_config.calculate_depth:
-            near_clip = self._cfg.sensor.depth_camera_config.near_clip
-            far_clip = self._cfg.sensor.depth_camera_config.far_clip
-            pixel_values = ((depth + 0.5) * 255.0).clamp(0, 255).cpu().numpy().astype(np.uint8)
-            depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
-            min_depth = float(depth.min().item() + 0.5) * (far_clip - near_clip) + near_clip
-            max_depth = float(depth.max().item() + 0.5) * (far_clip - near_clip) + near_clip
-            cv.putText(
-                depth_vis,
-                f"depth[m] min {min_depth:.2f} max {max_depth:.2f}",
-                (8, 18),
-                cv.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 255, 255),
-                1,
-                cv.LINE_AA,
-            )
-            cv.imshow("Genesis Depth Camera", depth_vis)
-            cv.waitKey(1)
+
+        env_panels = []
+        for env_idx in self._rendered_env_indices:
+            frames = []
+            if self._cfg.sensor.add_depth:
+                frames.append(self._prepare_depth_debug_frame(env_idx))
+            if getattr(self._cfg.sensor, "add_rgb", False):
+                frames.append(self._prepare_rgb_debug_frame(env_idx))
+            if frames:
+                target_height = max(frame.shape[0] for frame in frames)
+                padded_frames = [self._pad_debug_frame(frame, target_height) for frame in frames]
+                env_panels.append(np.concatenate(padded_frames, axis=1))
+        if not env_panels:
+            return
+
+        camera_canvas = self._tile_debug_panels(env_panels)
+        cv.namedWindow("Genesis Cameras", cv.WINDOW_NORMAL | cv.WINDOW_KEEPRATIO)
+        cv.imshow("Genesis Cameras", camera_canvas)
+        cv.waitKey(1)
     
     def _draw_key_body_points(self, ref_key_body_pos=None):
         """ Draws key body points for debugging
         """
         if ref_key_body_pos is not None:
-            self._scene.draw_debug_spheres(ref_key_body_pos.view(-1, 3), radius=0.03, color=(1, 0, 0, 1))
+            debug_obj = self._scene.draw_debug_spheres(
+                ref_key_body_pos.view(-1, 3), radius=0.03, color=(1, 0, 0, 1)
+            )
+            self._debug_vis_objects.append(debug_obj)
         else:
             pass
+
+    def _clear_debug_vis_objects(self):
+        for debug_obj in self._debug_vis_objects:
+            self._scene.clear_debug_object(debug_obj)
+        self._debug_vis_objects.clear()
 
     def _create_heightfield(self):
         """ Adds a heightfield terrain to the simulation, sets parameters based on the cfg.
@@ -888,6 +932,7 @@ class GenesisSimulator(Simulator):
         )
         sensor_kwargs = dict(
             entity_idx=self._robot.idx,
+            link_idx_local=self._cfg.sensor.depth_camera_config.link_idx_local,
             pos_offset=self._cfg.sensor.depth_camera_config.pos,
             euler_offset=self._cfg.sensor.depth_camera_config.euler,
             return_world_frame=False,
@@ -896,6 +941,149 @@ class GenesisSimulator(Simulator):
             max_range=self._cfg.sensor.depth_camera_config.far_plane,
         )
         self.depth_camera = self._scene.add_sensor(gs.sensors.DepthCamera(pattern=depth_pattern, **sensor_kwargs))
+
+    def _setup_rgb_cameras(self):
+        """Create one RGB debug camera per rendered environment."""
+        rgb_cfg = self._cfg.sensor.rgb_camera_config
+        self.rgb_cameras = {}
+        for env_idx in self._rendered_env_indices:
+            self.rgb_cameras[env_idx] = self._scene.add_camera(
+                res=rgb_cfg.resolution,
+                pos=rgb_cfg.pos,
+                lookat=(rgb_cfg.pos[0] + 1.0, rgb_cfg.pos[1], rgb_cfg.pos[2]),
+                up=(0.0, 0.0, 1.0),
+                fov=rgb_cfg.horizontal_fov_deg,
+                near=rgb_cfg.near_plane,
+                far=rgb_cfg.far_plane,
+                env_idx=env_idx,
+            )
+
+    def _attach_rgb_cameras(self):
+        """Attach each RGB camera to the configured camera mount of its environment."""
+        rgb_cfg = self._cfg.sensor.rgb_camera_config
+        camera_offset = self._camera_offset_transform(rgb_cfg.pos, rgb_cfg.euler)
+        mounted_link = self._get_robot_link_by_local_idx(rgb_cfg.link_idx_local)
+        for rgb_camera in self.rgb_cameras.values():
+            rgb_camera.attach(mounted_link, camera_offset)
+            rgb_camera.move_to_attach()
+
+    def _get_robot_link_by_local_idx(self, link_idx_local):
+        for link in self._robot.links:
+            if link.idx - self._robot.link_start == link_idx_local:
+                return link
+        raise IndexError(f"Invalid robot link_idx_local for camera mount: {link_idx_local}")
+
+    def _camera_offset_transform(self, pos_offset, euler_offset):
+        pos = np.asarray(pos_offset, dtype=np.float32)
+        euler = np.asarray(euler_offset, dtype=np.float32)
+        sensor_quat = gu.xyz_to_quat(euler)
+        sensor_rotation = gu.quat_to_R(sensor_quat)
+        # DepthCameraPattern uses a robotics camera frame: forward +X, right -Y, up +Z.
+        # Genesis visualizer cameras use: forward -Z, right +X, up +Y.
+        # Convert the configured sensor mount into the visualizer camera basis.
+        sensor_to_visualizer_camera = np.array(
+            [
+                [0.0, 0.0, -1.0],
+                [-1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        camera_rotation = sensor_rotation @ sensor_to_visualizer_camera
+        return gu.trans_R_to_T(pos, camera_rotation)
+
+    def _as_torch_frame(self, frame):
+        if isinstance(frame, np.ndarray):
+            if any(stride < 0 for stride in frame.strides) or not frame.flags.c_contiguous:
+                frame = np.ascontiguousarray(frame)
+            return torch.from_numpy(frame).to(self._device)
+        if torch.is_tensor(frame):
+            return frame.contiguous().to(self._device)
+        raise TypeError(f"Unsupported Genesis camera frame type: {type(frame)}")
+
+    def _convert_rgb_frame_to_uint8(self, frame):
+        frame = frame.detach()
+        if frame.dtype == torch.uint8:
+            return frame
+        if torch.is_floating_point(frame):
+            if frame.numel() > 0 and float(frame.max().item()) <= 1.0 + 1e-6:
+                frame = frame * 255.0
+            return frame.clamp(0, 255).round().to(torch.uint8)
+        return frame.clamp(0, 255).to(torch.uint8)
+
+    def _prepare_depth_debug_frame(self, env_idx):
+        depth = self._depth_images[env_idx, 0]
+        near_clip = self._cfg.sensor.depth_camera_config.near_clip
+        far_clip = self._cfg.sensor.depth_camera_config.far_clip
+        pixel_values = ((depth + 0.5) * 255.0).clamp(0, 255).cpu().numpy().astype(np.uint8)
+        depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
+        min_depth = float(depth.min().item() + 0.5) * (far_clip - near_clip) + near_clip
+        max_depth = float(depth.max().item() + 0.5) * (far_clip - near_clip) + near_clip
+        return self._label_debug_frame(depth_vis, f"Env {env_idx}  Depth  min {min_depth:.2f}m  max {max_depth:.2f}m")
+
+    def _prepare_rgb_debug_frame(self, env_idx):
+        rgb_frame = self._rgb_images[env_idx].cpu().numpy()
+        rgb_frame = cv.cvtColor(rgb_frame, cv.COLOR_RGB2BGR)
+        return self._label_debug_frame(rgb_frame, f"Env {env_idx}  RGB")
+
+    def _label_debug_frame(self, frame, label):
+        labeled = frame.copy()
+        cv.putText(
+            labeled,
+            label,
+            (8, 18),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+            cv.LINE_AA,
+        )
+        return labeled
+
+    def _pad_debug_frame(self, frame, target_height):
+        if frame.shape[0] == target_height:
+            return frame
+        pad_bottom = target_height - frame.shape[0]
+        return cv.copyMakeBorder(
+            frame,
+            0,
+            pad_bottom,
+            0,
+            0,
+            cv.BORDER_CONSTANT,
+            value=(0, 0, 0),
+        )
+
+    def _tile_debug_panels(self, panels):
+        if len(panels) == 1:
+            return panels[0]
+
+        num_cols = int(np.ceil(np.sqrt(len(panels))))
+        num_rows = int(np.ceil(len(panels) / num_cols))
+        cell_height = max(panel.shape[0] for panel in panels)
+        cell_width = max(panel.shape[1] for panel in panels)
+        blank_panel = np.zeros((cell_height, cell_width, 3), dtype=np.uint8)
+
+        padded_panels = [
+            cv.copyMakeBorder(
+                panel,
+                0,
+                cell_height - panel.shape[0],
+                0,
+                cell_width - panel.shape[1],
+                cv.BORDER_CONSTANT,
+                value=(0, 0, 0),
+            )
+            for panel in panels
+        ]
+        while len(padded_panels) < num_rows * num_cols:
+            padded_panels.append(blank_panel.copy())
+
+        rows = []
+        for row_idx in range(num_rows):
+            row_start = row_idx * num_cols
+            rows.append(np.concatenate(padded_panels[row_start : row_start + num_cols], axis=1))
+        return np.concatenate(rows, axis=0)
 
 
     #----- Properties -----#

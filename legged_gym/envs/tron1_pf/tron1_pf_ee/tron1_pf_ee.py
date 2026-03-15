@@ -38,8 +38,7 @@ class TRON1PF_EE(LeggedRobotEE):
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
         self._calc_periodic_reward_obs()
-        if self.cfg.sensor.add_depth:
-            self.simulator.update_depth_images()
+        self.simulator.update_sensors()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         self.llast_actions[:] = self.last_actions[:]
@@ -49,6 +48,7 @@ class TRON1PF_EE(LeggedRobotEE):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+            self.simulator.draw_debug_sensor_images()
             
     def compute_observations(self):
         obs_buf = torch.cat((
@@ -197,10 +197,15 @@ class TRON1PF_EE(LeggedRobotEE):
         if self.cfg.terrain.curriculum:
             self._update_terrain_curriculum(env_ids)
         # avoid updating command curriculum at each step since the maximum command is common to all envs
-        if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length ==0):
+        if (
+            not self.external_command_source_enabled
+            and self.cfg.commands.curriculum
+            and (self.common_step_counter % self.max_episode_length == 0)
+        ):
             self._update_command_curriculum(env_ids)
 
-        self._resample_commands(env_ids)
+        if not self.external_command_source_enabled:
+            self._resample_commands(env_ids)
         _ = np.random.random() # initialize the env at sit pose randomly
         if _ < self.cfg.init_state.sit_init_percent:
             self._reset_dofs_sit_pose(env_ids)
