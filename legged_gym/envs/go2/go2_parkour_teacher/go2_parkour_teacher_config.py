@@ -1,39 +1,7 @@
 from legged_gym import SIMULATOR
 from legged_gym.envs.base.common_cfgs import Go2RoughCommonCfg
+from legged_gym.envs.base.parkour_observation import parkour_actor_obs_dim, parkour_critic_obs_dim
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfgPPO
-
-
-def _num_scandot_points(terrain_cfg_cls):
-    return len(terrain_cfg_cls.scandots.points_x) * len(terrain_cfg_cls.scandots.points_y)
-
-
-def _critic_contact_dims(asset_cfg_cls):
-    return getattr(asset_cfg_cls, "contact_state_obs_dim", len(asset_cfg_cls.contact_state_link_names) * 4)
-
-
-def _actor_obs_dim(cfg_cls):
-    num_actions = len(cfg_cls.asset.dof_names)
-    num_goal_terms = 4
-    num_gravity = 3
-    num_ang_vel = 3
-    num_foot_contacts = 4
-    return (
-        num_goal_terms
-        + num_gravity
-        + num_ang_vel
-        + num_actions
-        + num_actions
-        + num_actions
-        + num_foot_contacts
-        + _num_scandot_points(cfg_cls.terrain)
-    )
-
-
-def _critic_obs_dim(cfg_cls):
-    num_actions = len(cfg_cls.asset.dof_names)
-    privileged_dynamics_dim = 1 + 1 + 3 + 2 + num_actions + num_actions
-    return _actor_obs_dim(cfg_cls) + 3 + privileged_dynamics_dim + _critic_contact_dims(cfg_cls.asset)
-
 
 class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
     class env(Go2RoughCommonCfg.env):
@@ -53,9 +21,9 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         terrain_length = 16.0
         terrain_width = 6.0
         platform_size = 3.0
-        num_rows = 4
+        num_rows = 3
         num_cols = 3
-        max_init_terrain_level = 1
+        max_init_terrain_level = 0
         obtain_terrain_info_around_feet = True
         measure_heights = True
         measured_points_x = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
@@ -76,8 +44,8 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
             force_family = None
             force_row = None
             max_waypoints = 5
-            max_obstacles = 4
-            max_sections = 4
+            max_obstacles = 3
+            max_sections = 3
             waypoint_radius = 0.45
             waypoint_dwell_steps = 3
             curriculum_progress_up_threshold = 0.9
@@ -98,8 +66,21 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
 
     class asset(Go2RoughCommonCfg.asset):
         obtain_link_contact_states = True
-        contact_state_link_names = ["base", "hip", "thigh", "calf"]
-        contact_state_obs_dim = 13
+        contact_state_link_names = [
+            "base",
+            "FL_hip",
+            "FR_hip",
+            "RL_hip",
+            "RR_hip",
+            "FL_thigh",
+            "FR_thigh",
+            "RL_thigh",
+            "RR_thigh",
+            "FL_calf",
+            "FR_calf",
+            "RL_calf",
+            "RR_calf",
+        ]
         penalize_contacts_on = ["hip", "thigh", "calf", "base", "Head"]
         terminate_after_contacts_on = ["base", "Head"]
         hip_joint_indices = [0, 3, 6, 9]
@@ -196,5 +177,5 @@ class Go2ParkourTeacherCfgPPO(LeggedRobotCfgPPO):
         max_iterations = 2500
 
 
-Go2ParkourTeacherCfg.env.num_observations = _actor_obs_dim(Go2ParkourTeacherCfg)
-Go2ParkourTeacherCfg.env.num_privileged_obs = _critic_obs_dim(Go2ParkourTeacherCfg)
+Go2ParkourTeacherCfg.env.num_observations = parkour_actor_obs_dim(Go2ParkourTeacherCfg)
+Go2ParkourTeacherCfg.env.num_privileged_obs = parkour_critic_obs_dim(Go2ParkourTeacherCfg)

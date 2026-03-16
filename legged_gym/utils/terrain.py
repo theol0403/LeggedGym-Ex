@@ -230,16 +230,21 @@ class Terrain:
         waypoint_count = 0
         section_count = 0
         cursor_x = 1.75
+        obstacle_count = min(self.max_obstacles, difficulty_row + 1)
 
         if family == "stairs":
-            difficulty_values = self._parkour_difficulty_series(difficulty_row, min(self.max_obstacles, 3))
-            for local_difficulty in difficulty_values:
+            step_heights = [0.06, 0.09, 0.12]
+            step_counts = [2, 3, 4]
+            step_height = step_heights[min(difficulty_row, len(step_heights) - 1)]
+            step_count = step_counts[min(difficulty_row, len(step_counts) - 1)]
+            for _ in range(obstacle_count):
                 end_x, _ = self._build_stairs_feature(
                     terrain,
                     start_x=cursor_x,
                     y_min=y_min,
                     y_max=y_max,
-                    difficulty=local_difficulty,
+                    step_height=step_height,
+                    step_count=step_count,
                 )
                 section_bounds[section_count] = np.array([cursor_x - 0.1, end_x + 0.3], dtype=np.float32)
                 section_tags[section_count] = self.PARKOUR_SECTION_IDS["stairs"]
@@ -251,13 +256,13 @@ class Terrain:
                 )
                 waypoint_count += 1
                 section_count += 1
-                cursor_x = end_x + self._lerp(0.65, 0.45, local_difficulty)
+                cursor_x = end_x + [0.9, 0.75, 0.6][min(difficulty_row, 2)]
         elif family == "hurdle_block":
-            difficulty_values = self._parkour_difficulty_series(difficulty_row, min(self.max_obstacles, 4))
-            for local_difficulty in difficulty_values:
-                block_height = self._lerp(0.10, 0.34, local_difficulty)
-                block_length = self._lerp(0.34, 0.80, local_difficulty)
-                y_half = self._lerp(0.62, 0.90, local_difficulty)
+            block_heights = [0.12, 0.20, 0.28]
+            block_height = block_heights[min(difficulty_row, len(block_heights) - 1)]
+            block_length = 0.25
+            y_half = [0.62, 0.72, 0.82][min(difficulty_row, 2)]
+            for _ in range(obstacle_count):
                 x0 = cursor_x
                 x1 = x0 + block_length
                 block_y_min = lane_center_y - y_half
@@ -267,19 +272,19 @@ class Terrain:
                 section_bounds[section_count] = np.array([x0 - 0.2, x1 + 0.35], dtype=np.float32)
                 section_tags[section_count] = self.PARKOUR_SECTION_IDS["jump"]
                 section_jump_expected[section_count] = True
-                waypoint_x = min(x1 + self._lerp(0.7, 0.55, local_difficulty), goal_x)
+                waypoint_x = min(x1 + [0.7, 0.62, 0.55][min(difficulty_row, 2)], goal_x)
                 waypoints[waypoint_count] = np.array(
                     [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
                     dtype=np.float32,
                 )
                 waypoint_count += 1
                 section_count += 1
-                cursor_x = x1 + self._lerp(0.6, 0.4, local_difficulty)
+                cursor_x = x1 + [0.9, 0.75, 0.65][min(difficulty_row, 2)]
         elif family == "gap":
-            difficulty_values = self._parkour_difficulty_series(difficulty_row, min(self.max_obstacles, 4))
-            for local_difficulty in difficulty_values:
-                gap_width = self._lerp(0.22, 0.80, local_difficulty)
-                gap_y_half = self._lerp(1.0, 1.15, local_difficulty)
+            gap_widths = [0.20, 0.35, 0.50]
+            gap_width = gap_widths[min(difficulty_row, len(gap_widths) - 1)]
+            gap_y_half = [1.0, 1.07, 1.15][min(difficulty_row, 2)]
+            for _ in range(obstacle_count):
                 x0 = cursor_x
                 x1 = x0 + gap_width
                 gap_y_min = lane_center_y - gap_y_half
@@ -289,14 +294,14 @@ class Terrain:
                 section_bounds[section_count] = np.array([x0 - 0.2, x1 + 0.45], dtype=np.float32)
                 section_tags[section_count] = self.PARKOUR_SECTION_IDS["jump"]
                 section_jump_expected[section_count] = True
-                waypoint_x = min(x1 + self._lerp(0.8, 0.6, local_difficulty), goal_x)
+                waypoint_x = min(x1 + [0.8, 0.7, 0.6][min(difficulty_row, 2)], goal_x)
                 waypoints[waypoint_count] = np.array(
                     [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
                     dtype=np.float32,
                 )
                 waypoint_count += 1
                 section_count += 1
-                cursor_x = x1 + self._lerp(0.65, 0.45, local_difficulty)
+                cursor_x = x1 + [0.95, 0.8, 0.7][min(difficulty_row, 2)]
         elif family != "flat":
             raise ValueError(f"Unsupported parkour family '{family}'")
 
@@ -316,6 +321,7 @@ class Terrain:
             "difficulty_row": difficulty_row,
             "spawn_pose": spawn_pose,
             "safe_spawn_region": np.array([0.6, 1.2, lane_center_y - 0.3, lane_center_y + 0.3], dtype=np.float32),
+            "lane_bounds": np.array([0.4, self.env_length - 0.4, y_min, y_max], dtype=np.float32),
             "waypoints": waypoints,
             "waypoint_count": waypoint_count,
             "terminal_goal": terminal_goal,
@@ -352,6 +358,7 @@ class Terrain:
             self.lane_difficulty_row[i, j] = metadata["difficulty_row"]
             self.lane_spawn_pose[i, j] = metadata["spawn_pose"]
             self.lane_safe_spawn_region[i, j] = metadata["safe_spawn_region"]
+            self.lane_bounds[i, j] = metadata["lane_bounds"]
             self.lane_waypoints[i, j] = metadata["waypoints"]
             self.lane_waypoint_counts[i, j] = metadata["waypoint_count"]
             self.lane_terminal_goal[i, j] = metadata["terminal_goal"]
@@ -426,6 +433,7 @@ class Terrain:
         self.lane_difficulty_row = np.zeros((self.cfg.num_rows, self.cfg.num_cols), dtype=np.int32)
         self.lane_spawn_pose = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 4), dtype=np.float32)
         self.lane_safe_spawn_region = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 4), dtype=np.float32)
+        self.lane_bounds = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 4), dtype=np.float32)
         self.lane_waypoints = np.zeros((self.cfg.num_rows, self.cfg.num_cols, self.max_waypoints, 3), dtype=np.float32)
         self.lane_waypoint_counts = np.zeros((self.cfg.num_rows, self.cfg.num_cols), dtype=np.int32)
         self.lane_terminal_goal = np.zeros((self.cfg.num_rows, self.cfg.num_cols, 3), dtype=np.float32)
@@ -455,11 +463,10 @@ class Terrain:
         end = self._lerp(0.60, 1.00, row_fraction)
         return np.linspace(start, end, count, dtype=np.float32)
 
-    def _build_stairs_feature(self, terrain, start_x, y_min, y_max, difficulty):
-        step_height = self._lerp(0.05, 0.13, float(difficulty))
-        step_count = int(np.round(self._lerp(2.0, 4.0, float(difficulty))))
-        step_tread = self._lerp(0.28, 0.38, float(difficulty))
-        flat_top = self._lerp(0.18, 0.34, float(difficulty))
+    def _build_stairs_feature(self, terrain, start_x, y_min, y_max, step_height, step_count):
+        row_fraction = max(step_count - 2, 0) / 2.0
+        step_tread = self._lerp(0.28, 0.38, row_fraction)
+        flat_top = self._lerp(0.18, 0.34, row_fraction)
 
         current_height = 0.0
         cursor_x = start_x

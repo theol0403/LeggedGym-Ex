@@ -2,6 +2,7 @@ import torch
 
 from legged_gym import SIMULATOR
 from legged_gym.envs.base.legged_robot import LeggedRobot
+from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 from legged_gym.utils.math_utils import quat_from_euler_xyz, quat_rotate_inverse, wrap_to_pi, torch_rand_float
 
 
@@ -16,11 +17,13 @@ class LeggedRobotParkour(LeggedRobot):
         self.parkour_cfg = self.cfg.terrain.parkour
 
     def _init_buffers(self):
+        self.obs_spec = ParkourObservationSpec.from_cfg(self.cfg)
         super()._init_buffers()
         if self.simulator.lane_waypoints is None:
             raise RuntimeError("LeggedRobotParkour requires simulator-owned parkour lane metadata.")
         if self.simulator.scandot_heights is None:
             raise RuntimeError("LeggedRobotParkour requires scandot terrain observations to be enabled.")
+        self._validate_configured_observation_dims()
 
         self.commands_scale = torch.tensor(
             [
@@ -55,6 +58,8 @@ class LeggedRobotParkour(LeggedRobot):
 
     def check_termination(self):
         super().check_termination()
+        self.reset_buf |= self.simulator.parkour_out_of_lane_buf
+        self.reset_buf |= self.simulator.global_out_of_bounds_buf
         self.reset_buf |= self.course_success
 
     def reset_idx(self, env_ids):
@@ -66,6 +71,8 @@ class LeggedRobotParkour(LeggedRobot):
         success_before_reset = self.course_success[env_ids].clone().float()
         family_before_reset = self.simulator.lane_family[env_ids].clone().float()
         row_before_reset = self.simulator.lane_difficulty_row[env_ids].clone().float()
+        out_of_lane_before_reset = self.simulator.parkour_out_of_lane_buf[env_ids].clone().float()
+        global_out_of_bounds_before_reset = self.simulator.global_out_of_bounds_buf[env_ids].clone().float()
 
         super().reset_idx(env_ids)
 
@@ -74,6 +81,8 @@ class LeggedRobotParkour(LeggedRobot):
         self.extras["episode"]["success"] = torch.mean(success_before_reset)
         self.extras["episode"]["terrain_family"] = torch.mean(family_before_reset)
         self.extras["episode"]["terrain_row"] = torch.mean(row_before_reset)
+        self.extras["episode"]["out_of_lane"] = torch.mean(out_of_lane_before_reset)
+        self.extras["episode"]["global_out_of_bounds"] = torch.mean(global_out_of_bounds_before_reset)
 
         self.active_waypoint_idx[env_ids] = 0
         self.waypoint_dwell_steps[env_ids] = 0
@@ -111,6 +120,7 @@ class LeggedRobotParkour(LeggedRobot):
             scandot_obs,
         )
         actor_obs = torch.cat(obs_parts, dim=-1)
+        self._validate_runtime_observation_dims(actor_obs, self.obs_spec.actor_dim, "actor")
 
         if self.num_privileged_obs is not None:
             privileged_parts = (
@@ -120,6 +130,7 @@ class LeggedRobotParkour(LeggedRobot):
                 self.simulator.link_contact_states,
             )
             self.privileged_obs_buf = torch.cat(privileged_parts, dim=-1)
+            self._validate_runtime_observation_dims(self.privileged_obs_buf, self.obs_spec.critic_dim, "critic")
 
         self.obs_buf = actor_obs
         if self.add_noise:
@@ -210,13 +221,14 @@ class LeggedRobotParkour(LeggedRobot):
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
 
-        noise_vec[:4] = 0.0
-        noise_vec[4:7] = noise_scales.gravity * noise_level
-        noise_vec[7:10] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-        noise_vec[10:22] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
-        noise_vec[22:34] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
-        noise_vec[34:50] = 0.0
-        noise_vec[50:] = noise_scales.scandots * noise_level
+        noise_vec[self.obs_spec.command_slice] = 0.0
+        noise_vec[self.obs_spec.gravity_slice] = noise_scales.gravity * noise_level
+        noise_vec[self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        noise_vec[self.obs_spec.actions_slice] = 0.0
+        noise_vec[self.obs_spec.foot_contacts_slice] = 0.0
+        noise_vec[self.obs_spec.scandots_slice] = noise_scales.scandots * noise_level
         return noise_vec
 
     def _get_privileged_dynamics(self):
@@ -412,3 +424,19 @@ class LeggedRobotParkour(LeggedRobot):
         env_ids = self.env_ids_long.unsqueeze(1).expand_as(px)
         edge_hits = self.simulator.lane_edge_masks[env_ids, px, py]
         return torch.sum(edge_hits.float() * foot_contacts.float(), dim=1)
+
+    def _validate_configured_observation_dims(self):
+        if self.num_obs != self.obs_spec.actor_dim:
+            raise RuntimeError(
+                f"Configured actor observation dim {self.num_obs} does not match parkour spec {self.obs_spec.actor_dim}."
+            )
+        if self.num_privileged_obs is not None and self.num_privileged_obs != self.obs_spec.critic_dim:
+            raise RuntimeError(
+                f"Configured critic observation dim {self.num_privileged_obs} does not match parkour spec {self.obs_spec.critic_dim}."
+            )
+
+    def _validate_runtime_observation_dims(self, obs_tensor, expected_dim, obs_name):
+        if obs_tensor.shape[1] != expected_dim:
+            raise RuntimeError(
+                f"Runtime {obs_name} observation dim {obs_tensor.shape[1]} does not match expected dim {expected_dim}."
+            )

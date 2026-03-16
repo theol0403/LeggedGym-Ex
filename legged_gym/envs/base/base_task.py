@@ -63,5 +63,9 @@ class BaseTask():
         obs, privileged_obs, _, _, _ = self.step(torch.zeros(self.num_envs, self.num_actions, device=self.device, requires_grad=False))
         return obs, privileged_obs
 
+    def close(self):
+        """Release simulator resources when a task is used programmatically."""
+        self.simulator.close()
+
     def step(self, actions):
         raise NotImplementedError

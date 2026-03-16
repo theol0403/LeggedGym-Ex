@@ -76,6 +76,7 @@ class OnPolicyRunner:
         self.tot_timesteps = 0
         self.tot_time = 0
         self.current_learning_iteration = 0
+        self.best_success_metric = float("-inf")
 
         self.env.reset()
     
@@ -147,6 +148,7 @@ class OnPolicyRunner:
             learn_time = stop - start
             if self.log_dir is not None:
                 self.log(locals())
+                self._maybe_save_best_success_model(it, ep_infos)
             if it % self.save_interval == 0:
                 self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             ep_infos.clear()
@@ -258,3 +260,29 @@ class OnPolicyRunner:
         if device is not None:
             self.alg.actor_critic.to(device)
         return self.alg.actor_critic.act_inference
+
+    def _maybe_save_best_success_model(self, iteration, ep_infos):
+        if self.log_dir is None or not ep_infos:
+            return
+        success_values = []
+        for ep_info in ep_infos:
+            if "success" not in ep_info:
+                continue
+            value = ep_info["success"]
+            if isinstance(value, torch.Tensor):
+                success_values.append(float(value.float().mean().item()))
+            else:
+                success_values.append(float(value))
+        if not success_values:
+            return
+        mean_success = sum(success_values) / len(success_values)
+        if mean_success <= self.best_success_metric:
+            return
+        self.best_success_metric = mean_success
+        self.save(
+            os.path.join(self.log_dir, "best_model.pt"),
+            infos={
+                "best_success_metric": mean_success,
+                "best_success_iteration": iteration,
+            },
+        )

@@ -100,10 +100,10 @@ task_registry.register( "go2_cts", Go2CTS, Go2CTSCfg(), Go2CTSCfgPPO())
 task_registry.register( "go2_dreamwaq", Go2Dreamwaq, Go2DreamwaqCfg(), Go2DreamwaqCfgPPO())
 task_registry.register( "go2_cat", Go2CaT, Go2CaTCfg(), Go2CaTCfgPPO())
 task_registry.register( "go2_ts_depth", Go2TSDepth, Go2TSDepthCfg(), Go2TSDepthCfgPPO())
+# Legacy rough-terrain teacher-student alias. This is not a parkour task.
 task_registry.register( "go2_ts_scandots", Go2TSDepth, Go2TSScandotsCfg(), Go2TSScandotsCfgPPO())
 task_registry.register( "go2_nav", GO2Nav, GO2NavCfg(), GO2NavCfgPPO())
-if SIMULATOR == "genesis":
-    task_registry.register( "go2_parkour_teacher", Go2ParkourTeacher, Go2ParkourTeacherCfg(), Go2ParkourTeacherCfgPPO())
+task_registry.register( "go2_parkour_teacher", Go2ParkourTeacher, Go2ParkourTeacherCfg(), Go2ParkourTeacherCfgPPO())
 task_registry.register( "tron1_pf", TRON1PF, TRON1PFCfg(), TRON1PFCfgPPO())
 task_registry.register( "tron1_pf_ee", TRON1PF_EE, TRON1PF_EECfg(), TRON1PF_EECfgPPO())
 task_registry.register( "tron1_sf", TRON1SF, TRON1SFCfg(), TRON1SFCfgPPO())

@@ -111,28 +111,34 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
     # environment parameters
     if env_cfg is not None:
         # num envs
-        if args.num_envs is not None:
+        if getattr(args, "num_envs", None) is not None:
             env_cfg.env.num_envs = args.num_envs
-        if args.debug:
+        if getattr(args, "debug", False):
             env_cfg.env.debug = args.debug
-        if args.motion_file is not None:
+        if getattr(args, "motion_file", None) is not None:
             env_cfg.env.motion_file = args.motion_file
+        parkour_cfg = getattr(env_cfg.terrain, "parkour", None)
+        if parkour_cfg is not None and getattr(parkour_cfg, "enable", False):
+            if getattr(args, "parkour_force_family", None) is not None:
+                parkour_cfg.force_family = args.parkour_force_family
+            if getattr(args, "parkour_force_row", None) is not None:
+                parkour_cfg.force_row = args.parkour_force_row
             
     # training parameters
     if cfg_train is not None:
-        resume_requested = args.resume or args.load_run is not None or (
-            args.ckpt is not None and args.ckpt >= 0
+        resume_requested = getattr(args, "resume", False) or getattr(args, "load_run", None) is not None or (
+            getattr(args, "ckpt", None) is not None and args.ckpt >= 0
         )
         # alg runner parameters
-        if args.max_iterations is not None:
+        if getattr(args, "max_iterations", None) is not None:
             cfg_train.runner.max_iterations = args.max_iterations
         if resume_requested:
             cfg_train.runner.resume = True
-        if args.sync_wandb:
+        if getattr(args, "sync_wandb", False):
             cfg_train.runner.sync_wandb = args.sync_wandb
-        if args.ckpt is not None:
+        if getattr(args, "ckpt", None) is not None:
             cfg_train.runner.checkpoint = args.ckpt
-        if args.load_run is not None:
+        if getattr(args, "load_run", None) is not None:
             cfg_train.runner.load_run = args.load_run
 
     return env_cfg, cfg_train
@@ -183,6 +189,11 @@ def get_args():
     parser.add_argument('--motion_file',    type=str, 
                         default=None, 
                         help="motion file to load")
+    parser.add_argument('--parkour_force_family', type=str, default=None,
+                        choices=['stairs', 'hurdle_block', 'gap'],
+                        help="force the Genesis parkour task to sample a single obstacle family")
+    parser.add_argument('--parkour_force_row', type=int, default=None,
+                        help="force the Genesis parkour task to sample a single curriculum row")
 
     return parser.parse_args()
 

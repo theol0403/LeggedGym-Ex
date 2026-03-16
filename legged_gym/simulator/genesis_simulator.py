@@ -46,8 +46,7 @@ class GenesisSimulator(Simulator):
     def post_physics_step(self):
         # prepare quantities
         self._base_pos[:] = self._robot.get_pos()
-        self._check_base_pos_out_of_bound()       # check if the pos of the robot is out of terrain bounds
-        self._base_pos[:] = self._robot.get_pos()
+        self._update_bounds_state()
         base_quat_gs = self._robot.get_quat()
         base_vel = self._robot.get_vel()
         base_ang = self._robot.get_ang()
@@ -106,6 +105,8 @@ class GenesisSimulator(Simulator):
         self._last_feet_vel[env_ids] = 0.
         self._last_base_lin_vel[env_ids] = 0.
         self._last_base_ang_vel[env_ids] = 0.
+        self._parkour_out_of_lane_buf[env_ids] = False
+        self._global_out_of_bounds_buf[env_ids] = False
 
     def reset_dofs(self, env_ids, dof_pos, dof_vel):
         """ Resets DOF position and velocities of selected environmments
@@ -444,11 +445,11 @@ class GenesisSimulator(Simulator):
         print(f"motor dof indices: {self._dof_indices}")
         
         # find indices of links specified in the config
-        def find_link_indices(names):
+        def find_link_indices(names, exact_match=False):
             return [
                 link.idx - self._robot.link_start
                 for link in self._robot.links
-                if any(name in link.name for name in names)
+                if any((link.name == name) if exact_match else (name in link.name) for name in names)
             ]
 
         self._termination_contact_indices = find_link_indices(
@@ -471,7 +472,8 @@ class GenesisSimulator(Simulator):
         
         if self._cfg.asset.obtain_link_contact_states:
             self._contact_state_link_indices = find_link_indices(
-                self._cfg.asset.contact_state_link_names
+                self._cfg.asset.contact_state_link_names,
+                exact_match=True,
             )
 
         # dof position limits
@@ -568,6 +570,17 @@ class GenesisSimulator(Simulator):
             (self._num_envs, len(self._key_body_indices), 3), device=self._device, dtype=torch.float
         )
         self._last_feet_vel = torch.zeros_like(self._feet_vel)
+        self._terrain_tile_half_extent = torch.tensor(
+            [0.5 * self._cfg.terrain.terrain_length, 0.5 * self._cfg.terrain.terrain_width],
+            device=self._device,
+            dtype=torch.float,
+        )
+        self._parkour_out_of_lane_buf = torch.zeros(
+            self._num_envs, device=self._device, dtype=torch.bool
+        )
+        self._global_out_of_bounds_buf = torch.zeros(
+            self._num_envs, device=self._device, dtype=torch.bool
+        )
         # depth images
         if self._cfg.sensor.add_depth:
             self._depth_images = torch.zeros(
@@ -688,6 +701,7 @@ class GenesisSimulator(Simulator):
         self._lane_difficulty_row[env_ids] = self._terrain_lane_difficulty_row[rows, cols]
         self._lane_spawn_pose[env_ids] = self._terrain_lane_spawn_pose[rows, cols]
         self._lane_safe_spawn_region[env_ids] = self._terrain_lane_safe_spawn_region[rows, cols]
+        self._lane_bounds[env_ids] = self._terrain_lane_bounds[rows, cols]
         self._lane_waypoints[env_ids] = self._terrain_lane_waypoints[rows, cols]
         self._lane_waypoint_counts[env_ids] = self._terrain_lane_waypoint_counts[rows, cols]
         self._lane_terminal_goal[env_ids] = self._terrain_lane_terminal_goal[rows, cols]
@@ -722,6 +736,7 @@ class GenesisSimulator(Simulator):
                 self._terrain_lane_difficulty_row = torch.from_numpy(self._terrain.lane_difficulty_row).to(self._device, dtype=torch.long)
                 self._terrain_lane_spawn_pose = torch.from_numpy(self._terrain.lane_spawn_pose).to(self._device, dtype=torch.float)
                 self._terrain_lane_safe_spawn_region = torch.from_numpy(self._terrain.lane_safe_spawn_region).to(self._device, dtype=torch.float)
+                self._terrain_lane_bounds = torch.from_numpy(self._terrain.lane_bounds).to(self._device, dtype=torch.float)
                 self._terrain_lane_waypoints = torch.from_numpy(self._terrain.lane_waypoints).to(self._device, dtype=torch.float)
                 self._terrain_lane_waypoint_counts = torch.from_numpy(self._terrain.lane_waypoint_counts).to(self._device, dtype=torch.long)
                 self._terrain_lane_terminal_goal = torch.from_numpy(self._terrain.lane_terminal_goal).to(self._device, dtype=torch.float)
@@ -734,6 +749,7 @@ class GenesisSimulator(Simulator):
                 self._lane_difficulty_row = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
                 self._lane_spawn_pose = torch.zeros((self._num_envs, 4), device=self._device, dtype=torch.float)
                 self._lane_safe_spawn_region = torch.zeros((self._num_envs, 4), device=self._device, dtype=torch.float)
+                self._lane_bounds = torch.zeros((self._num_envs, 4), device=self._device, dtype=torch.float)
                 self._lane_waypoints = torch.zeros(
                     (self._num_envs, self._terrain_lane_waypoints.shape[2], 3),
                     device=self._device,
@@ -823,23 +839,32 @@ class GenesisSimulator(Simulator):
         for i in range(9):
             self._height_around_feet[:, :, i] = eval(f'heights{i+1}').view(self._num_envs, -1)[:] * self._cfg.terrain.vertical_scale
 
-    def _check_base_pos_out_of_bound(self):
-        """ Check if the base position is out of the terrain bounds
-        """
+    def _update_bounds_state(self):
+        """Track terrain and lane-bound violations without mutating parkour course state."""
         x_out_of_bound = (self._base_pos[:, 0] >= self._terrain_x_range[1]) | (
             self._base_pos[:, 0] <= self._terrain_x_range[0])
         y_out_of_bound = (self._base_pos[:, 1] >= self._terrain_y_range[1]) | (
             self._base_pos[:, 1] <= self._terrain_y_range[0])
-        out_of_bound_buf = x_out_of_bound | y_out_of_bound
-        env_ids = out_of_bound_buf.nonzero(as_tuple=False).flatten()
-        if len(env_ids) == 0:
-            return
-        else:
-            # reset base position to initial position
+        self._global_out_of_bounds_buf[:] = x_out_of_bound | y_out_of_bound
+        if not self._terrain_uses_parkour_metadata():
+            self._parkour_out_of_lane_buf[:] = False
+            env_ids = self._global_out_of_bounds_buf.nonzero(as_tuple=False).flatten()
+            if len(env_ids) == 0:
+                return
             self._base_pos[env_ids] = self.base_init_pos
             self._base_pos[env_ids] += self._env_origins[env_ids]
             self._robot.set_pos(
                 self._base_pos[env_ids], zero_velocity=False, envs_idx=env_ids)
+            return
+
+        tile_origin_xy = self._env_origins[:, :2] - self._terrain_tile_half_extent
+        local_base_xy = self._base_pos[:, :2] - tile_origin_xy
+        x_out = (local_base_xy[:, 0] < self._lane_bounds[:, 0]) | (local_base_xy[:, 0] > self._lane_bounds[:, 1])
+        y_out = (local_base_xy[:, 1] < self._lane_bounds[:, 2]) | (local_base_xy[:, 1] > self._lane_bounds[:, 3])
+        self._parkour_out_of_lane_buf[:] = x_out | y_out
+
+    def _check_base_pos_out_of_bound(self):
+        self._update_bounds_state()
 
     def _compute_torques(self, actions):
         # control_type = 'P'

@@ -62,6 +62,10 @@ def override_configs(env_cfg, train_cfg, args):
     if env_cfg.terrain.mesh_type in ["heightfield", "trimesh"]:
         if getattr(getattr(env_cfg.terrain, "parkour", None), "enable", False):
             env_cfg.terrain.curriculum = False
+            if args.parkour_force_family is not None:
+                env_cfg.terrain.parkour.force_family = args.parkour_force_family
+            if args.parkour_force_row is not None:
+                env_cfg.terrain.parkour.force_row = args.parkour_force_row
             if getattr(env_cfg.terrain.parkour, "force_row", None) is None:
                 env_cfg.terrain.parkour.force_row = 0
             return
@@ -307,6 +311,7 @@ def play(args):
         interaction_loop(env, policy, args, train_cfg, command_controller)
     finally:
         command_controller.close()
+        env.close()
     
     
 if __name__ == '__main__':

@@ -186,6 +186,10 @@ class Simulator(ABC):
         """
         return
 
+    def close(self):
+        """Release backend resources when supported by the simulator implementation."""
+        return None
+
     #----- Protected methods -----#
     @abstractmethod
     def _parse_cfg(self):
@@ -909,3 +913,18 @@ class Simulator(ABC):
     def lane_edge_masks(self):
         """Returns local edge masks for each parkour lane."""
         return getattr(self, "_lane_edge_masks", None)
+
+    @property
+    def lane_bounds(self):
+        """Returns local lane bounds ``[x_min, x_max, y_min, y_max]`` for each parkour environment."""
+        return getattr(self, "_lane_bounds", None)
+
+    @property
+    def parkour_out_of_lane_buf(self):
+        """Returns whether each parkour environment left its assigned lane bounds."""
+        return getattr(self, "_parkour_out_of_lane_buf", None)
+
+    @property
+    def global_out_of_bounds_buf(self):
+        """Returns whether each environment left the simulator-wide terrain bounds."""
+        return getattr(self, "_global_out_of_bounds_buf", None)
