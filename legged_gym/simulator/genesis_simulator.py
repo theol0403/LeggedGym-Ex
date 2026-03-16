@@ -1,4 +1,5 @@
 from legged_gym import *
+from legged_gym.perception import DepthEstimatorError, create_depth_estimator
 from legged_gym.simulator.simulator import Simulator
 import cv2 as cv
 import torch
@@ -16,6 +17,10 @@ class GenesisSimulator(Simulator):
         self._sim_params = sim_params
         self._debug_vis_objects = []
         self._camera_window_initialized = False
+        self._depth_estimator = None
+        self._depth_estimator_backend_name = None
+        self._depth_estimator_latency_ms = None
+        self._depth_estimator_step = 0
         super().__init__(cfg, sim_params, device, headless)
     
     #----- Public methods -----#
@@ -162,7 +167,7 @@ class GenesisSimulator(Simulator):
             use_debug_depth_camera = False
 
         if use_debug_depth_camera or use_debug_rgb_camera:
-            debug_depth_frames, debug_rgb_frames = self._update_debug_camera_streams(
+            debug_depth_frames, debug_rgb_frames, inferred_depth_frames = self._update_debug_camera_streams(
                 render_depth=use_debug_depth_camera,
                 render_rgb=use_debug_rgb_camera,
             )
@@ -170,6 +175,8 @@ class GenesisSimulator(Simulator):
                 sensor_frames["depth"] = debug_depth_frames
             if debug_rgb_frames is not None:
                 sensor_frames["rgb"] = debug_rgb_frames
+            if inferred_depth_frames is not None:
+                sensor_frames["inferred_depth"] = inferred_depth_frames
         return sensor_frames or None
 
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
@@ -220,6 +227,7 @@ class GenesisSimulator(Simulator):
             self._cfg.sensor.add_depth
             or getattr(self._cfg.sensor, "debug_depth_via_camera", False)
             or getattr(self._cfg.sensor, "add_rgb", False)
+            or getattr(self._cfg.sensor.depth_estimation, "enabled", False)
         ):
             return None
         return self._draw_debug_sensor_images()
@@ -568,6 +576,16 @@ class GenesisSimulator(Simulator):
                 device=self._device,
                 dtype=torch.uint8,
             )
+        if getattr(self._cfg.sensor.depth_estimation, "enabled", False):
+            self._inferred_depth_images = torch.zeros(
+                (
+                    self._num_envs,
+                    self._cfg.sensor.rgb_camera_config.resolution[1],
+                    self._cfg.sensor.rgb_camera_config.resolution[0],
+                ),
+                device=self._device,
+                dtype=torch.float,
+            )
         
         # Terrain information around feet
         if self._cfg.terrain.obtain_terrain_info_around_feet:
@@ -877,6 +895,7 @@ class GenesisSimulator(Simulator):
         """Render play-time debug camera outputs through the offscreen camera path."""
         depth_frames = self._debug_depth_images if render_depth else None
         rgb_frames = self._rgb_images if render_rgb else None
+        inferred_depth_frames = None
 
         if render_depth:
             depth_cfg = self._cfg.sensor.depth_camera_config
@@ -912,23 +931,54 @@ class GenesisSimulator(Simulator):
                     )
                 rgb_frames[env_idx].copy_(self._convert_rgb_frame_to_uint8(rgb_frame))
 
-        return depth_frames, rgb_frames
+        if render_rgb and getattr(self._cfg.sensor.depth_estimation, "enabled", False):
+            inferred_depth_frames = self._update_inferred_depth_images(list(self.debug_cameras.keys()))
+
+        return depth_frames, rgb_frames, inferred_depth_frames
+
+    def _ensure_depth_estimator(self):
+        if self._depth_estimator is not None:
+            return self._depth_estimator
+        self._depth_estimator = create_depth_estimator(self._cfg.sensor, self._device)
+        self._depth_estimator_backend_name = self._depth_estimator.backend_name
+        return self._depth_estimator
+
+    def _update_inferred_depth_images(self, rendered_env_indices):
+        if not rendered_env_indices:
+            return None
+
+        self._depth_estimator_step += 1
+        update_interval = max(1, int(getattr(self._cfg.sensor.depth_estimation, "update_interval", 1)))
+        if self._depth_estimator_step > 1 and (self._depth_estimator_step - 1) % update_interval != 0:
+            return self._inferred_depth_images
+
+        estimator = self._ensure_depth_estimator()
+        env_ids = sorted(int(env_idx) for env_idx in rendered_env_indices)
+        output = estimator.estimate({"rgb": self._rgb_images[env_ids], "env_ids": env_ids})
+        if output.depth.ndim != 3:
+            raise RuntimeError(
+                f"Unexpected inferred-depth shape from {output.backend_name}: {tuple(output.depth.shape)}"
+            )
+        env_ids_tensor = torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
+        self._inferred_depth_images.index_copy_(0, env_ids_tensor, output.depth)
+        self._depth_estimator_backend_name = output.backend_name
+        self._depth_estimator_latency_ms = output.latency_ms
+        return self._inferred_depth_images
 
     def _draw_debug_sensor_images(self):
         if self._headless:
             return
 
+        panel_builders = self._debug_panel_builders()
+        if not panel_builders:
+            return
+
         env_panels = []
         for env_idx in self._rendered_env_indices:
-            frames = []
-            if self._cfg.sensor.add_depth or getattr(self._cfg.sensor, "debug_depth_via_camera", False):
-                frames.append(self._prepare_depth_debug_frame(env_idx))
-            if getattr(self._cfg.sensor, "add_rgb", False):
-                frames.append(self._prepare_rgb_debug_frame(env_idx))
-            if frames:
-                target_height = max(frame.shape[0] for frame in frames)
-                padded_frames = [self._pad_debug_frame(frame, target_height) for frame in frames]
-                env_panels.append(np.concatenate(padded_frames, axis=1))
+            frames = [builder(env_idx) for builder in panel_builders]
+            target_height = max(frame.shape[0] for frame in frames)
+            padded_frames = [self._pad_debug_frame(frame, target_height) for frame in frames]
+            env_panels.append(np.concatenate(padded_frames, axis=1))
         if not env_panels:
             return
 
@@ -1093,19 +1143,14 @@ class GenesisSimulator(Simulator):
 
     def _prepare_depth_debug_frame(self, env_idx):
         if self._cfg.sensor.add_depth:
-            depth = self._depth_images[env_idx, 0]
             near_clip = self._cfg.sensor.depth_camera_config.near_clip
             far_clip = self._cfg.sensor.depth_camera_config.far_clip
-            pixel_values = ((depth + 0.5) * 255.0).clamp(0, 255).cpu().numpy().astype(np.uint8)
-            depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
-            min_depth = float(depth.min().item() + 0.5) * (far_clip - near_clip) + near_clip
-            max_depth = float(depth.max().item() + 0.5) * (far_clip - near_clip) + near_clip
-            return self._label_debug_frame(depth_vis, f"Env {env_idx}  Depth  min {min_depth:.2f}m  max {max_depth:.2f}m")
-
-        depth = self._debug_depth_images[env_idx]
-        near_clip = self._cfg.sensor.depth_camera_config.near_clip
-        far_clip = self._cfg.sensor.depth_camera_config.far_clip
-        clipped_depth = depth.clamp(near_clip, far_clip)
+            clipped_depth = (self._depth_images[env_idx, 0] + 0.5) * (far_clip - near_clip) + near_clip
+        else:
+            near_clip = self._cfg.sensor.depth_camera_config.near_clip
+            far_clip = self._cfg.sensor.depth_camera_config.far_clip
+            clipped_depth = self._debug_depth_images[env_idx]
+        clipped_depth = clipped_depth.clamp(near_clip, far_clip)
         pixel_values = (
             ((clipped_depth - near_clip) / (far_clip - near_clip)) * 255.0
         ).clamp(0, 255).cpu().numpy().astype(np.uint8)
@@ -1118,6 +1163,48 @@ class GenesisSimulator(Simulator):
         rgb_frame = self._rgb_images[env_idx].cpu().numpy()
         rgb_frame = cv.cvtColor(rgb_frame, cv.COLOR_RGB2BGR)
         return self._label_debug_frame(rgb_frame, f"Env {env_idx}  RGB")
+
+    def _prepare_inferred_depth_debug_frame(self, env_idx):
+        depth = self._inferred_depth_images[env_idx]
+        finite_mask = torch.isfinite(depth)
+        if finite_mask.any():
+            valid_depth = depth[finite_mask]
+            min_depth = float(valid_depth.min().item())
+            max_depth = float(valid_depth.max().item())
+            disparity = torch.zeros_like(depth)
+            disparity[finite_mask] = valid_depth.reciprocal()
+            valid_disparity = disparity[finite_mask]
+            lo = float(torch.quantile(valid_disparity, 0.02).item())
+            hi = float(torch.quantile(valid_disparity, 0.98).item())
+            if hi - lo < 1e-6:
+                normalized = torch.full_like(depth, 0.5)
+            else:
+                normalized = ((disparity - lo) / (hi - lo)).clamp(0.0, 1.0)
+            normalized = torch.where(finite_mask, normalized, torch.zeros_like(normalized))
+        else:
+            min_depth = 0.0
+            max_depth = 0.0
+            normalized = torch.zeros_like(depth)
+        pixel_values = (normalized * 255.0).round().to(torch.uint8).cpu().numpy()
+        depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
+        backend_label = (self._depth_estimator_backend_name or "inferred_depth").replace("_", " ")
+        latency_suffix = ""
+        if self._depth_estimator_latency_ms is not None:
+            latency_suffix = f"  {self._depth_estimator_latency_ms:.1f}ms"
+        return self._label_debug_frame(
+            depth_vis,
+            f"Env {env_idx}  {backend_label}  min {min_depth:.3f}  max {max_depth:.3f}{latency_suffix}",
+        )
+
+    def _debug_panel_builders(self):
+        panel_builders = []
+        if self._cfg.sensor.add_depth or getattr(self._cfg.sensor, "debug_depth_via_camera", False):
+            panel_builders.append(self._prepare_depth_debug_frame)
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            panel_builders.append(self._prepare_rgb_debug_frame)
+        if getattr(self._cfg.sensor.depth_estimation, "enabled", False):
+            panel_builders.append(self._prepare_inferred_depth_debug_frame)
+        return panel_builders
 
     def _label_debug_frame(self, frame, label):
         labeled = frame.copy()

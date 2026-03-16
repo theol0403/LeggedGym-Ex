@@ -155,8 +155,21 @@ def get_args():
     parser.add_argument('--debug',          action='store_true', default=False, help="enable debug mode")
     parser.add_argument('--depth_debug',    action='store_true', default=False, help="enable debug camera rendering; on Genesis this enables depth and RGB by default")
     parser.add_argument('--rgb_debug',      action='store_true', default=False, help="enable RGB camera debug rendering when supported")
-    parser.add_argument('--disable_depth_debug', action='store_true', default=False, help="disable the depth debug camera stream")
-    parser.add_argument('--disable_rgb_debug',   action='store_true', default=False, help="disable the RGB debug camera stream")
+    parser.add_argument('--depth_model_type', type=str, default=None,
+                        choices=[
+                            'depth_anything_v2',
+                            'depth_anything_v2_metric_indoor',
+                            'depth_anything_v2_metric_outdoor',
+                            'video_depth_anything_metric',
+                            'metric3d_v2',
+                            'unidepth_v2',
+                        ],
+                        help="inferred-depth model family; passing this enables the inferred-depth debug panel")
+    parser.add_argument('--depth_model_size', type=str, default=None,
+                        choices=['small', 'base', 'large', 'giant'],
+                        help="inferred-depth model size; defaults to the config value when omitted")
+    parser.add_argument('--depth_update_interval', type=int, default=1,
+                        help="run inferred-depth updates every N rendered debug frames")
     parser.add_argument('--load_run',       type=str, default=None, help="run to load, default: last run")
     parser.add_argument('--ckpt',           type=int, default=-1, help="checkpoint to load, -1 means latest")
     parser.add_argument('--command_mode',   type=str, default='auto', choices=['auto', 'keyboard', 'joystick'],

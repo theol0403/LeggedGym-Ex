@@ -260,6 +260,12 @@ class LeggedRobotCfg(BaseConfig):
             near_plane = 0.1
             far_plane = 10.0
 
+        class depth_estimation:
+            enabled = False
+            model_type = "depth_anything_v2"
+            model_size = "small"
+            update_interval = 1
+
     class sim:
         # Common
         dt = 0.005                 # 200 Hz

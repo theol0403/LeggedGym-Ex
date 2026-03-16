@@ -9,7 +9,13 @@ from legged_gym.utils import *
 import numpy as np
 import torch
 from legged_gym.scripts.play_commands import PlayCommandController, resolve_command_mode, supports_manual_velocity_commands
-    
+
+
+def _copy_camera_debug_config(dst_cfg, src_cfg):
+    for attr in ("resolution", "horizontal_fov_deg", "link_idx_local", "pos", "euler", "near_plane", "far_plane"):
+        setattr(dst_cfg, attr, getattr(src_cfg, attr))
+
+
 def override_configs(env_cfg, train_cfg, args):
     """Override some environment configuration parameters for testing
 
@@ -18,14 +24,15 @@ def override_configs(env_cfg, train_cfg, args):
         args: command line arguments
     """
     command_mode = resolve_command_mode(args)
-    depth_debug = args.depth_debug
-    rgb_debug = args.rgb_debug
-    sensor_debug = depth_debug or rgb_debug
+    enable_depth_debug = bool(args.depth_debug)
+    enable_inferred_depth_debug = args.depth_model_type is not None
+    enable_rgb_debug = bool(
+        args.rgb_debug
+        or enable_inferred_depth_debug
+        or (SIMULATOR == "genesis" and args.depth_debug)
+    )
+    sensor_debug = enable_depth_debug or enable_rgb_debug
     had_depth_sensor = env_cfg.sensor.add_depth
-    enable_depth_debug = depth_debug and not args.disable_depth_debug
-    enable_rgb_debug = (rgb_debug or (SIMULATOR == "genesis" and depth_debug)) and not args.disable_rgb_debug
-    if sensor_debug and not (enable_depth_debug or enable_rgb_debug):
-        raise ValueError("At least one debug camera stream must remain enabled.")
     if sensor_debug and SIMULATOR == "isaaclab":
         raise NotImplementedError("Camera debug rendering is not implemented for Isaac Lab")
     if enable_rgb_debug and SIMULATOR != "genesis":
@@ -39,12 +46,13 @@ def override_configs(env_cfg, train_cfg, args):
         env_cfg.sensor.add_depth = had_depth_sensor or not use_debug_depth_camera
     if enable_rgb_debug:
         env_cfg.sensor.add_rgb = True
-        for attr in ("resolution", "horizontal_fov_deg", "link_idx_local", "pos", "euler", "near_plane", "far_plane"):
-            setattr(
-                env_cfg.sensor.rgb_camera_config,
-                attr,
-                getattr(env_cfg.sensor.depth_camera_config, attr),
-            )
+        _copy_camera_debug_config(env_cfg.sensor.rgb_camera_config, env_cfg.sensor.depth_camera_config)
+    env_cfg.sensor.depth_estimation.enabled = enable_inferred_depth_debug
+    if args.depth_model_type is not None:
+        env_cfg.sensor.depth_estimation.model_type = args.depth_model_type
+    if args.depth_model_size is not None:
+        env_cfg.sensor.depth_estimation.model_size = args.depth_model_size
+    env_cfg.sensor.depth_estimation.update_interval = max(1, int(args.depth_update_interval))
     env_cfg.env.debug = args.debug
     env_cfg.env.debug_sensor_images = sensor_debug
     if train_cfg.runner_class_name == "CTSRunner":

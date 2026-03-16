@@ -98,6 +98,10 @@ class Simulator(ABC):
     def get_rgb_images(self):
         """Returns the latest RGB image tensor if available."""
         return getattr(self, "_rgb_images", None)
+
+    def get_inferred_depth_images(self):
+        """Returns the latest inferred-depth tensor if available."""
+        return getattr(self, "_inferred_depth_images", None)
     
     @abstractmethod
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
@@ -158,7 +162,11 @@ class Simulator(ABC):
 
     def draw_debug_sensor_images(self):
         """Public wrapper for debug rendering of image sensors when implemented by a backend."""
-        if self._cfg.sensor.add_depth or getattr(self._cfg.sensor, "add_rgb", False):
+        if (
+            self._cfg.sensor.add_depth
+            or getattr(self._cfg.sensor, "add_rgb", False)
+            or getattr(getattr(self._cfg.sensor, "depth_estimation", None), "enabled", False)
+        ):
             return self._draw_debug_sensor_images()
 
     def draw_debug_depth_images(self):

@@ -39,6 +39,20 @@ isaaclab = [
     "isaaclab==2.3.2.post1",
     "isaacsim==5.1.0.0"
 ]
+depth-estimation = [
+    "transformers>=4.51.3,<5",
+    "accelerate>=0.34.0",
+    "huggingface-hub>=0.30.0",
+    "safetensors>=0.4.5",
+    "imageio>=2.36.0",
+    "einops>=0.7.0",
+    "easydict>=1.13",
+    "timm>=1.0.20",
+    "xformers>=0.0.32.post2",
+    "mmengine>=0.10.7",
+    "mmcv-lite>=2.1.0",
+    "iopath>=0.1.10"
+]
 
 [tool.setuptools]
 packages = ['rsl_rl', 'resources', 'legged_gym']
