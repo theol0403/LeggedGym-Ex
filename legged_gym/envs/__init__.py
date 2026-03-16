@@ -64,6 +64,12 @@ from legged_gym.envs.go2.go2_ts_depth.go2_ts_depth_config import Go2TSScandotsCf
 # go2_nav
 from legged_gym.envs.go2.go2_nav.go2_nav import GO2Nav
 from legged_gym.envs.go2.go2_nav.go2_nav_config import GO2NavCfg, GO2NavCfgPPO
+# go2_parkour_teacher
+from legged_gym.envs.go2.go2_parkour_teacher.go2_parkour_teacher import Go2ParkourTeacher
+from legged_gym.envs.go2.go2_parkour_teacher.go2_parkour_teacher_config import (
+    Go2ParkourTeacherCfg,
+    Go2ParkourTeacherCfgPPO,
+)
 
 # tron1_pf
 from legged_gym.envs.tron1_pf.tron1_pf import TRON1PF
@@ -96,6 +102,8 @@ task_registry.register( "go2_cat", Go2CaT, Go2CaTCfg(), Go2CaTCfgPPO())
 task_registry.register( "go2_ts_depth", Go2TSDepth, Go2TSDepthCfg(), Go2TSDepthCfgPPO())
 task_registry.register( "go2_ts_scandots", Go2TSDepth, Go2TSScandotsCfg(), Go2TSScandotsCfgPPO())
 task_registry.register( "go2_nav", GO2Nav, GO2NavCfg(), GO2NavCfgPPO())
+if SIMULATOR == "genesis":
+    task_registry.register( "go2_parkour_teacher", Go2ParkourTeacher, Go2ParkourTeacherCfg(), Go2ParkourTeacherCfgPPO())
 task_registry.register( "tron1_pf", TRON1PF, TRON1PFCfg(), TRON1PFCfgPPO())
 task_registry.register( "tron1_pf_ee", TRON1PF_EE, TRON1PF_EECfg(), TRON1PF_EECfgPPO())
 task_registry.register( "tron1_sf", TRON1SF, TRON1SFCfg(), TRON1SFCfgPPO())

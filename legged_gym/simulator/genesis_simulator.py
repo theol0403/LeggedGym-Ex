@@ -180,6 +180,28 @@ class GenesisSimulator(Simulator):
         return sensor_frames or None
 
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
+        if self._terrain_uses_parkour_metadata():
+            parkour_cfg = self._cfg.terrain.parkour
+            if parkour_cfg.force_row is None:
+                self._terrain_levels[env_ids] += 1 * move_up - 1 * move_down
+                self._terrain_levels[env_ids] = torch.where(
+                    self._terrain_levels[env_ids] >= self._max_terrain_level,
+                    torch.randint_like(self._terrain_levels[env_ids], self._max_terrain_level),
+                    torch.clip(self._terrain_levels[env_ids], 0),
+                )
+            else:
+                self._terrain_levels[env_ids] = int(parkour_cfg.force_row)
+            if parkour_cfg.force_family is not None:
+                forced_family = str(parkour_cfg.force_family)
+                if forced_family not in self._terrain.family_col_indices:
+                    raise ValueError(
+                        f"Forced parkour family '{forced_family}' is not available in terrain columns "
+                        f"{list(self._terrain.family_col_indices.keys())}"
+                    )
+                self._terrain_types[env_ids] = int(self._terrain.family_col_indices[forced_family])
+            self._refresh_lane_metadata(env_ids)
+            return
+
         self._terrain_levels[env_ids] += 1 * move_up - 1 * move_down
         # Robots that solve the last level are sent to a random one
         self._terrain_levels[env_ids] = torch.where(self._terrain_levels[env_ids] >= self._max_terrain_level,
@@ -188,6 +210,7 @@ class GenesisSimulator(Simulator):
                                                    torch.clip(self._terrain_levels[env_ids], 0))  # (the minumum level is zero)
         self._env_origins[env_ids] = self._terrain_origins[self._terrain_levels[env_ids],
             self._terrain_types[env_ids]]
+        self._refresh_lane_metadata(env_ids)
 
     def push_robots(self):
         max_push_vel_xy = self._cfg.domain_rand.max_push_vel_xy
@@ -624,7 +647,55 @@ class GenesisSimulator(Simulator):
         self._robot.set_dofs_kv(self._d_gains, self._dof_indices)
 
         self._init_height_points()
-    
+
+    def _terrain_uses_parkour_metadata(self):
+        return bool(getattr(self._terrain, "metadata_enabled", False))
+
+    def _apply_forced_parkour_indices(self):
+        if not self._terrain_uses_parkour_metadata():
+            return
+
+        parkour_cfg = self._cfg.terrain.parkour
+        if parkour_cfg.force_row is not None:
+            forced_row = int(parkour_cfg.force_row)
+            if forced_row < 0 or forced_row >= self._cfg.terrain.num_rows:
+                raise ValueError(
+                    f"Forced parkour row {forced_row} is outside [0, {self._cfg.terrain.num_rows - 1}]"
+                )
+            self._terrain_levels[:] = forced_row
+        if parkour_cfg.force_family is not None:
+            forced_family = str(parkour_cfg.force_family)
+            if forced_family not in self._terrain.family_col_indices:
+                raise ValueError(
+                    f"Forced parkour family '{forced_family}' is not available in terrain columns "
+                    f"{list(self._terrain.family_col_indices.keys())}"
+                )
+            self._terrain_types[:] = int(self._terrain.family_col_indices[forced_family])
+
+    def _refresh_lane_metadata(self, env_ids=None):
+        if not self._terrain_uses_parkour_metadata():
+            return
+
+        if env_ids is None:
+            env_ids = torch.arange(self._num_envs, device=self._device)
+
+        env_ids = env_ids.to(dtype=torch.long, device=self._device)
+        rows = self._terrain_levels[env_ids].long()
+        cols = self._terrain_types[env_ids].long()
+        self._env_origins[env_ids] = self._terrain_origins[rows, cols]
+
+        self._lane_family[env_ids] = self._terrain_lane_family[rows, cols]
+        self._lane_difficulty_row[env_ids] = self._terrain_lane_difficulty_row[rows, cols]
+        self._lane_spawn_pose[env_ids] = self._terrain_lane_spawn_pose[rows, cols]
+        self._lane_safe_spawn_region[env_ids] = self._terrain_lane_safe_spawn_region[rows, cols]
+        self._lane_waypoints[env_ids] = self._terrain_lane_waypoints[rows, cols]
+        self._lane_waypoint_counts[env_ids] = self._terrain_lane_waypoint_counts[rows, cols]
+        self._lane_terminal_goal[env_ids] = self._terrain_lane_terminal_goal[rows, cols]
+        self._lane_section_bounds[env_ids] = self._terrain_lane_section_bounds[rows, cols]
+        self._lane_section_tags[env_ids] = self._terrain_lane_section_tags[rows, cols]
+        self._lane_jump_expected_mask[env_ids] = self._terrain_lane_jump_expected_mask[rows, cols]
+        self._lane_edge_masks[env_ids] = self._terrain_lane_edge_masks[rows, cols]
+
     def _get_env_origins(self):
         """ Sets environment origins. On rough terrain the origins are defined by the terrain platforms.
             Otherwise create a grid.
@@ -646,6 +717,57 @@ class GenesisSimulator(Simulator):
                 self._terrain.env_origins).to(self._device).to(torch.float)
             self._env_origins[:] = self._terrain_origins[self._terrain_levels,
                                                        self._terrain_types]
+            if self._terrain_uses_parkour_metadata():
+                self._terrain_lane_family = torch.from_numpy(self._terrain.lane_family).to(self._device, dtype=torch.long)
+                self._terrain_lane_difficulty_row = torch.from_numpy(self._terrain.lane_difficulty_row).to(self._device, dtype=torch.long)
+                self._terrain_lane_spawn_pose = torch.from_numpy(self._terrain.lane_spawn_pose).to(self._device, dtype=torch.float)
+                self._terrain_lane_safe_spawn_region = torch.from_numpy(self._terrain.lane_safe_spawn_region).to(self._device, dtype=torch.float)
+                self._terrain_lane_waypoints = torch.from_numpy(self._terrain.lane_waypoints).to(self._device, dtype=torch.float)
+                self._terrain_lane_waypoint_counts = torch.from_numpy(self._terrain.lane_waypoint_counts).to(self._device, dtype=torch.long)
+                self._terrain_lane_terminal_goal = torch.from_numpy(self._terrain.lane_terminal_goal).to(self._device, dtype=torch.float)
+                self._terrain_lane_section_bounds = torch.from_numpy(self._terrain.lane_section_bounds).to(self._device, dtype=torch.float)
+                self._terrain_lane_section_tags = torch.from_numpy(self._terrain.lane_section_tags).to(self._device, dtype=torch.long)
+                self._terrain_lane_jump_expected_mask = torch.from_numpy(self._terrain.lane_jump_expected_mask).to(self._device, dtype=torch.bool)
+                self._terrain_lane_edge_masks = torch.from_numpy(self._terrain.lane_edge_masks).to(self._device, dtype=torch.bool)
+
+                self._lane_family = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
+                self._lane_difficulty_row = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
+                self._lane_spawn_pose = torch.zeros((self._num_envs, 4), device=self._device, dtype=torch.float)
+                self._lane_safe_spawn_region = torch.zeros((self._num_envs, 4), device=self._device, dtype=torch.float)
+                self._lane_waypoints = torch.zeros(
+                    (self._num_envs, self._terrain_lane_waypoints.shape[2], 3),
+                    device=self._device,
+                    dtype=torch.float,
+                )
+                self._lane_waypoint_counts = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
+                self._lane_terminal_goal = torch.zeros((self._num_envs, 3), device=self._device, dtype=torch.float)
+                self._lane_section_bounds = torch.zeros(
+                    (self._num_envs, self._terrain_lane_section_bounds.shape[2], 2),
+                    device=self._device,
+                    dtype=torch.float,
+                )
+                self._lane_section_tags = torch.zeros(
+                    (self._num_envs, self._terrain_lane_section_tags.shape[2]),
+                    device=self._device,
+                    dtype=torch.long,
+                )
+                self._lane_jump_expected_mask = torch.zeros(
+                    (self._num_envs, self._terrain_lane_jump_expected_mask.shape[2]),
+                    device=self._device,
+                    dtype=torch.bool,
+                )
+                self._lane_edge_masks = torch.zeros(
+                    (
+                        self._num_envs,
+                        self._terrain_lane_edge_masks.shape[2],
+                        self._terrain_lane_edge_masks.shape[3],
+                    ),
+                    device=self._device,
+                    dtype=torch.bool,
+                )
+
+                self._apply_forced_parkour_indices()
+                self._refresh_lane_metadata()
         else:
             self._custom_origins = False
             self._env_origins = torch.zeros(

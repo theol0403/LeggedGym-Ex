@@ -55,6 +55,16 @@ class LeggedRobotCfg(BaseConfig):
             clip_min = -1.0
             clip_max = 1.0
 
+        class parkour:
+            enable = False
+            families = ["stairs", "hurdle_block", "gap"]
+            include_flat_debug = False
+            force_family = None
+            force_row = None
+            max_waypoints = 2
+            max_obstacles = 1
+            max_sections = 1
+
         selected = False # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
         max_init_terrain_level = 1 # starting curriculum level

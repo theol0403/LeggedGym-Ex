@@ -4,6 +4,7 @@ from typing import Tuple
 import torch
 import numpy as np
 import re
+import copy
 
 from rsl_rl.env import VecEnv
 from rsl_rl.runners import OnPolicyRunner
@@ -11,6 +12,7 @@ from rsl_rl.utils.runner_registry import runner_registry
 
 from legged_gym import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 from .helpers import get_args, update_cfg_from_args, class_to_dict, get_load_path, get_load_path_ee, set_seed
+from .runtime import ensure_runtime_initialized
 
 class TaskRegistry():
     def __init__(self):
@@ -27,8 +29,8 @@ class TaskRegistry():
         return self.task_classes[name]
     
     def get_cfgs(self, name):
-        train_cfg = self.train_cfgs[name]
-        env_cfg = self.env_cfgs[name]
+        train_cfg = copy.deepcopy(self.train_cfgs[name])
+        env_cfg = copy.deepcopy(self.env_cfgs[name])
         # copy seed
         env_cfg.seed = train_cfg.seed
         return env_cfg, train_cfg
@@ -62,6 +64,7 @@ class TaskRegistry():
         # override cfg from args (if specified)
         env_cfg, _ = update_cfg_from_args(env_cfg, None, args)
         set_seed(env_cfg.seed)
+        ensure_runtime_initialized(args)
         # parse sim params (convert to dict first)
         sim_device = "cpu" if args.cpu else "cuda:0"
         # sim_params

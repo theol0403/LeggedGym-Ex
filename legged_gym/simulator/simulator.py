@@ -854,3 +854,58 @@ class Simulator(ABC):
             Tensor((num_envs, 3)): Origin positions of all environments.
         """
         return self._env_origins
+
+    @property
+    def lane_family(self):
+        """Returns the parkour terrain family id for each environment."""
+        return getattr(self, "_lane_family", None)
+
+    @property
+    def lane_difficulty_row(self):
+        """Returns the parkour terrain difficulty row for each environment."""
+        return getattr(self, "_lane_difficulty_row", None)
+
+    @property
+    def lane_spawn_pose(self):
+        """Returns the local spawn pose for each parkour environment."""
+        return getattr(self, "_lane_spawn_pose", None)
+
+    @property
+    def lane_safe_spawn_region(self):
+        """Returns local safe spawn boxes ``[x_min, x_max, y_min, y_max]`` for parkour lanes."""
+        return getattr(self, "_lane_safe_spawn_region", None)
+
+    @property
+    def lane_waypoints(self):
+        """Returns ordered local waypoint positions for each parkour lane."""
+        return getattr(self, "_lane_waypoints", None)
+
+    @property
+    def lane_waypoint_counts(self):
+        """Returns the number of valid ordered waypoints for each parkour lane."""
+        return getattr(self, "_lane_waypoint_counts", None)
+
+    @property
+    def lane_terminal_goal(self):
+        """Returns the final local goal position for each parkour lane."""
+        return getattr(self, "_lane_terminal_goal", None)
+
+    @property
+    def lane_section_bounds(self):
+        """Returns per-section local x-bounds for each parkour lane."""
+        return getattr(self, "_lane_section_bounds", None)
+
+    @property
+    def lane_section_tags(self):
+        """Returns integer section tags for each parkour lane."""
+        return getattr(self, "_lane_section_tags", None)
+
+    @property
+    def lane_jump_expected_mask(self):
+        """Returns whether each parkour section expects dynamic motion or jumping."""
+        return getattr(self, "_lane_jump_expected_mask", None)
+
+    @property
+    def lane_edge_masks(self):
+        """Returns local edge masks for each parkour lane."""
+        return getattr(self, "_lane_edge_masks", None)

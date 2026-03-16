@@ -3,3 +3,4 @@ from .helpers import class_to_dict, get_load_path, get_args, set_seed, update_cl
 from .task_registry import task_registry
 from .logger import Logger, QuadLogger
 from .math_utils import *
+from .runtime import ensure_runtime_initialized

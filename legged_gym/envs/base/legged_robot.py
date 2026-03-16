@@ -189,7 +189,7 @@ class LeggedRobot(BaseTask):
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
             heights = torch.clip(self.simulator.base_pos[:, 2].unsqueeze(
-                1) - 0.5 - self.simulaor.measured_heights, -1, 1.) * self.obs_scales.height_measurements
+                1) - 0.5 - self.simulator.measured_heights, -1, 1.) * self.obs_scales.height_measurements
             self.obs_buf = torch.cat((self.obs_buf, heights), dim=-1)
 
         # add noise if needed
@@ -545,7 +545,10 @@ class LeggedRobot(BaseTask):
 
     def _reward_torque_limits(self):
         # penalize torques too close to the limit
-        return torch.sum((torch.abs(self.simulator.torques) - self.torque_limits*self.cfg.rewards.soft_torque_limit).clip(min=0.), dim=1)
+        return torch.sum(
+            (torch.abs(self.simulator.torques) - self.simulator.torque_limits * self.cfg.rewards.soft_torque_limit).clip(min=0.),
+            dim=1,
+        )
 
     def _reward_tracking_lin_vel(self):
         # Tracking of linear velocity commands (xy axes)

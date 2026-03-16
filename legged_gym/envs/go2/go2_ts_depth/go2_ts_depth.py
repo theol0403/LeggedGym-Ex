@@ -17,10 +17,7 @@ class Go2TSDepth(LeggedRobot):
         Args:
             actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
         """
-        clip_actions = self.cfg.normalization.clip_actions
-        actions = torch.clip(
-            actions, -clip_actions, clip_actions).to(self.device)
-        self.actions[:] = actions[:]
+        actions = self._pre_sim_step(actions)
         self.simulator.step(actions)
         self.post_physics_step()
 
@@ -216,10 +213,6 @@ class Go2TSDepth(LeggedRobot):
         self.simulator.update_sensors()
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
-        self.llast_actions[:] = self.last_actions[:]
-        self.last_actions[:] = self.actions[:]
-        self.simulator.last_dof_vel[:] = self.simulator.dof_vel[:]
-        
         if self.debug:
             self.simulator.draw_debug_vis()
         if self.debug_sensor_images:

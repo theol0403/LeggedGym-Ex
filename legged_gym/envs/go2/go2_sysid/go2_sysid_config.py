@@ -69,7 +69,9 @@ class GO2SysIDCfg( LeggedRobotCfg ):
         push_interval_s = 15
         max_push_vel_xy = 1.
         randomize_com_displacement = False
-        com_displacement_range = [-0.03, 0.03]
+        com_pos_x_range = [-0.03, 0.03]
+        com_pos_y_range = [-0.03, 0.03]
+        com_pos_z_range = [-0.03, 0.03]
         randomize_ctrl_delay = False
         randomize_joint_armature = False
         joint_armature_range = [0.0, 0.05]  # [N*m*s/rad]

@@ -60,6 +60,11 @@ def override_configs(env_cfg, train_cfg, args):
     env_cfg.viewer.rendered_envs_idx = list(range(env_cfg.env.num_envs))
     # adjust parameters according to terrain type
     if env_cfg.terrain.mesh_type in ["heightfield", "trimesh"]:
+        if getattr(getattr(env_cfg.terrain, "parkour", None), "enable", False):
+            env_cfg.terrain.curriculum = False
+            if getattr(env_cfg.terrain.parkour, "force_row", None) is None:
+                env_cfg.terrain.parkour.force_row = 0
+            return
         env_cfg.terrain.num_rows = 2
         env_cfg.terrain.num_cols = 2
         env_cfg.terrain.border_size = 5.0
@@ -270,11 +275,7 @@ def play(args):
     args.resume = args.resume or args.load_run is not None or (
         args.ckpt is not None and args.ckpt >= 0
     )
-    if SIMULATOR == "genesis":
-        gs.init(
-            backend=gs.cpu if args.cpu else gs.gpu,
-            logging_level='warning',
-        )
+    ensure_runtime_initialized(args)
     args.command_mode = resolve_command_mode(args)
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     override_configs(env_cfg, train_cfg, args)
