@@ -12,6 +12,7 @@ class LeggedRobotCfg(BaseConfig):
         env_spacing = 2.0 # spacing between envs in the scene, only for plane
         fail_to_terminal_time_s = 0.1 # time before a fail state leads to environment reset, refer to https://github.com/limxdynamics/tron1-rl-isaacgym/tree/master
         debug = False # enable debug drawings in the simulator
+        debug_sensor_images = False # show camera debug windows without enabling heavy 3D debug overlays
         debug_draw_height_points_around_base = False # obtain height measurements around the base
         debug_draw_height_points_around_feet = False # obtain height measurements around the feet (9 points around each foot, see terrain.measured_points_x/y)
         debug_draw_terrain_height_points = False # draw all height points of the terrain
@@ -224,12 +225,15 @@ class LeggedRobotCfg(BaseConfig):
         ref_env = 0
         pos = [4.0, 4.0, 2.0]       # [m], relative to the robot position
         lookat = [0., 0, 0.]  # [m], relative to the robot position
+        resolution = (1280, 720)    # [Genesis] cap viewer resolution instead of using full display resolution
+        max_fps = None              # [Genesis] let play.py own real-time pacing
         rendered_envs_idx = [i for i in range(5)]  # [Genesis] number of environments to be rendered, if not headless
     
     # sensor configuration:
     class sensor:
         add_depth = False
         add_rgb = False
+        debug_depth_via_camera = False
         use_warp = False       # whether to use warp-based model
         class camera_config:
             resolution = (80, 60)

@@ -219,6 +219,7 @@ class Go2TSDepth(LeggedRobot):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+        if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
     
     def _log_constraint_violations(self):
@@ -263,8 +264,8 @@ class Go2TSDepth(LeggedRobot):
         # ------------ Style constraints ----------------
         
         # Standing still constraint, penalize motion when command is zero
-        cstr_stand_still = torch.any(torch.abs(self.simulator.dof_vel) > 4.0, dim=-1) * \
-            (torch.norm(self.commands[:, :3], dim=1) < 0.1).float().unsqueeze(1)
+        cstr_stand_still = torch.any(torch.abs(self.simulator.dof_vel) > 4.0, dim=-1).float() * \
+            (torch.norm(self.commands[:, :3], dim=1) < 0.1).float()
         
         # ------------ Log constraint violation ----------------
         if self.debug_cstr:

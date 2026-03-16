@@ -48,6 +48,7 @@ class GO2WTW(LeggedRobot):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+        if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
             
     def compute_observations(self):

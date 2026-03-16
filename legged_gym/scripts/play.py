@@ -21,6 +21,7 @@ def override_configs(env_cfg, train_cfg, args):
     depth_debug = args.depth_debug
     rgb_debug = args.rgb_debug
     sensor_debug = depth_debug or rgb_debug
+    had_depth_sensor = env_cfg.sensor.add_depth
     enable_depth_debug = depth_debug and not args.disable_depth_debug
     enable_rgb_debug = (rgb_debug or (SIMULATOR == "genesis" and depth_debug)) and not args.disable_rgb_debug
     if sensor_debug and not (enable_depth_debug or enable_rgb_debug):
@@ -33,7 +34,9 @@ def override_configs(env_cfg, train_cfg, args):
     # number of environments
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 16)
     if enable_depth_debug:
-        env_cfg.sensor.add_depth = True
+        use_debug_depth_camera = SIMULATOR == "genesis" and not had_depth_sensor and not args.debug
+        env_cfg.sensor.debug_depth_via_camera = use_debug_depth_camera
+        env_cfg.sensor.add_depth = had_depth_sensor or not use_debug_depth_camera
     if enable_rgb_debug:
         env_cfg.sensor.add_rgb = True
         for attr in ("resolution", "horizontal_fov_deg", "link_idx_local", "pos", "euler", "near_plane", "far_plane"):
@@ -42,7 +45,8 @@ def override_configs(env_cfg, train_cfg, args):
                 attr,
                 getattr(env_cfg.sensor.depth_camera_config, attr),
             )
-    env_cfg.env.debug = args.debug or sensor_debug
+    env_cfg.env.debug = args.debug
+    env_cfg.env.debug_sensor_images = sensor_debug
     if train_cfg.runner_class_name == "CTSRunner":
         env_cfg.env.num_teacher = 1
     env_cfg.viewer.rendered_envs_idx = list(range(env_cfg.env.num_envs))
@@ -120,7 +124,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
         args: command line arguments
     """
     
-    logger = Logger(env.dt)
+    logger = Logger(env.dt) if args.log_play_stats else None
     robot_index = 0 # which robot is used for logging
     joint_index = 2 # which joint is used for logging
     stop_state_log = 300 # number of steps before plotting states
@@ -139,42 +143,52 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
     else:
         obs = env.get_observations()
     
-    frame_dt = 1 / 60.0  # 60 Hz
+    frame_dt = env.dt
+    next_frame_deadline = time.perf_counter()
     # interaction loop
     for i in range(10*int(env.max_episode_length)):
-        
-        t_start = time.perf_counter()
         if not command_controller.update(env):
             break
         
         # set the viewer camera to follow the first environment by default
-        if args.follow_robot:
+        if args.follow_robot and SIMULATOR != "genesis":
             pos = env.simulator.base_pos[robot_index].cpu().numpy() + np.array(env.cfg.viewer.pos, dtype=np.float32)
             lookat = env.simulator.base_pos[robot_index].cpu().numpy() + np.array(env.cfg.viewer.lookat, dtype=np.float32)
             env.set_viewer_camera(pos, lookat)
         
         # Step the environment according to task type
         if runner_class_name == "TSRunner":
-            actions = policy(obs_buf, obs_history)
+            with torch.inference_mode():
+                actions = policy(obs_buf, obs_history)
+        elif runner_class_name == "EERunner":
+            with torch.inference_mode():
+                actions = policy(estimator_features.detach())
+        elif runner_class_name == "DreamWaQRunner":
+            with torch.inference_mode():
+                actions = policy(obs_buf, obs_history)
+        elif runner_class_name == "CTSRunner":
+            with torch.inference_mode():
+                actions = policy(obs_buf, obs_history)
+        else:
+            with torch.inference_mode():
+                actions = policy(obs.detach())
+
+        if runner_class_name == "TSRunner":
             obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "EERunner":
-            actions = policy(estimator_features.detach())
             estimator_features, estimator_labels, _, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "DreamWaQRunner":
-            actions = policy(obs_buf, obs_history)
             obs_buf, privileged_obs_buf, obs_history, explicit_labels, next_states, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "CTSRunner":
-            actions = policy(obs_buf, obs_history)
             obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
         else:
-            actions = policy(obs.detach())
             obs, _, rews, dones, infos = env.step(actions.detach())
         
         # print debug info
         print_debug_info(env, robot_index)
         
         # Update logger info
-        if i < stop_state_log:
+        if logger is not None and i < stop_state_log:
             logger.log_states(
                 {
                     'dof_pos_target': actions[robot_index, joint_index].item() * env.cfg.control.action_scale,
@@ -192,21 +206,26 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
                                                                           env.simulator.feet_indices, 2].cpu().numpy()
                 }
             )
-        elif i==stop_state_log:
+        elif logger is not None and i==stop_state_log:
             logger.plot_states()
-        if  0 < i < stop_rew_log:
+        if logger is not None and 0 < i < stop_rew_log:
             if infos["episode"]:
                 num_episodes = torch.sum(env.reset_buf).item()
                 if num_episodes>0:
                     logger.log_rewards(infos["episode"], num_episodes)
-        elif i==stop_rew_log:
+        elif logger is not None and i==stop_rew_log:
             logger.print_rewards()
         
         # sleep for the remainder of the frame budget to match real-time playback
-        elapsed = time.perf_counter() - t_start
-        remaining = frame_dt - elapsed
+        next_frame_deadline += frame_dt
+        now = time.perf_counter()
+        remaining = next_frame_deadline - now
         if remaining > 0:
             time.sleep(remaining)
+        else:
+            # If rendering or policy inference overruns the frame budget, drop the
+            # wall-clock deadline instead of accumulating timing drift forever.
+            next_frame_deadline = now
 
 def export_policy(alg_runner, path: str, args, env_cfg, train_cfg):
     """export the policy as jit script according to different task types
@@ -257,6 +276,8 @@ def play(args):
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
     env.external_command_source_enabled = command_controller.requires_external_command_source
     command_controller.initialize_env_commands(env)
+    if args.follow_robot and SIMULATOR == "genesis":
+        env.simulator.enable_viewer_follow()
     # load policy
     train_cfg.runner.resume = args.resume
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)

@@ -80,6 +80,7 @@ class GO2Nav(LeggedRobotNav):
             self.simulator.draw_debug_boxes(self.target_pos_world, quat_from_euler_xyz(torch.zeros_like(self.target_orientation_world), 
                                                                                        torch.zeros_like(self.target_orientation_world), 
                                                                                        self.target_orientation_world))
+        if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
 
     def _init_buffers(self):

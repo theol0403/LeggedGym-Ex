@@ -15,6 +15,7 @@ class GenesisSimulator(Simulator):
     def __init__(self, cfg, sim_params: dict, device, headless):
         self._sim_params = sim_params
         self._debug_vis_objects = []
+        self._camera_window_initialized = False
         super().__init__(cfg, sim_params, device, headless)
     
     #----- Public methods -----#
@@ -23,33 +24,28 @@ class GenesisSimulator(Simulator):
         self._last_base_ang_vel[:] = self._base_ang_vel[:]
         self._last_feet_vel[:] = self._feet_vel[:]
         self._last_dof_vel[:] = self._dof_vel[:]
-        for _ in range(self._cfg.control.decimation):
+        for substep_idx in range(self._cfg.control.decimation):
+            update_viewer = not self._headless and substep_idx == self._cfg.control.decimation - 1
             self._torques = self._compute_torques(actions)
             self._robot.control_dofs_force(
                 self._torques, self._dof_indices)
-            self._scene.step()
-            if self._cfg.sensor.add_depth and self._debug and not self._headless:
-                # Refresh the native Genesis sensor overlay every rendered substep so
-                # the projected debug points remain stable instead of blinking at the
-                # control-step cadence.
+            self._scene.step(update_visualizer=update_viewer, refresh_visualizer=update_viewer)
+            if self._cfg.sensor.add_depth and self._debug and update_viewer:
+                # Refresh the native Genesis sensor overlay only for the rendered
+                # control step. Physics still advances at the configured dt/substeps,
+                # but avoiding per-substep viewer updates keeps play closer to real time.
                 self.depth_camera.read_image()
-            self._dof_pos[:] = self._robot.get_dofs_position(
-                self._dof_indices)
-            self._dof_vel[:] = self._robot.get_dofs_velocity(
-                self._dof_indices)
+            self._dof_pos[:] = self._robot.get_dofs_position(self._dof_indices)
+            self._dof_vel[:] = self._robot.get_dofs_velocity(self._dof_indices)
 
     def post_physics_step(self):
         # prepare quantities
         self._base_pos[:] = self._robot.get_pos()
         self._check_base_pos_out_of_bound()       # check if the pos of the robot is out of terrain bounds
         self._base_pos[:] = self._robot.get_pos()
-        self._base_quat_gs[:] = self._robot.get_quat()
-        self._base_quat[:,-1] = self._robot.get_quat()[:,0]   # wxyz to xyzw
-        self._base_quat[:,:3] = self._robot.get_quat()[:,1:4] # wxyz to xyzw
-        self._base_euler[:] = get_euler_xyz(self._base_quat)
-        self._base_lin_vel[:] = quat_rotate_inverse(self._base_quat, self._robot.get_vel())
-        self._base_ang_vel[:] = quat_rotate_inverse(self._base_quat, self._robot.get_ang())
-        self._projected_gravity = quat_rotate_inverse(self._base_quat, self._global_gravity)
+        base_quat_gs = self._robot.get_quat()
+        base_vel = self._robot.get_vel()
+        base_ang = self._robot.get_ang()
         self._dof_pos[:] = self._robot.get_dofs_position(self._dof_indices)
         self._dof_vel[:] = self._robot.get_dofs_velocity(self._dof_indices)
         self._link_contact_forces[:] = self._robot.get_links_net_contact_force()
@@ -57,6 +53,15 @@ class GenesisSimulator(Simulator):
         links_quat_gs = self._robot.get_links_quat()
         links_vel = self._robot.get_links_vel()
         links_ang = self._robot.get_links_ang()
+
+        self._base_quat_gs[:] = base_quat_gs
+        self._base_quat[:, -1] = base_quat_gs[:, 0]   # wxyz to xyzw
+        self._base_quat[:, :3] = base_quat_gs[:, 1:4] # wxyz to xyzw
+
+        self._base_euler[:] = get_euler_xyz(self._base_quat)
+        self._base_lin_vel[:] = quat_rotate_inverse(self._base_quat, base_vel)
+        self._base_ang_vel[:] = quat_rotate_inverse(self._base_quat, base_ang)
+        self._projected_gravity = quat_rotate_inverse(self._base_quat, self._global_gravity)
         self._rigid_body_states[:, :, :3] = links_pos
         self._rigid_body_states[:, :, 3:6] = links_quat_gs[:, :, 1:4]
         self._rigid_body_states[:, :, 6] = links_quat_gs[:, :, 0]
@@ -148,7 +153,24 @@ class GenesisSimulator(Simulator):
         self._base_ang_vel[env_ids] = quat_rotate_inverse(self._base_quat[env_ids], self._robot.get_ang()[env_ids])
 
     def update_sensors(self):
-        return super().update_sensors()
+        sensor_frames = {}
+        use_debug_depth_camera = getattr(self._cfg.sensor, "debug_depth_via_camera", False)
+        use_debug_rgb_camera = getattr(self._cfg.sensor, "add_rgb", False)
+
+        if self._cfg.sensor.add_depth:
+            sensor_frames["depth"] = self._update_depth_images()
+            use_debug_depth_camera = False
+
+        if use_debug_depth_camera or use_debug_rgb_camera:
+            debug_depth_frames, debug_rgb_frames = self._update_debug_camera_streams(
+                render_depth=use_debug_depth_camera,
+                render_rgb=use_debug_rgb_camera,
+            )
+            if debug_depth_frames is not None:
+                sensor_frames["depth"] = debug_depth_frames
+            if debug_rgb_frames is not None:
+                sensor_frames["rgb"] = debug_rgb_frames
+        return sensor_frames or None
 
     def update_terrain_curriculum(self, env_ids, move_up, move_down):
         self._terrain_levels[env_ids] += 1 * move_up - 1 * move_down
@@ -192,6 +214,15 @@ class GenesisSimulator(Simulator):
         self._clear_debug_vis_objects()
         if self._cfg.env.debug_draw_key_body_points:
             self._draw_key_body_points(ref_key_body_pos)
+
+    def draw_debug_sensor_images(self):
+        if not (
+            self._cfg.sensor.add_depth
+            or getattr(self._cfg.sensor, "debug_depth_via_camera", False)
+            or getattr(self._cfg.sensor, "add_rgb", False)
+        ):
+            return None
+        return self._draw_debug_sensor_images()
         # # Height points around feet
         # height_points = torch.zeros(self._num_envs, 9*len(self._feet_indices), 3, device=self._device)
         # foot_points = self._feet_pos + self._cfg.terrain.border_size
@@ -243,6 +274,11 @@ class GenesisSimulator(Simulator):
         if self._scene.viewer is None:
             return
         self._scene.viewer.set_camera_pose(pos=eye, lookat=target)
+
+    def enable_viewer_follow(self):
+        if self._scene.viewer is None:
+            return
+        self._scene.viewer.follow_entity(self._robot, smoothing=0.6, fix_orientation=False)
     
     #----- Protected methods -----#
     def _parse_cfg(self):
@@ -273,7 +309,8 @@ class GenesisSimulator(Simulator):
                 dt=self._sim_params["dt"],
                 substeps=self._sim_params["substeps"]),
             viewer_options=gs.options.ViewerOptions(
-                # max_FPS=int(1 / self._control_dt * self._cfg.control.decimation),
+                res=getattr(self._cfg.viewer, "resolution", None),
+                max_FPS=getattr(self._cfg.viewer, "max_fps", None),
                 camera_pos=np.array(self._cfg.viewer.pos),
                 camera_lookat=np.array(self._cfg.viewer.lookat),
                 camera_fov=40,
@@ -357,13 +394,13 @@ class GenesisSimulator(Simulator):
         # add camera if needed
         if self._cfg.sensor.add_depth:
             self._setup_depth_camera()
-        if getattr(self._cfg.sensor, "add_rgb", False):
-            self._setup_rgb_cameras()
+        if self._needs_debug_cameras():
+            self._setup_debug_cameras()
         
         # build
         self._scene.build(n_envs=self._num_envs)
-        if getattr(self._cfg.sensor, "add_rgb", False):
-            self._attach_rgb_cameras()
+        if self._needs_debug_cameras():
+            self._attach_debug_cameras()
 
         self._get_env_origins()
 
@@ -509,6 +546,16 @@ class GenesisSimulator(Simulator):
                  self._cfg.sensor.depth_camera_config.resolution[0]), 
                 device=self._device, 
                 dtype=torch.float
+            )
+        if getattr(self._cfg.sensor, "debug_depth_via_camera", False):
+            self._debug_depth_images = torch.zeros(
+                (
+                    self._num_envs,
+                    self._cfg.sensor.depth_camera_config.resolution[1],
+                    self._cfg.sensor.depth_camera_config.resolution[0],
+                ),
+                device=self._device,
+                dtype=torch.float,
             )
         if getattr(self._cfg.sensor, "add_rgb", False):
             self._rgb_images = torch.zeros(
@@ -826,24 +873,46 @@ class GenesisSimulator(Simulator):
         # normalize the depth images to be within 0-1
         self._depth_images.sub_(near_clip).div_(far_clip - near_clip).sub_(0.5)
 
-    def _update_rgb_images(self):
-        """Render the RGB camera only when the RGB stream is enabled."""
-        self._rgb_images.zero_()
-        expected_frame_shape = (
-            self._cfg.sensor.rgb_camera_config.resolution[1],
-            self._cfg.sensor.rgb_camera_config.resolution[0],
-            3,
-        )
-        for env_idx, rgb_camera in self.rgb_cameras.items():
-            rgb_camera.move_to_attach()
-            latest_frame, _, _, _ = rgb_camera.render(rgb=True, depth=False, segmentation=False, normal=False)
-            latest_frame = self._as_torch_frame(latest_frame)
-            if latest_frame.ndim != 3 or tuple(latest_frame.shape) != expected_frame_shape:
-                raise RuntimeError(
-                    f"Unexpected Genesis RGB image shape for env {env_idx}: {tuple(latest_frame.shape)}"
-                )
-            self._rgb_images[env_idx].copy_(self._convert_rgb_frame_to_uint8(latest_frame))
-        return self._rgb_images
+    def _update_debug_camera_streams(self, render_depth: bool, render_rgb: bool):
+        """Render play-time debug camera outputs through the offscreen camera path."""
+        depth_frames = self._debug_depth_images if render_depth else None
+        rgb_frames = self._rgb_images if render_rgb else None
+
+        if render_depth:
+            depth_cfg = self._cfg.sensor.depth_camera_config
+            expected_depth_shape = (depth_cfg.resolution[1], depth_cfg.resolution[0])
+            near_clip = depth_cfg.near_clip
+            far_clip = depth_cfg.far_clip
+            depth_frames.zero_()
+        if render_rgb:
+            rgb_cfg = self._cfg.sensor.rgb_camera_config
+            expected_rgb_shape = (rgb_cfg.resolution[1], rgb_cfg.resolution[0], 3)
+            rgb_frames.zero_()
+
+        for env_idx, debug_camera in self.debug_cameras.items():
+            debug_camera.move_to_attach()
+            rgb_frame, depth_frame, _, _ = debug_camera.render(
+                rgb=render_rgb,
+                depth=render_depth,
+                segmentation=False,
+                normal=False,
+            )
+            if render_depth:
+                depth_frame = self._as_torch_frame(depth_frame)
+                if depth_frame.ndim != 2 or tuple(depth_frame.shape) != expected_depth_shape:
+                    raise RuntimeError(
+                        f"Unexpected Genesis debug depth image shape for env {env_idx}: {tuple(depth_frame.shape)}"
+                    )
+                depth_frames[env_idx].copy_(depth_frame.clamp(near_clip, far_clip))
+            if render_rgb:
+                rgb_frame = self._as_torch_frame(rgb_frame)
+                if rgb_frame.ndim != 3 or tuple(rgb_frame.shape) != expected_rgb_shape:
+                    raise RuntimeError(
+                        f"Unexpected Genesis RGB image shape for env {env_idx}: {tuple(rgb_frame.shape)}"
+                    )
+                rgb_frames[env_idx].copy_(self._convert_rgb_frame_to_uint8(rgb_frame))
+
+        return depth_frames, rgb_frames
 
     def _draw_debug_sensor_images(self):
         if self._headless:
@@ -852,7 +921,7 @@ class GenesisSimulator(Simulator):
         env_panels = []
         for env_idx in self._rendered_env_indices:
             frames = []
-            if self._cfg.sensor.add_depth:
+            if self._cfg.sensor.add_depth or getattr(self._cfg.sensor, "debug_depth_via_camera", False):
                 frames.append(self._prepare_depth_debug_frame(env_idx))
             if getattr(self._cfg.sensor, "add_rgb", False):
                 frames.append(self._prepare_rgb_debug_frame(env_idx))
@@ -864,7 +933,9 @@ class GenesisSimulator(Simulator):
             return
 
         camera_canvas = self._tile_debug_panels(env_panels)
-        cv.namedWindow("Genesis Cameras", cv.WINDOW_NORMAL | cv.WINDOW_KEEPRATIO)
+        if not self._camera_window_initialized:
+            cv.namedWindow("Genesis Cameras", cv.WINDOW_NORMAL | cv.WINDOW_KEEPRATIO)
+            self._camera_window_initialized = True
         cv.imshow("Genesis Cameras", camera_canvas)
         cv.waitKey(1)
     
@@ -942,30 +1013,39 @@ class GenesisSimulator(Simulator):
         )
         self.depth_camera = self._scene.add_sensor(gs.sensors.DepthCamera(pattern=depth_pattern, **sensor_kwargs))
 
-    def _setup_rgb_cameras(self):
-        """Create one RGB debug camera per rendered environment."""
-        rgb_cfg = self._cfg.sensor.rgb_camera_config
-        self.rgb_cameras = {}
+    def _needs_debug_cameras(self):
+        return getattr(self._cfg.sensor, "add_rgb", False) or getattr(self._cfg.sensor, "debug_depth_via_camera", False)
+
+    def _debug_camera_config(self):
+        if getattr(self._cfg.sensor, "add_rgb", False):
+            return self._cfg.sensor.rgb_camera_config
+        return self._cfg.sensor.depth_camera_config
+
+    def _setup_debug_cameras(self):
+        """Create one offscreen debug camera per rendered environment."""
+        camera_cfg = self._debug_camera_config()
+        self.debug_cameras = {}
         for env_idx in self._rendered_env_indices:
-            self.rgb_cameras[env_idx] = self._scene.add_camera(
-                res=rgb_cfg.resolution,
-                pos=rgb_cfg.pos,
-                lookat=(rgb_cfg.pos[0] + 1.0, rgb_cfg.pos[1], rgb_cfg.pos[2]),
+            self.debug_cameras[env_idx] = self._scene.add_camera(
+                res=camera_cfg.resolution,
+                pos=camera_cfg.pos,
+                lookat=(camera_cfg.pos[0] + 1.0, camera_cfg.pos[1], camera_cfg.pos[2]),
                 up=(0.0, 0.0, 1.0),
-                fov=rgb_cfg.horizontal_fov_deg,
-                near=rgb_cfg.near_plane,
-                far=rgb_cfg.far_plane,
+                fov=camera_cfg.horizontal_fov_deg,
+                near=camera_cfg.near_plane,
+                far=camera_cfg.far_plane,
                 env_idx=env_idx,
+                debug=True,
             )
 
-    def _attach_rgb_cameras(self):
-        """Attach each RGB camera to the configured camera mount of its environment."""
-        rgb_cfg = self._cfg.sensor.rgb_camera_config
-        camera_offset = self._camera_offset_transform(rgb_cfg.pos, rgb_cfg.euler)
-        mounted_link = self._get_robot_link_by_local_idx(rgb_cfg.link_idx_local)
-        for rgb_camera in self.rgb_cameras.values():
-            rgb_camera.attach(mounted_link, camera_offset)
-            rgb_camera.move_to_attach()
+    def _attach_debug_cameras(self):
+        """Attach each debug camera to the configured camera mount of its environment."""
+        camera_cfg = self._debug_camera_config()
+        camera_offset = self._camera_offset_transform(camera_cfg.pos, camera_cfg.euler)
+        mounted_link = self._get_robot_link_by_local_idx(camera_cfg.link_idx_local)
+        for debug_camera in self.debug_cameras.values():
+            debug_camera.attach(mounted_link, camera_offset)
+            debug_camera.move_to_attach()
 
     def _get_robot_link_by_local_idx(self, link_idx_local):
         for link in self._robot.links:
@@ -1012,13 +1092,26 @@ class GenesisSimulator(Simulator):
         return frame.clamp(0, 255).to(torch.uint8)
 
     def _prepare_depth_debug_frame(self, env_idx):
-        depth = self._depth_images[env_idx, 0]
+        if self._cfg.sensor.add_depth:
+            depth = self._depth_images[env_idx, 0]
+            near_clip = self._cfg.sensor.depth_camera_config.near_clip
+            far_clip = self._cfg.sensor.depth_camera_config.far_clip
+            pixel_values = ((depth + 0.5) * 255.0).clamp(0, 255).cpu().numpy().astype(np.uint8)
+            depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
+            min_depth = float(depth.min().item() + 0.5) * (far_clip - near_clip) + near_clip
+            max_depth = float(depth.max().item() + 0.5) * (far_clip - near_clip) + near_clip
+            return self._label_debug_frame(depth_vis, f"Env {env_idx}  Depth  min {min_depth:.2f}m  max {max_depth:.2f}m")
+
+        depth = self._debug_depth_images[env_idx]
         near_clip = self._cfg.sensor.depth_camera_config.near_clip
         far_clip = self._cfg.sensor.depth_camera_config.far_clip
-        pixel_values = ((depth + 0.5) * 255.0).clamp(0, 255).cpu().numpy().astype(np.uint8)
+        clipped_depth = depth.clamp(near_clip, far_clip)
+        pixel_values = (
+            ((clipped_depth - near_clip) / (far_clip - near_clip)) * 255.0
+        ).clamp(0, 255).cpu().numpy().astype(np.uint8)
         depth_vis = cv.applyColorMap(pixel_values, cv.COLORMAP_TURBO)
-        min_depth = float(depth.min().item() + 0.5) * (far_clip - near_clip) + near_clip
-        max_depth = float(depth.max().item() + 0.5) * (far_clip - near_clip) + near_clip
+        min_depth = float(clipped_depth.min().item())
+        max_depth = float(clipped_depth.max().item())
         return self._label_debug_frame(depth_vis, f"Env {env_idx}  Depth  min {min_depth:.2f}m  max {max_depth:.2f}m")
 
     def _prepare_rgb_debug_frame(self, env_idx):

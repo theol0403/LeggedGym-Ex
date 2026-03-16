@@ -92,6 +92,10 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
             'RL_thigh_joint',
             'RL_calf_joint',]
         links_to_keep = ['FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']
+        dof_vel_limits = [30.1, 30.1, 15.7,
+                          30.1, 30.1, 15.7,
+                          30.1, 30.1, 15.7,
+                          30.1, 30.1, 15.7]
   
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9

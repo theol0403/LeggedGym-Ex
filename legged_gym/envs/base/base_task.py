@@ -1,7 +1,6 @@
 import sys
 import numpy as np
 import torch
-import time
 from legged_gym.simulator import GenesisSimulator, IsaacGymSimulator, IsaacLabSimulator
 from legged_gym import SIMULATOR
 

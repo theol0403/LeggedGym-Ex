@@ -73,6 +73,7 @@ class LeggedRobot(BaseTask):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+        if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
 
     def check_termination(self):
@@ -450,6 +451,7 @@ class LeggedRobot(BaseTask):
     def _parse_cfg(self, cfg):
         self.dt = self.cfg.sim.dt * self.cfg.control.decimation
         self.debug = self.cfg.env.debug
+        self.debug_sensor_images = getattr(self.cfg.env, "debug_sensor_images", False)
         # use self-implemented pd controller
         self.obs_scales = self.cfg.normalization.obs_scales
         self.reward_scales = class_to_dict(self.cfg.rewards.scales)

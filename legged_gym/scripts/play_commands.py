@@ -70,9 +70,15 @@ class PlayCommandController:
 
     def _get_command_limits(self, env_cfg, command_scale: float) -> VelocityCommandLimits:
         ranges = env_cfg.commands.ranges
+        planar_limit = command_scale * max(
+            abs(ranges.lin_vel_x[0]),
+            abs(ranges.lin_vel_x[1]),
+            abs(ranges.lin_vel_y[0]),
+            abs(ranges.lin_vel_y[1]),
+        )
         return VelocityCommandLimits(
-            x=command_scale * max(abs(ranges.lin_vel_x[0]), abs(ranges.lin_vel_x[1])),
-            y=command_scale * max(abs(ranges.lin_vel_y[0]), abs(ranges.lin_vel_y[1])),
+            x=planar_limit,
+            y=planar_limit,
             yaw=command_scale * max(abs(ranges.ang_vel_yaw[0]), abs(ranges.ang_vel_yaw[1])),
         )
 

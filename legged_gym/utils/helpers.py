@@ -166,6 +166,7 @@ def get_args():
     parser.add_argument('--use_joystick',   action='store_true', default=False, help="use joystick to provide commands")
     parser.add_argument('--joystick_type',  type=str, default='xbox', help="type of joystick: xbox, switch")
     parser.add_argument('--follow_robot',   action='store_true', default=False, help="whether the camera follows the robot during play")
+    parser.add_argument('--log_play_stats', action='store_true', default=False, help="collect and plot play-time state/reward logs")
     parser.add_argument('--motion_file',    type=str, 
                         default=None, 
                         help="motion file to load")

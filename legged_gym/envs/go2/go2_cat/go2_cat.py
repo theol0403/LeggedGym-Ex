@@ -9,6 +9,18 @@ from legged_gym.utils.constraint_manager import ConstraintManager
 from .go2_cat_config import Go2CaTCfg
 
 class Go2CaT(LeggedRobotTS):
+    _CONSTRAINT_NAMES = (
+        "torque",
+        "dof_vel",
+        "action_rate",
+        "base_height",
+        "collision",
+        "feet_stumble",
+        "dof_pos",
+        "base_orientation",
+        "stand_still",
+    )
+
     def __init__(self, cfg: Go2CaTCfg, sim_params, sim_device, headless):
         super().__init__(cfg, sim_params, sim_device, headless)
         if self.cfg.constraints.enable == "cat":
@@ -132,6 +144,7 @@ class Go2CaT(LeggedRobotTS):
         
         if self.debug:
             self.simulator.draw_debug_vis()
+        if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
     
     def compute_constraints_cat(self):
@@ -140,16 +153,24 @@ class Go2CaT(LeggedRobotTS):
         if not self.init_done:
             return
         # ------------ Soft constraints ----------------
+        torques_abs = torch.abs(self.simulator.torques)
+        dof_vel_abs = torch.abs(self.simulator.dof_vel)
+        contact_forces = self.simulator.link_contact_forces
+        penalized_forces = contact_forces[:, self.simulator.penalized_contact_indices, :]
+        feet_forces = contact_forces[:, self.simulator.feet_indices, :]
+        command_sq_norm = self.commands[:, :3].square().sum(dim=1)
         
         # Torque constraint
-        cstr_torque = torch.any(torch.abs(self.simulator.torques) > self.simulator.torque_limits, dim=-1)
+        cstr_torque = torch.any(torques_abs > self.simulator.torque_limits, dim=-1)
         
         # Joint velocity constraint
-        cstr_dof_vel = torch.any(torch.abs(self.simulator.dof_vel) > self.simulator.dof_vel_limits, dim=-1)
+        cstr_dof_vel = torch.any(dof_vel_abs > self.simulator.dof_vel_limits, dim=-1)
         
         # Action rate constraint (for command smoothness)
-        cstr_action_rate = torch.any(torch.abs(self.actions - self.last_actions) / self.dt > 
-                                     self.cfg.constraints.limits.action_rate, dim=-1)
+        cstr_action_rate = torch.any(
+            torch.abs(self.actions - self.last_actions) > self.cfg.constraints.limits.action_rate * self.dt,
+            dim=-1,
+        )
         
         # Base height constraint (too low)
         cstr_base_height = torch.mean(self.simulator.base_pos[:, 2].unsqueeze(
@@ -158,13 +179,13 @@ class Go2CaT(LeggedRobotTS):
         # ------------ Hard constraints ----------------
         
         # Collision constraint
-        cstr_collision = torch.any(torch.norm(
-            self.simulator.link_contact_forces[:, self.simulator.penalized_contact_indices, :], 
-            dim=-1) > 10.0, dim=1)
+        cstr_collision = torch.any(penalized_forces.square().sum(dim=-1) > 100.0, dim=1)
         
         # Feet stumble constraint
-        cstr_feet_stumble = torch.any(torch.norm(self.simulator.link_contact_forces[:, self.simulator.feet_indices, :], dim=-1) > \
-            4 * torch.abs(self.simulator.link_contact_forces[:, self.simulator.feet_indices, 2]), dim=1)
+        cstr_feet_stumble = torch.any(
+            feet_forces.square().sum(dim=-1) > 16.0 * feet_forces[:, :, 2].square(),
+            dim=1,
+        )
 
         # Joint position limit constraint
         cstr_dof_pos = torch.any(self.simulator.dof_pos < self.simulator.dof_pos_limits[:, 0], dim=-1) * \
@@ -176,40 +197,47 @@ class Go2CaT(LeggedRobotTS):
         # ------------ Style constraints ----------------
         
         # Standing still constraint, penalize motion when command is zero
-        cstr_stand_still = torch.any(torch.abs(self.simulator.dof_vel) > 4.0, dim=-1) * \
-            (torch.norm(self.commands[:, :3], dim=1) < 0.1).float().unsqueeze(1)
+        cstr_stand_still = torch.any(dof_vel_abs > 4.0, dim=-1).float() * \
+            (command_sq_norm < 0.01).float()
         
         # ------------ Log constraint violation ----------------
         if self.debug_cstr:
-            cstr_names = ["torque", "dof_vel", "action_rate", "base_height",
-                            "collision", "feet_stumble", "dof_pos", "base_orientation",
-                            "stand_still"]
-            cstr_violations = [cstr_torque, cstr_dof_vel, cstr_action_rate, cstr_base_height,
-                                cstr_collision, cstr_feet_stumble, cstr_dof_pos, cstr_base_orientation,
-                                cstr_stand_still]
-            for i in range(len(cstr_names)):
-                name = cstr_names[i]
+            cstr_violations = (
+                cstr_torque,
+                cstr_dof_vel,
+                cstr_action_rate,
+                cstr_base_height,
+                cstr_collision,
+                cstr_feet_stumble,
+                cstr_dof_pos,
+                cstr_base_orientation,
+                cstr_stand_still,
+            )
+            for name, violation in zip(self._CONSTRAINT_NAMES, cstr_violations):
                 if name not in self.cstr_violation:
                     self.cstr_violation[name] = 0
-                violation = cstr_violations[i]
                 self.cstr_violation[name] += torch.mean(violation.float()).item()
         
         # ------------ Applying constraints ----------------
-        
         soft_p = self.constraint["soft_p"]
-        
-        # soft constraints
-        self.constraint_manager.add("torque", cstr_torque, max_p=soft_p)
-        self.constraint_manager.add("dof_vel", cstr_dof_vel, max_p=soft_p)
-        self.constraint_manager.add("action_rate", cstr_action_rate, max_p=soft_p)
-        self.constraint_manager.add("base_height", cstr_base_height, max_p=soft_p)
-        # hard constraints
-        self.constraint_manager.add("collision", cstr_collision, max_p=1.0)
-        self.constraint_manager.add("feet_stumble", cstr_feet_stumble, max_p=1.0)
-        self.constraint_manager.add("dof_pos", cstr_dof_pos, max_p=1.0)
-        self.constraint_manager.add("base_orientation", cstr_base_orientation, max_p=1.0)
-        # style constraints
-        self.constraint_manager.add("stand_still", cstr_stand_still, max_p=soft_p)
+        constraint_values = torch.stack(
+            (
+                cstr_torque.float(),
+                cstr_dof_vel.float(),
+                cstr_action_rate.float(),
+                cstr_base_height.float(),
+                cstr_collision.float(),
+                cstr_feet_stumble.float(),
+                cstr_dof_pos.float(),
+                cstr_base_orientation.float(),
+                cstr_stand_still.float().view(-1),
+            ),
+            dim=1,
+        )
+        max_p = constraint_values.new_tensor(
+            (soft_p, soft_p, soft_p, soft_p, 1.0, 1.0, 1.0, 1.0, soft_p)
+        )
+        self.constraint_manager.add_many(self._CONSTRAINT_NAMES, constraint_values, max_p=max_p)
         
         self.constraint_manager.log_all(self.episode_sums)
         
