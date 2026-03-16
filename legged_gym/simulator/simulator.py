@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from torch import Tensor
+import torch
 import numpy as np
+
+from legged_gym.utils.math_utils import quat_apply_yaw
 
 """ ********** Base Simulator ********** """
 class Simulator(ABC):
@@ -220,11 +223,82 @@ class Simulator(ABC):
         """
         return
     
-    @abstractmethod
-    def _init_height_points(self):
-        """Initializes the height sampling points around the robot in the base frame, which are used for measuring terrain heights.
+    def _make_height_grid(self, points_x, points_y):
+        """Create a meshgrid of height sampling points from coordinate lists.
+
+        Returns:
+            tuple: ``(num_points, points)`` where *points* has shape
+            ``(num_envs, num_points, 3)`` with z=0.
         """
-        return
+        y = torch.tensor(points_y, device=self._device, requires_grad=False)
+        x = torch.tensor(points_x, device=self._device, requires_grad=False)
+        grid_x, grid_y = torch.meshgrid(x, y, indexing='ij')
+        num_points = grid_x.numel()
+        points = torch.zeros(self._num_envs, num_points, 3,
+                             device=self._device, requires_grad=False)
+        points[:, :, 0] = grid_x.flatten()
+        points[:, :, 1] = grid_y.flatten()
+        return num_points, points
+
+    def _sample_heights_at_grid(self, grid_points, num_points):
+        """Look up terrain heights at a set of body-frame grid points.
+
+        The points are rotated by the robot yaw, translated to world
+        coordinates, and then looked up in ``_height_samples``.
+
+        Args:
+            grid_points: ``(num_envs, num_points, 3)`` in body frame.
+            num_points: number of points per environment.
+
+        Returns:
+            Tensor of shape ``(num_envs, num_points)`` with heights in metres.
+        """
+        if self._cfg.terrain.mesh_type == 'plane':
+            return torch.zeros(self._num_envs, num_points,
+                               device=self._device, requires_grad=False)
+        if self._cfg.terrain.mesh_type == 'none':
+            raise NameError("Can't measure height with terrain mesh type 'none'")
+
+        points = quat_apply_yaw(
+            self._base_quat.repeat(1, num_points), grid_points
+        ) + self._base_pos[:, :3].unsqueeze(1)
+
+        # Offset for border: terrain origin is at (border_size, border_size)
+        points += self._cfg.terrain.border_size
+        points = (points / self._cfg.terrain.horizontal_scale).long()
+        px = points[:, :, 0].view(-1)
+        py = points[:, :, 1].view(-1)
+        px = torch.clip(px, 0, self._height_samples.shape[0] - 2)
+        py = torch.clip(py, 0, self._height_samples.shape[1] - 2)
+
+        heights1 = self._height_samples[px, py]
+        heights2 = self._height_samples[px + 1, py]
+        heights3 = self._height_samples[px, py + 1]
+        heights = torch.min(torch.min(heights1, heights2), heights3)
+        return heights.view(self._num_envs, -1) * self._cfg.terrain.vertical_scale
+
+    def _init_height_points(self):
+        """Initializes the height sampling points around the robot in the base frame."""
+        self._num_height_points, self._height_points = self._make_height_grid(
+            self._cfg.terrain.measured_points_x,
+            self._cfg.terrain.measured_points_y,
+        )
+        self._measured_heights = torch.zeros(
+            self._num_envs, self._num_height_points,
+            device=self._device, requires_grad=False)
+
+        # Scandots grid (forward-biased elevation map for teacher)
+        scandots_cfg = getattr(self._cfg.terrain, 'scandots', None)
+        if scandots_cfg and scandots_cfg.enable:
+            self._num_scandot_points, self._scandot_points = self._make_height_grid(
+                scandots_cfg.points_x, scandots_cfg.points_y)
+            self._scandot_heights = torch.zeros(
+                self._num_envs, self._num_scandot_points,
+                device=self._device, requires_grad=False)
+        else:
+            self._num_scandot_points = 0
+            self._scandot_points = None
+            self._scandot_heights = None
     
     @abstractmethod
     def _get_env_origins(self):
@@ -232,13 +306,23 @@ class Simulator(ABC):
         """
         return
     
-    @abstractmethod
     def _update_surrounding_heights(self):
         """Updates the height of the sampling points around the robot.
-        
+
         The sampling grid is defined in LeggedRobotCfg.terrain.measured_points_x/y.
         """
-        return
+        self._measured_heights = self._sample_heights_at_grid(
+            self._height_points, self._num_height_points)
+
+    def _update_scandot_heights(self):
+        """Updates terrain heights at the scandot grid positions."""
+        if self._scandot_points is not None:
+            self._scandot_heights = self._sample_heights_at_grid(
+                self._scandot_points, self._num_scandot_points)
+
+    def update_scandot_heights(self):
+        """Public wrapper for refreshing scandot terrain samples."""
+        self._update_scandot_heights()
 
     @abstractmethod
     def _calc_terrain_info_around_feet(self):
@@ -599,6 +683,15 @@ class Simulator(ABC):
             Tensor((num_envs, num_height_points)): Measured heights of the sampling points around the robot.
         """
         return self._measured_heights
+
+    @property
+    def scandot_heights(self):
+        """Returns the terrain heights at the scandot grid positions.
+
+        Returns:
+            Tensor((num_envs, num_scandot_points)): Terrain heights at scandot positions, or None if disabled.
+        """
+        return self._scandot_heights
     
     @property
     def link_contact_forces(self):

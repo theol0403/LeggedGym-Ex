@@ -527,20 +527,6 @@ class IsaacLabSimulator(Simulator):
                     print(f"PD gain of joint {name} were not defined, setting them to zero")
         
         self._init_height_points()
-        self._measured_heights = torch.zeros(self._num_envs, self._num_height_points, device=self._device, requires_grad=False)
-        
-    def _init_height_points(self):
-        y = torch.tensor(self._cfg.terrain.measured_points_y,
-                         device=self._device, requires_grad=False)
-        x = torch.tensor(self._cfg.terrain.measured_points_x,
-                         device=self._device, requires_grad=False)
-        grid_x, grid_y = torch.meshgrid(x, y, indexing='ij')
-
-        self._num_height_points = grid_x.numel()
-        self._height_points = torch.zeros(self._num_envs, self._num_height_points,
-                             3, device=self._device, requires_grad=False)
-        self._height_points[:, :, 0] = grid_x.flatten()
-        self._height_points[:, :, 1] = grid_y.flatten()
         
     def _get_env_origins(self):
         """ Sets environment origins. On rough terrain the origins are defined by the terrain platforms.
@@ -585,33 +571,6 @@ class IsaacLabSimulator(Simulator):
             self._env_origins[:, 0] -= self._cfg.terrain.plane_length / 4
             self._env_origins[:, 1] -= self._cfg.terrain.plane_length / 4
         
-    def _update_surrounding_heights(self):
-        if self._cfg.terrain.mesh_type == 'plane':
-            self._measured_heights = torch.zeros(self._num_envs, self._num_height_points, device=self._device, requires_grad=False)
-        elif self._cfg.terrain.mesh_type == 'none':
-            raise NameError(
-                "Can't measure height with terrain mesh type 'none'")
-
-        points = quat_apply_yaw(self._base_quat.repeat(
-                1, self._num_height_points), self._height_points) + (self._base_pos[:, :3]).unsqueeze(1)
-
-        # When acquiring heights, the points need to add border_size
-        # because in the height_samples, the origin of the terrain is at (border_size, border_size)
-        points += self._cfg.terrain.border_size
-        points = (points/self._cfg.terrain.horizontal_scale).long()
-        px = points[:, :, 0].view(-1)
-        py = points[:, :, 1].view(-1)
-        px = torch.clip(px, 0, self._height_samples.shape[0]-2)
-        py = torch.clip(py, 0, self._height_samples.shape[1]-2)
-
-        heights1 = self._height_samples[px, py]
-        heights2 = self._height_samples[px+1, py]
-        heights3 = self._height_samples[px, py+1]
-        heights = torch.min(heights1, heights2)
-        heights = torch.min(heights, heights3)
-
-        self._measured_heights = heights.view(self._num_envs, -1) * self._cfg.terrain.vertical_scale
-
     def _calc_terrain_info_around_feet(self):
         """ Finds neighboring points around each foot for terrain height measurement."""
         # Foot positions

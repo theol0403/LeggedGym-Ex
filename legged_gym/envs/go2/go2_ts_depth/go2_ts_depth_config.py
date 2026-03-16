@@ -18,7 +18,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
         # This operation is to prevent the critic from receiving noisy input from the concatenation of current observation(noisy) and latent vector
         num_actions = 12
         env_spacing = 0.5
-    
+
     class terrain( LeggedRobotCfg.terrain ):
         if SIMULATOR == "genesis":
             mesh_type = "heightfield" # for genesis
@@ -39,7 +39,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
         num_cols = 10  # number of terrain cols (types)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
         terrain_proportions = [0.2, 0.1, 0.25, 0.25, 0.2]
-        
+
     class init_state( LeggedRobotCfg.init_state ):
         pos = [0.0, 0.0, 0.42] # x,y,z [m]
         default_joint_angles = { # = target angles [rad] when action = 0.0
@@ -69,7 +69,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
         decimation = 4 # decimation: Number of control action updates @ sim DT per policy DT
 
     class asset( LeggedRobotCfg.asset ):
-        # Common: 
+        # Common:
         name = "go2"
         file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/go2/urdf/go2.urdf'
         obtain_link_contact_states = True
@@ -77,7 +77,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
         foot_name = "foot"
         penalize_contacts_on = ["thigh", "calf", "base", "Head"]
         terminate_after_contacts_on = []
-        # Genesis: 
+        # Genesis:
         dof_names = [        # specify the sequence of actions
             'FR_hip_joint',
             'FR_thigh_joint',
@@ -96,7 +96,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
                           30.1, 30.1, 15.7,
                           30.1, 30.1, 15.7,
                           30.1, 30.1, 15.7]
-  
+
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
         base_height_target = 0.4
@@ -135,7 +135,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
             lin_vel_y = [-1.0, 1.0]   # min max [m/s]
             ang_vel_yaw = [-1, 1]    # min max [rad/s]
             heading = [-3.14, 3.14]
-            
+
     class domain_rand(LeggedRobotCfg.domain_rand):
         randomize_friction = True
         friction_range = [0.2, 1.7]
@@ -155,7 +155,7 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
         joint_friction_range = [0.01, 0.02]
         randomize_joint_damping = True
         joint_damping_range = [0.25, 0.3]
-    
+
     class sensor( LeggedRobotCfg.sensor ):
         add_depth = True
         class depth_camera_config( LeggedRobotCfg.sensor.depth_camera_config ):
@@ -198,3 +198,29 @@ class Go2TSDepthCfgPPO( LeggedRobotCfgPPO ):
         load_run = -1
         checkpoint = -1
         max_iterations = 2500
+
+class Go2TSScandotsCfg( Go2TSDepthCfg ):
+    """Teacher-student config using scandots (elevation map) instead of depth camera."""
+    class env( Go2TSDepthCfg.env ):
+        num_envs = 4096
+        # 34 (DR) + 132 (scandots) + 3 (lin_vel) + 12 (contacts) = 181
+        num_privileged_obs = 181
+        num_latent_dims = num_privileged_obs
+        single_critic_obs_len = Go2TSDepthCfg.env.num_observations + 34 + 12 + 3 + 81
+        num_critic_obs = Go2TSDepthCfg.env.c_frame_stack * single_critic_obs_len
+
+    class terrain( Go2TSDepthCfg.terrain ):
+        class scandots:
+            enable = True
+            points_x = [-0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2, 1.35]
+            points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
+            base_height_offset = 0.5
+            clip_min = -1.0
+            clip_max = 1.0
+
+    class sensor( Go2TSDepthCfg.sensor ):
+        add_depth = False  # scandots replace depth camera
+
+class Go2TSScandotsCfgPPO( Go2TSDepthCfgPPO ):
+    class runner( Go2TSDepthCfgPPO.runner ):
+        experiment_name = 'go2_scandots'

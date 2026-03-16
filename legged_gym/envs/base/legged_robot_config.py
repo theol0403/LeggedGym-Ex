@@ -44,6 +44,17 @@ class LeggedRobotCfg(BaseConfig):
         # positions of the sampling height around the base (relative to the base of the robot)
         measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
         measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+        # Scandots: forward-biased elevation map for teacher policy (parkour-style)
+        class scandots:
+            enable = False
+            # 12x11 grid, 0.15m spacing (Extreme Parkour parameters)
+            points_x = [-0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2, 1.35]
+            points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
+            # 12 * 11 = 132 points
+            base_height_offset = 0.5  # nominal base height subtracted before computing relative elevation
+            clip_min = -1.0
+            clip_max = 1.0
+
         selected = False # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
         max_init_terrain_level = 1 # starting curriculum level

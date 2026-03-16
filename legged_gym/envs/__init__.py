@@ -60,6 +60,7 @@ from legged_gym.envs.go2.go2_cat.go2_cat_config import Go2CaTCfg, Go2CaTCfgPPO
 # go2_ts_depth
 from legged_gym.envs.go2.go2_ts_depth.go2_ts_depth import Go2TSDepth
 from legged_gym.envs.go2.go2_ts_depth.go2_ts_depth_config import Go2TSDepthCfg, Go2TSDepthCfgPPO
+from legged_gym.envs.go2.go2_ts_depth.go2_ts_depth_config import Go2TSScandotsCfg, Go2TSScandotsCfgPPO
 # go2_nav
 from legged_gym.envs.go2.go2_nav.go2_nav import GO2Nav
 from legged_gym.envs.go2.go2_nav.go2_nav_config import GO2NavCfg, GO2NavCfgPPO
@@ -93,6 +94,7 @@ task_registry.register( "go2_cts", Go2CTS, Go2CTSCfg(), Go2CTSCfgPPO())
 task_registry.register( "go2_dreamwaq", Go2Dreamwaq, Go2DreamwaqCfg(), Go2DreamwaqCfgPPO())
 task_registry.register( "go2_cat", Go2CaT, Go2CaTCfg(), Go2CaTCfgPPO())
 task_registry.register( "go2_ts_depth", Go2TSDepth, Go2TSDepthCfg(), Go2TSDepthCfgPPO())
+task_registry.register( "go2_ts_scandots", Go2TSDepth, Go2TSScandotsCfg(), Go2TSScandotsCfgPPO())
 task_registry.register( "go2_nav", GO2Nav, GO2NavCfg(), GO2NavCfgPPO())
 task_registry.register( "tron1_pf", TRON1PF, TRON1PFCfg(), TRON1PFCfgPPO())
 task_registry.register( "tron1_pf_ee", TRON1PF_EE, TRON1PF_EECfg(), TRON1PF_EECfgPPO())

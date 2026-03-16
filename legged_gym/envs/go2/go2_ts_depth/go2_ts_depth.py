@@ -106,23 +106,26 @@ class Go2TSDepth(LeggedRobot):
         
         # Privileged observation, for privileged encoder
         if self.num_privileged_obs is not None:
-            self.privileged_obs_buf = torch.cat(
-                (
-                    domain_randomization_info,                       # 34
-                    self.simulator.height_around_feet.flatten(1,2),  # 9*number of feet
-                    self.simulator.normal_vector_around_feet,        # 3*number of feet
-                    self.simulator.base_lin_vel * self.obs_scales.lin_vel,     # 3
-                ),
-                dim=-1,
-            )
-            if self.cfg.asset.obtain_link_contact_states:
-                self.privileged_obs_buf = torch.cat(
-                    (
-                        self.privileged_obs_buf,                   # previous
-                        self.simulator.link_contact_states,        # contact states of thighs, calfs and feet (4+4+4)=12
-                    ),
-                    dim=-1,
+            priv_parts = [domain_randomization_info]  # 34
+
+            scandots_cfg = getattr(self.cfg.terrain, 'scandots', None)
+            if scandots_cfg and scandots_cfg.enable:
+                # Scandots: relative elevation map for teacher
+                scandot_obs = torch.clip(
+                    self.simulator.base_pos[:, 2:3] - scandots_cfg.base_height_offset
+                    - self.simulator.scandot_heights,
+                    scandots_cfg.clip_min, scandots_cfg.clip_max,
                 )
+                priv_parts.append(scandot_obs)  # num_scandot_points (default 132)
+            else:
+                priv_parts.append(self.simulator.height_around_feet.flatten(1, 2))  # 9*num_feet
+                priv_parts.append(self.simulator.normal_vector_around_feet)  # 3*num_feet
+
+            priv_parts.append(self.simulator.base_lin_vel * self.obs_scales.lin_vel)  # 3
+            if self.cfg.asset.obtain_link_contact_states:
+                priv_parts.append(self.simulator.link_contact_states)  # 12
+
+            self.privileged_obs_buf = torch.cat(priv_parts, dim=-1)
 
     def _init_buffers(self):
         super()._init_buffers()
@@ -299,9 +302,11 @@ class Go2TSDepth(LeggedRobot):
             self.simulator.update_surrounding_heights()
             if self.cfg.terrain.obtain_terrain_info_around_feet:
                 self.simulator.calc_terrain_info_around_feet()
+        if getattr(self.cfg.terrain, 'scandots', None) and self.cfg.terrain.scandots.enable:
+            self.simulator.update_scandot_heights()
         if self.cfg.domain_rand.push_robots and (self.common_step_counter % self.cfg.domain_rand.push_interval == 0):
             self.simulator.push_robots()
-    
+
     def _get_noise_scale_vec(self):
         """ Sets a vector used to scale the noise added to the observations.
             [NOTE]: Must be adapted when changing the observations structure
