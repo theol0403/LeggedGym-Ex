@@ -27,7 +27,8 @@ class ParkourObservationSpec:
         return 1 + 1 + 3 + 2 + self.num_actions + self.num_actions
 
     @property
-    def actor_dim(self) -> int:
+    def prop_dim(self) -> int:
+        """Proprioceptive-only observation dimension (no scandots)."""
         return (
             self.num_goal_terms
             + self.num_gravity
@@ -36,8 +37,11 @@ class ParkourObservationSpec:
             + self.num_actions
             + self.num_actions
             + self.num_foot_contacts
-            + self.num_scandots
         )
+
+    @property
+    def actor_dim(self) -> int:
+        return self.prop_dim + self.num_scandots
 
     @property
     def critic_dim(self) -> int:
@@ -102,3 +106,7 @@ def parkour_actor_obs_dim(cfg) -> int:
 
 def parkour_critic_obs_dim(cfg) -> int:
     return ParkourObservationSpec.from_cfg(cfg).critic_dim
+
+
+def parkour_prop_obs_dim(cfg) -> int:
+    return ParkourObservationSpec.from_cfg(cfg).prop_dim

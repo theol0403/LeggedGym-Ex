@@ -142,6 +142,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.runner.checkpoint = args.ckpt
         if getattr(args, "load_run", None) is not None:
             cfg_train.runner.load_run = args.load_run
+        if getattr(args, "teacher_checkpoint", None) is not None:
+            cfg_train.policy.teacher_checkpoint = args.teacher_checkpoint
 
     return env_cfg, cfg_train
 
@@ -196,6 +198,8 @@ def get_args():
                         help="force the Genesis parkour task to sample a single obstacle family")
     parser.add_argument('--parkour_force_row', type=int, default=None,
                         help="force the Genesis parkour task to sample a single curriculum row")
+    parser.add_argument('--teacher_checkpoint', type=str, default=None,
+                        help="path to teacher model .pt checkpoint for student weight initialization")
 
     return parser.parse_args()
 
