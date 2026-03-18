@@ -54,7 +54,13 @@ class ParkourLaneBuilder:
                 "Parkour terrain config is inconsistent: max_waypoints must be >= max_obstacles + 1 "
                 f"(got {self.max_waypoints} < {self.max_obstacles + 1})."
             )
-        self._base_slot_centers = np.array([4.0, 8.0, 12.0], dtype=np.float32)
+        self._slot_margin = 3.0
+        self._base_slot_centers = np.linspace(
+            self._slot_margin,
+            self.env_length - self._slot_margin,
+            num=self.max_obstacles,
+            dtype=np.float32,
+        )
         self._slot_offset_patterns = np.array(
             [
                 [0.0, 0.0, 0.0],
@@ -78,9 +84,9 @@ class ParkourLaneBuilder:
         edge_mask = np.zeros_like(terrain.height_field_raw, dtype=np.uint8)
 
         lane_center_y = 0.5 * self.env_width
-        lane_half_width = 1.1
-        spawn_x = 0.75
-        goal_x = self.env_length - 0.6
+        lane_half_width = 1.2
+        spawn_x = 0.55
+        goal_x = self.env_length - 0.45
         y_min = lane_center_y - lane_half_width
         y_max = lane_center_y + lane_half_width
 
@@ -194,8 +200,8 @@ class ParkourLaneBuilder:
                 [spawn_x, lane_center_y, self._sample_local_height(terrain, spawn_x, lane_center_y), 0.0],
                 dtype=np.float32,
             ),
-            safe_spawn_region=np.array([0.6, 1.2, lane_center_y - 0.3, lane_center_y + 0.3], dtype=np.float32),
-            lane_bounds=np.array([0.4, self.env_length - 0.4, y_min, y_max], dtype=np.float32),
+            safe_spawn_region=np.array([0.45, 0.95, lane_center_y - 0.3, lane_center_y + 0.3], dtype=np.float32),
+            lane_bounds=np.array([0.3, self.env_length - 0.3, y_min, y_max], dtype=np.float32),
             waypoints=waypoints,
             waypoint_count=waypoint_count,
             terminal_goal=terminal_goal,
@@ -253,7 +259,7 @@ class ParkourLaneBuilder:
     def _slot_centers_for_variant(self, variant_id: int):
         offset_row = self._slot_offset_patterns[variant_id % len(self._slot_offset_patterns)]
         slot_centers = self._base_slot_centers + offset_row
-        return np.clip(slot_centers, 3.3, self.env_length - 3.3)
+        return np.clip(slot_centers, self._slot_margin - 0.2, self.env_length - self._slot_margin + 0.2)
 
     def _stairs_start_x(self, center_x: float, step_count: int):
         row_fraction = max(step_count - 2, 0) / 2.0

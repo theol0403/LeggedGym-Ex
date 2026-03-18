@@ -20,10 +20,10 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
             mesh_type = "heightfield"
         else:
             mesh_type = "trimesh"
-        border_size = 5.0
+        border_size = 2.0
         curriculum = True
-        terrain_length = 16.0
-        terrain_width = 6.0
+        terrain_length = 12.0
+        terrain_width = 3.6
         platform_size = 3.0
         num_rows = 4
         num_cols = 12
