@@ -58,7 +58,7 @@ class LeggedRobotCfg(BaseConfig):
         class parkour:
             enable = False
             families = ["stairs", "hurdle_block", "gap"]
-            include_flat_debug = False
+            variants_per_family = 1
             force_family = None
             force_row = None
             max_waypoints = 2
@@ -244,6 +244,7 @@ class LeggedRobotCfg(BaseConfig):
     # viewer camera:
     class viewer:
         ref_env = 0
+        follow_robot = False
         pos = [4.0, 4.0, 2.0]       # [m], relative to the robot position
         lookat = [0., 0, 0.]  # [m], relative to the robot position
         resolution = (1280, 720)    # [Genesis] cap viewer resolution instead of using full display resolution

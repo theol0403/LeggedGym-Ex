@@ -32,12 +32,9 @@ import numpy as np
 import trimesh
 
 from . import terrain_utils
-from .parkour_terrain import PARKOUR_FAMILY_IDS, PARKOUR_SECTION_IDS, ParkourLaneBuilder
+from .parkour_terrain import ParkourLaneBuilder
 
 class Terrain:
-    PARKOUR_FAMILY_IDS = PARKOUR_FAMILY_IDS
-    PARKOUR_SECTION_IDS = PARKOUR_SECTION_IDS
-
     def __init__(self, cfg) -> None:
 
         self.cfg = cfg
@@ -114,9 +111,9 @@ class Terrain:
                 self.add_terrain_to_map(terrain, i, j)
 
     def parkour_curriculum(self):
-        for j, family in enumerate(self.parkour_family_names):
+        for j, (family, variant_id) in enumerate(self.parkour_column_specs):
             for i in range(self.cfg.num_rows):
-                terrain, metadata = self._parkour_lane_builder.build_lane(family, i)
+                terrain, metadata = self._parkour_lane_builder.build_lane(family, i, variant_id=variant_id)
                 self.add_terrain_to_map(terrain, i, j, metadata=metadata)
 
     def selected_terrain(self):
@@ -279,22 +276,31 @@ class Terrain:
     def _init_metadata_arrays(self):
         self.metadata_enabled = self.parkour_enabled
         if not self.metadata_enabled:
-            self.parkour_family_names = []
-            self.family_col_indices = {}
+            self.family_variant_col_indices = {}
+            self.family_bucket_ids = {}
+            self.parkour_column_specs = []
             return
 
-        self.parkour_family_names = list(self.parkour_cfg.families)
-        if getattr(self.parkour_cfg, "include_flat_debug", False) and "flat" not in self.parkour_family_names:
-            self.parkour_family_names.append("flat")
-        if self.cfg.num_cols != len(self.parkour_family_names):
+        base_family_names = list(self.parkour_cfg.families)
+        variants_per_family = max(1, int(getattr(self.parkour_cfg, "variants_per_family", 1)))
+
+        self.parkour_column_specs = []
+        self.family_variant_col_indices = {}
+        self.family_bucket_ids = {}
+        for family_name in base_family_names:
+            self.family_bucket_ids[family_name] = len(self.family_bucket_ids)
+            self.family_variant_col_indices[family_name] = []
+            for variant_id in range(variants_per_family):
+                col_idx = len(self.parkour_column_specs)
+                self.parkour_column_specs.append((family_name, variant_id))
+                self.family_variant_col_indices[family_name].append(col_idx)
+
+        if self.cfg.num_cols != len(self.parkour_column_specs):
             raise ValueError(
-                "Parkour terrain expects cfg.num_cols to match cfg.parkour.families "
-                f"(plus optional flat debug). Got num_cols={self.cfg.num_cols}, "
-                f"families={self.parkour_family_names}."
+                "Parkour terrain expects cfg.num_cols to match cfg.parkour.families * "
+                "terrain.parkour.variants_per_family. "
+                f"Got num_cols={self.cfg.num_cols}, column_specs={self.parkour_column_specs}."
             )
-        self.family_col_indices = {
-            family_name: col_idx for col_idx, family_name in enumerate(self.parkour_family_names)
-        }
         self.max_waypoints = int(self.parkour_cfg.max_waypoints)
         self.max_obstacles = int(self.parkour_cfg.max_obstacles)
         self.max_sections = int(self.parkour_cfg.max_sections)

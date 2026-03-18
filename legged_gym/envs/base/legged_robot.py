@@ -29,6 +29,8 @@ class LeggedRobot(BaseTask):
         self.init_done = False
         self._parse_cfg(self.cfg)
         super().__init__(self.cfg, sim_params, sim_device, headless)
+        if not self.headless and self.follow_robot and hasattr(self.simulator, "enable_viewer_follow"):
+            self.simulator.enable_viewer_follow()
         
         self._init_buffers()
         self._prepare_reward_function()
@@ -250,7 +252,7 @@ class LeggedRobot(BaseTask):
             self.action_queue[:, 0] = actions.clone()
             actions = self.action_queue[torch.arange(
                 self.num_envs), self.action_delay].clone()
-        # Keep training's default follow behavior, but let play.py disable it.
+        # Keep the viewer anchored to the configured robot only when enabled.
         if not self.debug and not self.headless and self.follow_robot:
             env_idx = int(np.clip(self.viewer_follow_env_idx, 0, self.num_envs - 1))
             pos = self.simulator.base_pos[env_idx].cpu().numpy() + np.array(self.cfg.viewer.pos)
@@ -453,7 +455,7 @@ class LeggedRobot(BaseTask):
         self.dt = self.cfg.sim.dt * self.cfg.control.decimation
         self.debug = self.cfg.env.debug
         self.debug_sensor_images = getattr(self.cfg.env, "debug_sensor_images", False)
-        self.follow_robot = True
+        self.follow_robot = bool(getattr(self.cfg.viewer, "follow_robot", False))
         self.viewer_follow_env_idx = int(getattr(self.cfg.viewer, "ref_env", 0))
         # use self-implemented pd controller
         self.obs_scales = self.cfg.normalization.obs_scales

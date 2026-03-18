@@ -195,6 +195,7 @@ class LeggedRobotNavCfg(BaseConfig):
     # viewer camera:
     class viewer:
         ref_env = 0
+        follow_robot = False
         pos = [2, 2, 2]       # [m]
         lookat = [0., 0, 1.]  # [m]
         rendered_envs_idx = [i for i in range(5)]  # number of environments to be rendered

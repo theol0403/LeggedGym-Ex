@@ -25,8 +25,8 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         terrain_length = 16.0
         terrain_width = 6.0
         platform_size = 3.0
-        num_rows = 3
-        num_cols = 3
+        num_rows = 4
+        num_cols = 12
         max_init_terrain_level = 0
         obtain_terrain_info_around_feet = True
         measure_heights = True
@@ -44,16 +44,16 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         class parkour(Go2RoughCommonCfg.terrain.parkour):
             enable = True
             families = ["stairs", "hurdle_block", "gap"]
-            include_flat_debug = False
+            variants_per_family = 4
             force_family = None
             force_row = None
-            max_waypoints = 5
+            max_waypoints = 4
             max_obstacles = 3
             max_sections = 3
             waypoint_radius = 0.45
             waypoint_dwell_steps = 3
-            curriculum_progress_up_threshold = 0.9
-            curriculum_progress_down_threshold = 0.35
+            curriculum_progress_up_threshold = 0.85
+            curriculum_progress_down_threshold = 0.40
 
     class init_state(Go2RoughCommonCfg.init_state):
         pos = [0.0, 0.0, 0.42]
@@ -121,14 +121,14 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
             lin_vel_z = -0.5
             ang_vel_xy = -0.05
             orientation = -0.5
-            foot_clearance = 0.2
-            hip_pos = -0.05
+            foot_clearance = 0.0
+            hip_pos = 0.0
             feet_contact_stand_still = 0.0
 
     class commands(Go2RoughCommonCfg.commands):
         curriculum = False
         heading_command = False
-        num_commands = 4
+        num_commands = 7
         goal_speed_range = [0.8, 1.0]
 
     class domain_rand(Go2RoughCommonCfg.domain_rand):
@@ -182,6 +182,12 @@ class Go2ParkourTeacherCfgPPO(LeggedRobotCfgPPO):
         max_iterations = 2500
 
 
+Go2ParkourTeacherCfg.terrain.num_cols = (
+    len(Go2ParkourTeacherCfg.terrain.parkour.families) * Go2ParkourTeacherCfg.terrain.parkour.variants_per_family
+)
+Go2ParkourTeacherCfg.terrain.num_subterrains = (
+    Go2ParkourTeacherCfg.terrain.num_rows * Go2ParkourTeacherCfg.terrain.num_cols
+)
 _OBS_SPEC = ParkourObservationSpec.from_cfg(Go2ParkourTeacherCfg)
 Go2ParkourTeacherCfg.env.num_observations = parkour_actor_obs_dim(Go2ParkourTeacherCfg)
 Go2ParkourTeacherCfg.env.num_privileged_obs = parkour_critic_obs_dim(Go2ParkourTeacherCfg)

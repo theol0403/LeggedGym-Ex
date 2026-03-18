@@ -8,7 +8,6 @@ from legged_gym.utils.parkour_terrain import PARKOUR_FAMILY_IDS
 
 
 class LeggedRobotParkour(LeggedRobot):
-    SECTION_JUMP = 1
     SECTION_STAIRS = 2
 
     def _parse_cfg(self, cfg):
@@ -30,6 +29,9 @@ class LeggedRobotParkour(LeggedRobot):
             [
                 self.obs_scales.goal_pos,
                 self.obs_scales.goal_pos,
+                self.obs_scales.goal_pos,
+                self.obs_scales.goal_pos,
+                self.obs_scales.heading,
                 self.obs_scales.heading,
                 self.obs_scales.goal_speed,
             ],
@@ -168,7 +170,10 @@ class LeggedRobotParkour(LeggedRobot):
             self.progress_ratio[env_ids] >= self.parkour_cfg.curriculum_progress_up_threshold
         )
         move_down = (~move_up) & (
-            self.progress_ratio[env_ids] <= self.parkour_cfg.curriculum_progress_down_threshold
+            (self.progress_ratio[env_ids] <= self.parkour_cfg.curriculum_progress_down_threshold)
+            | self.simulator.parkour_out_of_lane_buf[env_ids]
+            | self.simulator.global_out_of_bounds_buf[env_ids]
+            | (self.fail_buf[env_ids] > 0)
         )
         self.simulator.update_terrain_curriculum(env_ids, move_up, move_down)
 
@@ -275,19 +280,25 @@ class LeggedRobotParkour(LeggedRobot):
 
     def _update_command_targets(self, env_ids=None):
         env_ids = self._resolve_env_ids(env_ids)
-        current_goal_local = self._get_active_goal_local(env_ids)
-        goal_delta_world = self._lane_local_to_world(current_goal_local, env_ids) - self.simulator.base_pos[env_ids]
-        goal_delta_base = quat_rotate_inverse(self.simulator.base_quat[env_ids], goal_delta_world)
-        goal_delta_xy = goal_delta_world[:, :2]
-        goal_distance = torch.norm(goal_delta_xy, dim=1)
+        current_goal_local, next_goal_local = self._get_goal_pair_local(env_ids)
+        current_goal_delta_world = self._lane_local_to_world(current_goal_local, env_ids) - self.simulator.base_pos[env_ids]
+        next_goal_delta_world = self._lane_local_to_world(next_goal_local, env_ids) - self.simulator.base_pos[env_ids]
 
-        goal_heading_world = torch.atan2(goal_delta_xy[:, 1], goal_delta_xy[:, 0])
-        goal_heading_error = wrap_to_pi(goal_heading_world - self.simulator.base_euler[env_ids, 2])
+        current_goal_delta_base = quat_rotate_inverse(self.simulator.base_quat[env_ids], current_goal_delta_world)
+        next_goal_delta_base = quat_rotate_inverse(self.simulator.base_quat[env_ids], next_goal_delta_world)
 
-        self.commands[env_ids, 0] = goal_delta_base[:, 0]
-        self.commands[env_ids, 1] = goal_delta_base[:, 1]
-        self.commands[env_ids, 2] = goal_heading_error
-        self.commands[env_ids, 3] = self.goal_speed_targets[env_ids]
+        current_goal_heading_world = torch.atan2(current_goal_delta_world[:, 1], current_goal_delta_world[:, 0])
+        next_goal_heading_world = torch.atan2(next_goal_delta_world[:, 1], next_goal_delta_world[:, 0])
+        current_goal_heading_error = wrap_to_pi(current_goal_heading_world - self.simulator.base_euler[env_ids, 2])
+        next_goal_heading_error = wrap_to_pi(next_goal_heading_world - self.simulator.base_euler[env_ids, 2])
+
+        self.commands[env_ids, 0] = current_goal_delta_base[:, 0]
+        self.commands[env_ids, 1] = current_goal_delta_base[:, 1]
+        self.commands[env_ids, 2] = next_goal_delta_base[:, 0]
+        self.commands[env_ids, 3] = next_goal_delta_base[:, 1]
+        self.commands[env_ids, 4] = current_goal_heading_error
+        self.commands[env_ids, 5] = next_goal_heading_error
+        self.commands[env_ids, 6] = self.goal_speed_targets[env_ids]
 
     def _update_parkour_progress(self):
         spawn_xy = self.simulator.lane_spawn_pose[:, :2]
@@ -333,11 +344,15 @@ class LeggedRobotParkour(LeggedRobot):
 
         return advance_ids
 
-    def _get_active_goal_local(self, env_ids=None):
+    def _get_goal_pair_local(self, env_ids=None):
         env_ids = self._resolve_env_ids(env_ids)
         waypoint_counts = self.simulator.lane_waypoint_counts[env_ids]
-        safe_idx = torch.minimum(self.active_waypoint_idx[env_ids], waypoint_counts - 1)
-        return self.simulator.lane_waypoints[env_ids, safe_idx]
+        current_idx = torch.minimum(self.active_waypoint_idx[env_ids], waypoint_counts - 1)
+        next_idx = torch.minimum(current_idx + 1, waypoint_counts - 1)
+        return (
+            self.simulator.lane_waypoints[env_ids, current_idx],
+            self.simulator.lane_waypoints[env_ids, next_idx],
+        )
 
     def _lane_local_to_world(self, local_points, env_ids=None):
         env_ids = self._resolve_env_ids(env_ids)
@@ -362,12 +377,12 @@ class LeggedRobotParkour(LeggedRobot):
         non_zero = goal_distance[:, 0] > 1e-6
         desired_goal_velocity[non_zero] = (
             self.commands[non_zero, :2] / goal_distance[non_zero]
-        ) * self.commands[non_zero, 3:4]
+        ) * self.commands[non_zero, 6:7]
         velocity_error = torch.sum(torch.square(desired_goal_velocity - self.simulator.base_lin_vel[:, :2]), dim=1)
         return torch.exp(-velocity_error / self.cfg.rewards.goal_velocity_tracking_sigma)
 
     def _reward_tracking_goal_heading(self):
-        return torch.exp(-torch.square(self.commands[:, 2]) / self.cfg.rewards.goal_heading_tracking_sigma)
+        return torch.exp(-torch.square(self.commands[:, 4]) / self.cfg.rewards.goal_heading_tracking_sigma)
 
     def _reward_progress_along_course(self):
         return torch.clamp(
@@ -424,7 +439,12 @@ class LeggedRobotParkour(LeggedRobot):
         py = torch.clamp(py, 0, self.simulator.lane_edge_masks.shape[2] - 1)
         env_ids = self.env_ids_long.unsqueeze(1).expand_as(px)
         edge_hits = self.simulator.lane_edge_masks[env_ids, px, py]
-        return torch.sum(edge_hits.float() * foot_contacts.float(), dim=1)
+        obstacle_family_mask = (self.simulator.lane_family == PARKOUR_FAMILY_IDS["hurdle_block"]) | (
+            self.simulator.lane_family == PARKOUR_FAMILY_IDS["gap"]
+        )
+        row_mask = self.simulator.lane_difficulty_row >= 1
+        active_mask = (obstacle_family_mask & row_mask).float().unsqueeze(1)
+        return torch.sum(edge_hits.float() * foot_contacts.float() * active_mask, dim=1)
 
     def _validate_configured_observation_dims(self):
         if self.num_obs != self.obs_spec.actor_dim:
@@ -441,9 +461,3 @@ class LeggedRobotParkour(LeggedRobot):
             raise RuntimeError(
                 f"Runtime {obs_name} observation dim {obs_tensor.shape[1]} does not match expected dim {expected_dim}."
             )
-
-    def _non_flat_lane_mask(self):
-        lane_family = self.simulator.lane_family
-        if lane_family is None:
-            return torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
-        return lane_family != PARKOUR_FAMILY_IDS["flat"]

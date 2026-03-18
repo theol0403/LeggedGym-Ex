@@ -16,7 +16,7 @@ class ParkourObservationSpec:
     num_actions: int
     num_scandots: int
     num_contact_states: int
-    num_goal_terms: int = 4
+    num_goal_terms: int = 7
     num_gravity: int = 3
     num_ang_vel: int = 3
     num_foot_contacts: int = 4

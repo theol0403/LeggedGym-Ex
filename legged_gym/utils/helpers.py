@@ -113,6 +113,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
         # num envs
         if getattr(args, "num_envs", None) is not None:
             env_cfg.env.num_envs = args.num_envs
+        if hasattr(env_cfg, "viewer") and hasattr(args, "follow_robot"):
+            env_cfg.viewer.follow_robot = bool(args.follow_robot)
         if getattr(args, "debug", False):
             env_cfg.env.debug = args.debug
         if getattr(args, "motion_file", None) is not None:
@@ -184,7 +186,7 @@ def get_args():
                         help="fraction of the task command range used by keyboard/joystick teleop")
     parser.add_argument('--use_joystick',   action='store_true', default=False, help="use joystick to provide commands")
     parser.add_argument('--joystick_type',  type=str, default='xbox', help="type of joystick: xbox, switch")
-    parser.add_argument('--follow_robot',   action='store_true', default=False, help="whether the camera follows the robot during play")
+    parser.add_argument('--follow_robot',   action='store_true', default=False, help="whether the viewer camera follows the robot when visualization is enabled")
     parser.add_argument('--log_play_stats', action='store_true', default=False, help="collect and plot play-time state/reward logs")
     parser.add_argument('--motion_file',    type=str, 
                         default=None, 

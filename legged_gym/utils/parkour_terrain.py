@@ -11,7 +11,6 @@ PARKOUR_FAMILY_IDS = {
     "stairs": 0,
     "hurdle_block": 1,
     "gap": 2,
-    "flat": 3,
 }
 
 PARKOUR_SECTION_IDS = {"jump": 1, "stairs": 2}
@@ -55,8 +54,18 @@ class ParkourLaneBuilder:
                 "Parkour terrain config is inconsistent: max_waypoints must be >= max_obstacles + 1 "
                 f"(got {self.max_waypoints} < {self.max_obstacles + 1})."
             )
+        self._base_slot_centers = np.array([4.0, 8.0, 12.0], dtype=np.float32)
+        self._slot_offset_patterns = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [-0.35, 0.15, 0.40],
+                [0.25, -0.25, 0.10],
+                [0.40, 0.25, -0.30],
+            ],
+            dtype=np.float32,
+        )
 
-    def build_lane(self, family: str, difficulty_row: int):
+    def build_lane(self, family: str, difficulty_row: int, variant_id: int = 0):
         if difficulty_row < 0:
             raise ValueError(f"Parkour difficulty_row must be non-negative, got {difficulty_row}.")
         terrain = terrain_utils.SubTerrain(
@@ -82,42 +91,52 @@ class ParkourLaneBuilder:
 
         waypoint_count = 0
         section_count = 0
-        cursor_x = 1.75
-        obstacle_count = min(self.max_obstacles, difficulty_row + 1)
+        row_idx = min(difficulty_row, 3)
+        obstacle_count_by_row = [1, 2, 3, 3]
+        obstacle_count = min(self.max_obstacles, obstacle_count_by_row[row_idx])
         self._validate_lane_capacity(obstacle_count)
+        slot_centers = self._slot_centers_for_variant(variant_id)
 
         if family == "stairs":
-            step_heights = [0.06, 0.09, 0.12]
-            step_counts = [2, 3, 4]
-            step_height = step_heights[min(difficulty_row, len(step_heights) - 1)]
-            step_count = step_counts[min(difficulty_row, len(step_counts) - 1)]
-            for _ in range(obstacle_count):
+            step_heights = [0.06, 0.08, 0.10, 0.12]
+            step_counts = [2, 3, 4, 4]
+            post_offsets = [0.90, 0.80, 0.68, 0.58]
+            step_height = step_heights[row_idx]
+            step_count = step_counts[row_idx]
+            for slot_idx in range(obstacle_count):
+                slot_center_x = float(slot_centers[slot_idx])
                 end_x, _ = self._build_stairs_feature(
                     terrain=terrain,
-                    start_x=cursor_x,
+                    center_x=slot_center_x,
                     y_min=y_min,
                     y_max=y_max,
                     step_height=step_height,
                     step_count=step_count,
                 )
-                section_bounds[section_count] = np.array([cursor_x - 0.1, end_x + 0.3], dtype=np.float32)
+                section_start_x = self._stairs_start_x(slot_center_x, step_count)
+                section_bounds[section_count] = np.array(
+                    [section_start_x - 0.1, end_x + 0.3], dtype=np.float32
+                )
                 section_tags[section_count] = PARKOUR_SECTION_IDS["stairs"]
                 section_jump_expected[section_count] = False
-                waypoint_x = min(end_x + 0.4, goal_x)
+                waypoint_x = min(end_x + post_offsets[row_idx], goal_x)
                 waypoints[waypoint_count] = np.array(
                     [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
                     dtype=np.float32,
                 )
                 waypoint_count += 1
                 section_count += 1
-                cursor_x = end_x + [0.9, 0.75, 0.6][min(difficulty_row, 2)]
         elif family == "hurdle_block":
-            block_heights = [0.12, 0.20, 0.28]
-            block_height = block_heights[min(difficulty_row, len(block_heights) - 1)]
-            block_length = 0.25
-            y_half = [0.62, 0.72, 0.82][min(difficulty_row, 2)]
-            for _ in range(obstacle_count):
-                x0 = cursor_x
+            block_heights = [0.10, 0.14, 0.20, 0.26]
+            block_lengths = [0.20, 0.22, 0.25, 0.28]
+            y_halves = [0.55, 0.65, 0.75, 0.85]
+            post_offsets = [0.95, 0.80, 0.68, 0.55]
+            block_height = block_heights[row_idx]
+            block_length = block_lengths[row_idx]
+            y_half = y_halves[row_idx]
+            for slot_idx in range(obstacle_count):
+                slot_center_x = float(slot_centers[slot_idx])
+                x0 = slot_center_x - 0.5 * block_length
                 x1 = x0 + block_length
                 block_y_min = lane_center_y - y_half
                 block_y_max = lane_center_y + y_half
@@ -126,20 +145,22 @@ class ParkourLaneBuilder:
                 section_bounds[section_count] = np.array([x0 - 0.2, x1 + 0.35], dtype=np.float32)
                 section_tags[section_count] = PARKOUR_SECTION_IDS["jump"]
                 section_jump_expected[section_count] = True
-                waypoint_x = min(x1 + [0.7, 0.62, 0.55][min(difficulty_row, 2)], goal_x)
+                waypoint_x = min(x1 + post_offsets[row_idx], goal_x)
                 waypoints[waypoint_count] = np.array(
                     [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
                     dtype=np.float32,
                 )
                 waypoint_count += 1
                 section_count += 1
-                cursor_x = x1 + [0.9, 0.75, 0.65][min(difficulty_row, 2)]
         elif family == "gap":
-            gap_widths = [0.20, 0.35, 0.50]
-            gap_width = gap_widths[min(difficulty_row, len(gap_widths) - 1)]
-            gap_y_half = [1.0, 1.07, 1.15][min(difficulty_row, 2)]
-            for _ in range(obstacle_count):
-                x0 = cursor_x
+            gap_widths = [0.16, 0.24, 0.36, 0.48]
+            gap_y_halves = [0.85, 0.95, 1.05, 1.15]
+            post_offsets = [1.00, 0.85, 0.74, 0.62]
+            gap_width = gap_widths[row_idx]
+            gap_y_half = gap_y_halves[row_idx]
+            for slot_idx in range(obstacle_count):
+                slot_center_x = float(slot_centers[slot_idx])
+                x0 = slot_center_x - 0.5 * gap_width
                 x1 = x0 + gap_width
                 gap_y_min = lane_center_y - gap_y_half
                 gap_y_max = lane_center_y + gap_y_half
@@ -148,15 +169,14 @@ class ParkourLaneBuilder:
                 section_bounds[section_count] = np.array([x0 - 0.2, x1 + 0.45], dtype=np.float32)
                 section_tags[section_count] = PARKOUR_SECTION_IDS["jump"]
                 section_jump_expected[section_count] = True
-                waypoint_x = min(x1 + [0.8, 0.7, 0.6][min(difficulty_row, 2)], goal_x)
+                waypoint_x = min(x1 + post_offsets[row_idx], goal_x)
                 waypoints[waypoint_count] = np.array(
                     [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
                     dtype=np.float32,
                 )
                 waypoint_count += 1
                 section_count += 1
-                cursor_x = x1 + [0.95, 0.8, 0.7][min(difficulty_row, 2)]
-        elif family != "flat":
+        else:
             raise ValueError(f"Unsupported parkour family '{family}'")
 
         terminal_goal = np.array(
@@ -200,11 +220,12 @@ class ParkourLaneBuilder:
                 f"required_waypoints={required_waypoints}, max_waypoints={self.max_waypoints}."
             )
 
-    def _build_stairs_feature(self, terrain, start_x, y_min, y_max, step_height, step_count):
+    def _build_stairs_feature(self, terrain, center_x, y_min, y_max, step_height, step_count):
         row_fraction = max(step_count - 2, 0) / 2.0
         step_tread = self._lerp(0.28, 0.38, row_fraction)
         flat_top = self._lerp(0.18, 0.34, row_fraction)
 
+        start_x = self._stairs_start_x(center_x, step_count)
         current_height = 0.0
         cursor_x = start_x
         for _ in range(step_count):
@@ -228,6 +249,18 @@ class ParkourLaneBuilder:
             cursor_x += step_tread
 
         return cursor_x, current_height
+
+    def _slot_centers_for_variant(self, variant_id: int):
+        offset_row = self._slot_offset_patterns[variant_id % len(self._slot_offset_patterns)]
+        slot_centers = self._base_slot_centers + offset_row
+        return np.clip(slot_centers, 3.3, self.env_length - 3.3)
+
+    def _stairs_start_x(self, center_x: float, step_count: int):
+        row_fraction = max(step_count - 2, 0) / 2.0
+        step_tread = self._lerp(0.28, 0.38, row_fraction)
+        flat_top = self._lerp(0.18, 0.34, row_fraction)
+        total_length = (2 * step_count * step_tread) + flat_top
+        return center_x - 0.5 * total_length
 
     def _meters_to_cell(self, value: float, upper_bound: int) -> int:
         return int(np.clip(np.round(value / self.cfg.horizontal_scale), 0, upper_bound - 1))

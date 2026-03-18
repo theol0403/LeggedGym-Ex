@@ -168,7 +168,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
             break
         
         # Non-LeggedRobot tasks can still opt into play-time camera follow here.
-        if args.follow_robot and SIMULATOR != "genesis":
+        if getattr(env, "follow_robot", bool(getattr(env.cfg.viewer, "follow_robot", False))) and SIMULATOR != "genesis":
             pos = env.simulator.base_pos[robot_index].cpu().numpy() + np.array(env.cfg.viewer.pos, dtype=np.float32)
             lookat = env.simulator.base_pos[robot_index].cpu().numpy() + np.array(env.cfg.viewer.lookat, dtype=np.float32)
             env.set_viewer_camera(pos, lookat)
@@ -288,11 +288,7 @@ def play(args):
     # prepare environment
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
     env.external_command_source_enabled = command_controller.requires_external_command_source
-    env.follow_robot = bool(args.follow_robot)
-    env.viewer_follow_env_idx = min(max(int(getattr(env.cfg.viewer, "ref_env", 0)), 0), env.num_envs - 1)
     command_controller.initialize_env_commands(env)
-    if args.follow_robot and SIMULATOR == "genesis":
-        env.simulator.enable_viewer_follow()
     # load policy
     train_cfg.runner.resume = args.resume
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)

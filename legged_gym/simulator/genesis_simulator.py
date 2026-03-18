@@ -194,12 +194,13 @@ class GenesisSimulator(Simulator):
                 self._terrain_levels[env_ids] = int(parkour_cfg.force_row)
             if parkour_cfg.force_family is not None:
                 forced_family = str(parkour_cfg.force_family)
-                if forced_family not in self._terrain.family_col_indices:
+                if forced_family not in self._terrain.family_bucket_ids:
                     raise ValueError(
                         f"Forced parkour family '{forced_family}' is not available in terrain columns "
-                        f"{list(self._terrain.family_col_indices.keys())}"
+                        f"{list(self._terrain.family_bucket_ids.keys())}"
                     )
-                self._terrain_types[env_ids] = int(self._terrain.family_col_indices[forced_family])
+                self._terrain_family_types[env_ids] = int(self._terrain.family_bucket_ids[forced_family])
+            self._assign_variant_columns_from_family_buckets(env_ids)
             self._refresh_lane_metadata(env_ids)
             return
 
@@ -632,12 +633,31 @@ class GenesisSimulator(Simulator):
             self._terrain_levels[:] = forced_row
         if parkour_cfg.force_family is not None:
             forced_family = str(parkour_cfg.force_family)
-            if forced_family not in self._terrain.family_col_indices:
+            if forced_family not in self._terrain.family_bucket_ids:
                 raise ValueError(
                     f"Forced parkour family '{forced_family}' is not available in terrain columns "
-                    f"{list(self._terrain.family_col_indices.keys())}"
+                    f"{list(self._terrain.family_bucket_ids.keys())}"
                 )
-            self._terrain_types[:] = int(self._terrain.family_col_indices[forced_family])
+            self._terrain_family_types[:] = int(self._terrain.family_bucket_ids[forced_family])
+        self._assign_variant_columns_from_family_buckets(torch.arange(self._num_envs, device=self._device))
+
+    def _assign_variant_columns_from_family_buckets(self, env_ids):
+        if not self._terrain_uses_parkour_metadata() or len(env_ids) == 0:
+            return
+
+        env_ids = env_ids.to(dtype=torch.long, device=self._device)
+        for family_name, col_indices in self._terrain_family_variant_cols.items():
+            family_bucket_id = int(self._terrain.family_bucket_ids[family_name])
+            family_env_ids = env_ids[self._terrain_family_types[env_ids] == family_bucket_id]
+            if len(family_env_ids) == 0:
+                continue
+            if col_indices.numel() == 1:
+                self._terrain_types[family_env_ids] = col_indices[0]
+                continue
+            family_rank = torch.arange(family_env_ids.numel(), device=self._device, dtype=torch.long)
+            variant_idx = (self._terrain_variant_cycle[family_env_ids] + family_rank) % col_indices.numel()
+            self._terrain_types[family_env_ids] = col_indices[variant_idx]
+            self._terrain_variant_cycle[family_env_ids] += 1
 
     def _refresh_lane_metadata(self, env_ids=None):
         if not self._terrain_uses_parkour_metadata():
@@ -686,6 +706,19 @@ class GenesisSimulator(Simulator):
             self._env_origins[:] = self._terrain_origins[self._terrain_levels,
                                                        self._terrain_types]
             if self._terrain_uses_parkour_metadata():
+                self._terrain_family_variant_cols = {
+                    family_name: torch.tensor(col_indices, device=self._device, dtype=torch.long)
+                    for family_name, col_indices in self._terrain.family_variant_col_indices.items()
+                }
+                num_family_buckets = len(self._terrain.family_variant_col_indices)
+                family_divisor = self._num_envs / max(num_family_buckets, 1)
+                self._terrain_family_types = torch.div(
+                    torch.arange(self._num_envs, device=self._device),
+                    family_divisor,
+                    rounding_mode='floor',
+                ).to(torch.long)
+                self._terrain_family_types = torch.clamp(self._terrain_family_types, max=num_family_buckets - 1)
+                self._terrain_variant_cycle = torch.zeros(self._num_envs, device=self._device, dtype=torch.long)
                 self._terrain_lane_family = torch.from_numpy(self._terrain.lane_family).to(self._device, dtype=torch.long)
                 self._terrain_lane_difficulty_row = torch.from_numpy(self._terrain.lane_difficulty_row).to(self._device, dtype=torch.long)
                 self._terrain_lane_spawn_pose = torch.from_numpy(self._terrain.lane_spawn_pose).to(self._device, dtype=torch.float)
