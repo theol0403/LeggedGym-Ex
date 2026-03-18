@@ -10,14 +10,13 @@ from legged_gym.utils import ensure_runtime_initialized, task_registry
 
 
 def _build_args(cli_args):
-    resume = cli_args.load_run is not None or cli_args.ckpt >= 0
     return SimpleNamespace(
         task=cli_args.task,
         headless=cli_args.headless,
         cpu=cli_args.cpu,
         num_envs=cli_args.num_envs,
         max_iterations=None,
-        resume=resume,
+        resume=True,
         sync_wandb=False,
         export_onnx=False,
         debug=False,
@@ -26,7 +25,7 @@ def _build_args(cli_args):
         depth_model_type=None,
         depth_model_size=None,
         depth_update_interval=1,
-        load_run=cli_args.load_run,
+        load_run=cli_args.load_run if cli_args.load_run is not None else -1,
         ckpt=cli_args.ckpt,
         command_mode="auto",
         command_scale=1.0,

@@ -142,7 +142,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
     """
     
     logger = Logger(env.dt) if args.log_play_stats else None
-    robot_index = 0 # which robot is used for logging
+    robot_index = min(max(int(getattr(env.cfg.viewer, "ref_env", 0)), 0), env.num_envs - 1) # which robot is used for logging
     joint_index = 2 # which joint is used for logging
     stop_state_log = 300 # number of steps before plotting states
     stop_rew_log = env.max_episode_length + 1 # number of steps before print average episode rewards
@@ -167,7 +167,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
         if not command_controller.update(env):
             break
         
-        # set the viewer camera to follow the first environment by default
+        # Non-LeggedRobot tasks can still opt into play-time camera follow here.
         if args.follow_robot and SIMULATOR != "genesis":
             pos = env.simulator.base_pos[robot_index].cpu().numpy() + np.array(env.cfg.viewer.pos, dtype=np.float32)
             lookat = env.simulator.base_pos[robot_index].cpu().numpy() + np.array(env.cfg.viewer.lookat, dtype=np.float32)
@@ -288,6 +288,8 @@ def play(args):
     # prepare environment
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
     env.external_command_source_enabled = command_controller.requires_external_command_source
+    env.follow_robot = bool(args.follow_robot)
+    env.viewer_follow_env_idx = min(max(int(getattr(env.cfg.viewer, "ref_env", 0)), 0), env.num_envs - 1)
     command_controller.initialize_env_commands(env)
     if args.follow_robot and SIMULATOR == "genesis":
         env.simulator.enable_viewer_follow()

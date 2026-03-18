@@ -250,10 +250,11 @@ class LeggedRobot(BaseTask):
             self.action_queue[:, 0] = actions.clone()
             actions = self.action_queue[torch.arange(
                 self.num_envs), self.action_delay].clone()
-        # during training, the camera follows the first environment
-        if not self.debug and not self.headless:
-            pos = self.simulator.base_pos[0].cpu().numpy() + np.array(self.cfg.viewer.pos)
-            lookat = self.simulator.base_pos[0].cpu().numpy() + np.array(self.cfg.viewer.lookat)
+        # Keep training's default follow behavior, but let play.py disable it.
+        if not self.debug and not self.headless and self.follow_robot:
+            env_idx = int(np.clip(self.viewer_follow_env_idx, 0, self.num_envs - 1))
+            pos = self.simulator.base_pos[env_idx].cpu().numpy() + np.array(self.cfg.viewer.pos)
+            lookat = self.simulator.base_pos[env_idx].cpu().numpy() + np.array(self.cfg.viewer.lookat)
             self.set_viewer_camera(pos, lookat)
         
         return actions
@@ -452,6 +453,8 @@ class LeggedRobot(BaseTask):
         self.dt = self.cfg.sim.dt * self.cfg.control.decimation
         self.debug = self.cfg.env.debug
         self.debug_sensor_images = getattr(self.cfg.env, "debug_sensor_images", False)
+        self.follow_robot = True
+        self.viewer_follow_env_idx = int(getattr(self.cfg.viewer, "ref_env", 0))
         # use self-implemented pd controller
         self.obs_scales = self.cfg.normalization.obs_scales
         self.reward_scales = class_to_dict(self.cfg.rewards.scales)

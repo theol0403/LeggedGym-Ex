@@ -4,6 +4,7 @@ from legged_gym import SIMULATOR
 from legged_gym.envs.base.legged_robot import LeggedRobot
 from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 from legged_gym.utils.math_utils import quat_from_euler_xyz, quat_rotate_inverse, wrap_to_pi, torch_rand_float
+from legged_gym.utils.parkour_terrain import PARKOUR_FAMILY_IDS
 
 
 class LeggedRobotParkour(LeggedRobot):
@@ -440,3 +441,9 @@ class LeggedRobotParkour(LeggedRobot):
             raise RuntimeError(
                 f"Runtime {obs_name} observation dim {obs_tensor.shape[1]} does not match expected dim {expected_dim}."
             )
+
+    def _non_flat_lane_mask(self):
+        lane_family = self.simulator.lane_family
+        if lane_family is None:
+            return torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+        return lane_family != PARKOUR_FAMILY_IDS["flat"]

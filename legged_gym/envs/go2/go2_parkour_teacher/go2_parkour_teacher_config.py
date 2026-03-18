@@ -1,6 +1,10 @@
 from legged_gym import SIMULATOR
 from legged_gym.envs.base.common_cfgs import Go2RoughCommonCfg
-from legged_gym.envs.base.parkour_observation import parkour_actor_obs_dim, parkour_critic_obs_dim
+from legged_gym.envs.base.parkour_observation import (
+    ParkourObservationSpec,
+    parkour_actor_obs_dim,
+    parkour_critic_obs_dim,
+)
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfgPPO
 
 class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
@@ -160,6 +164,7 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
 
 class Go2ParkourTeacherCfgPPO(LeggedRobotCfgPPO):
     class policy(LeggedRobotCfgPPO.policy):
+        scandot_encoder_hidden_dims = [128, 64, 32]
         actor_hidden_dims = [512, 256, 128]
         critic_hidden_dims = [1024, 512, 256]
 
@@ -168,7 +173,7 @@ class Go2ParkourTeacherCfgPPO(LeggedRobotCfgPPO):
         learning_rate = 1.0e-3
 
     class runner(LeggedRobotCfgPPO.runner):
-        policy_class_name = "ActorCritic"
+        policy_class_name = "ActorCriticParkour"
         algorithm_class_name = "PPO"
         run_name = "teacher_genesis"
         experiment_name = "go2_parkour_teacher"
@@ -177,5 +182,8 @@ class Go2ParkourTeacherCfgPPO(LeggedRobotCfgPPO):
         max_iterations = 2500
 
 
+_OBS_SPEC = ParkourObservationSpec.from_cfg(Go2ParkourTeacherCfg)
 Go2ParkourTeacherCfg.env.num_observations = parkour_actor_obs_dim(Go2ParkourTeacherCfg)
 Go2ParkourTeacherCfg.env.num_privileged_obs = parkour_critic_obs_dim(Go2ParkourTeacherCfg)
+Go2ParkourTeacherCfgPPO.policy.num_scandots = _OBS_SPEC.num_scandots
+Go2ParkourTeacherCfgPPO.policy.scandot_start_idx = _OBS_SPEC.scandots_slice.start

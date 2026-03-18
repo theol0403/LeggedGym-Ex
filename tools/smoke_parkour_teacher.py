@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import torch
 
 from legged_gym.envs import task_registry
+from legged_gym.utils.terrain import Terrain
 from legged_gym.utils.math_utils import quat_rotate_inverse, wrap_to_pi
 from legged_gym.utils import class_to_dict, ensure_runtime_initialized
 
@@ -19,6 +20,24 @@ def main():
     env_cfg.terrain.parkour.force_row = 0
     env_cfg.terrain.parkour.force_family = None
     train_cfg.runner.max_iterations = 1
+
+    terrain_cfg = env_cfg.terrain
+    terrain_cfg.num_cols = 4
+    terrain_cfg.parkour.include_flat_debug = True
+    terrain = Terrain(terrain_cfg)
+    expected_counts = [min(terrain_cfg.parkour.max_obstacles, row + 1) + 1 for row in range(terrain_cfg.num_rows)]
+    for row in range(terrain_cfg.num_rows):
+        row_counts = terrain.lane_waypoint_counts[row].tolist()
+        if row_counts[:3] != [expected_counts[row]] * 3:
+            raise AssertionError(
+                f"Expected row {row} waypoint counts {[expected_counts[row]] * 3} for stairs/block/gap, got {row_counts[:3]}"
+            )
+        if row_counts[3] != 1:
+            raise AssertionError(f"Expected flat debug lane to expose only the terminal goal, got {row_counts[3]}")
+        if not all(terrain.lane_section_tags[row, col, 0] != 0 for col in range(3)):
+            raise AssertionError("Missing first parkour section tag for one or more obstacle lanes.")
+        if not all(int(terrain.lane_edge_masks[row, col].sum()) > 0 for col in (1, 2)):
+            raise AssertionError("Expected hurdle and gap lanes to populate edge masks.")
 
     expected_obs = env_cfg.env.num_observations
     expected_priv = env_cfg.env.num_privileged_obs
@@ -72,14 +91,23 @@ def main():
     if env.simulator.lane_edge_masks.shape[0] != env_cfg.env.num_envs:
         raise AssertionError("Missing per-environment lane edge masks.")
     waypoint_counts = env.simulator.lane_waypoint_counts.cpu().tolist()
-    if waypoint_counts[:3] != [4, 5, 5]:
-        raise AssertionError(f"Expected waypoint counts [4, 5, 5] for stairs/block/gap at row 0, got {waypoint_counts[:3]}")
+    if waypoint_counts[:3] != [expected_counts[0]] * 3:
+        raise AssertionError(
+            f"Expected waypoint counts {[expected_counts[0]] * 3} for stairs/block/gap at row 0, got {waypoint_counts[:3]}"
+        )
 
     for _ in range(env_cfg.terrain.parkour.max_waypoints + 1):
         env._update_local_base_positions()
         env._update_current_section_state()
         env._update_command_targets()
-        env.simulator._base_pos[:] = env._lane_local_to_world(env._get_active_goal_local())
+        target_world = env._lane_local_to_world(env._get_active_goal_local())
+        env.simulator.reset_root_states(
+            env_ids,
+            target_world,
+            env.simulator.base_quat[env_ids],
+            torch.zeros((env_cfg.env.num_envs, 3), dtype=torch.float, device=env.device),
+            torch.zeros((env_cfg.env.num_envs, 3), dtype=torch.float, device=env.device),
+        )
         for _ in range(env_cfg.terrain.parkour.waypoint_dwell_steps):
             env._update_local_base_positions()
             env._update_current_section_state()

@@ -255,52 +255,6 @@ class GenesisSimulator(Simulator):
         ):
             return None
         return self._draw_debug_sensor_images()
-        # # Height points around feet
-        # height_points = torch.zeros(self._num_envs, 9*len(self._feet_indices), 3, device=self._device)
-        # foot_points = self._feet_pos + self._cfg.terrain.border_size
-        # foot_points = (foot_points/self._cfg.terrain.horizontal_scale).long()
-        # px = foot_points[:, :, 0].view(-1)
-        # py = foot_points[:, :, 1].view(-1)
-        # heights1 = self._height_samples[px-1, py]  # [x-0.1, y]
-        # heights2 = self._height_samples[px+1, py]  # [x+0.1, y]
-        # heights3 = self._height_samples[px, py-1]  # [x, y-0.1]
-        # heights4 = self._height_samples[px, py+1]  # [x, y+0.1]
-        # heights5 = self._height_samples[px, py]    # [x, y]
-        # heights6 = self._height_samples[px-1, py-1]  # [x-0.1, y-0.1]
-        # heights7 = self._height_samples[px+1, py+1]  # [x+0.1, y+0.1]
-        # heights8 = self._height_samples[px-1, py+1]  # [x-0.1, y+0.1]
-        # heights9 = self._height_samples[px+1, py-1]  # [x+0.1, y-0.1]
-        # for i in range(len(self._feet_indices)):
-        #     height_points[0, i*9+0, 0] = (px-1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+0, 1] = (py-1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+0, 2] = heights6.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+1, 0] = (px-1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+1, 1] = py.view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+1, 2] = heights1.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+2, 0] = px.view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+2, 1] = (py-1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+2, 2] = heights3.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+3, 0] = px.view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+3, 1] = (py+1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+3, 2] = heights4.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+4, 0] = px.view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+4, 1] = py.view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+4, 2] = heights5.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+5, 0] = (px+1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+5, 1] = py.view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+5, 2] = heights2.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+6, 0] = (px+1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+6, 1] = (py+1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+6, 2] = heights7.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+7, 0] = (px-1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+7, 1] = (py+1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+7, 2] = heights8.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        #     height_points[0, i*9+8, 0] = (px+1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+8, 1] = (py-1).view(self._num_envs, -1)[0, i] * self._cfg.terrain.horizontal_scale - self._cfg.terrain.border_size
-        #     height_points[0, i*9+8, 2] = heights9.view(self._num_envs, -1)[0, i] * self._cfg.terrain.vertical_scale
-        
-        # # print(f"shape of height_points: ", height_points.shape) # (num_envs, num_points, 3)
-        # self._scene.draw_debug_spheres(height_points[0, :], radius=0.02, color=(1, 0, 0, 0.7))  # only draw for the first env
 
     def set_viewer_camera(self, eye: np.ndarray, target: np.ndarray):
         if self._scene.viewer is None:

@@ -32,19 +32,13 @@ import numpy as np
 import trimesh
 
 from . import terrain_utils
-from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg
+from .parkour_terrain import PARKOUR_FAMILY_IDS, PARKOUR_SECTION_IDS, ParkourLaneBuilder
 
 class Terrain:
-    PARKOUR_FAMILY_IDS = {
-        "stairs": 0,
-        "hurdle_block": 1,
-        "gap": 2,
-        "flat": 3,
-    }
+    PARKOUR_FAMILY_IDS = PARKOUR_FAMILY_IDS
+    PARKOUR_SECTION_IDS = PARKOUR_SECTION_IDS
 
-    PARKOUR_SECTION_IDS = {"jump": 1, "stairs": 2}
-
-    def __init__(self, cfg: LeggedRobotCfg.terrain) -> None:
+    def __init__(self, cfg) -> None:
 
         self.cfg = cfg
         self.type = cfg.mesh_type
@@ -74,6 +68,7 @@ class Terrain:
         self.height_field_raw = np.zeros((self.tot_rows , self.tot_cols), dtype=np.int16)
         self.terrain_meshes = []
         self._init_metadata_arrays()
+        self._parkour_lane_builder = ParkourLaneBuilder(cfg) if self.parkour_enabled else None
         if cfg.curriculum and cfg.selected:
             raise ValueError("Curriculum and selected terrain cannot be both True.")
         if self.parkour_enabled:
@@ -121,7 +116,7 @@ class Terrain:
     def parkour_curriculum(self):
         for j, family in enumerate(self.parkour_family_names):
             for i in range(self.cfg.num_rows):
-                terrain, metadata = self.make_parkour_lane(family, i)
+                terrain, metadata = self._parkour_lane_builder.build_lane(family, i)
                 self.add_terrain_to_map(terrain, i, j, metadata=metadata)
 
     def selected_terrain(self):
@@ -206,132 +201,6 @@ class Terrain:
 
         return terrain
 
-    def make_parkour_lane(self, family: str, difficulty_row: int):
-        terrain = terrain_utils.SubTerrain(
-            "parkour",
-            width=self.length_per_env_pixels,
-            length=self.width_per_env_pixels,
-            vertical_scale=self.cfg.vertical_scale,
-            horizontal_scale=self.cfg.horizontal_scale,
-        )
-        edge_mask = np.zeros_like(terrain.height_field_raw, dtype=np.uint8)
-
-        lane_center_y = 0.5 * self.env_width
-        lane_half_width = 1.1
-        spawn_x = 0.75
-        goal_x = self.env_length - 0.6
-        y_min = lane_center_y - lane_half_width
-        y_max = lane_center_y + lane_half_width
-        section_bounds = np.zeros((self.max_sections, 2), dtype=np.float32)
-        section_tags = np.zeros((self.max_sections,), dtype=np.int32)
-        section_jump_expected = np.zeros((self.max_sections,), dtype=np.bool_)
-        waypoints = np.zeros((self.max_waypoints, 3), dtype=np.float32)
-
-        waypoint_count = 0
-        section_count = 0
-        cursor_x = 1.75
-        obstacle_count = min(self.max_obstacles, difficulty_row + 1)
-
-        if family == "stairs":
-            step_heights = [0.06, 0.09, 0.12]
-            step_counts = [2, 3, 4]
-            step_height = step_heights[min(difficulty_row, len(step_heights) - 1)]
-            step_count = step_counts[min(difficulty_row, len(step_counts) - 1)]
-            for _ in range(obstacle_count):
-                end_x, _ = self._build_stairs_feature(
-                    terrain,
-                    start_x=cursor_x,
-                    y_min=y_min,
-                    y_max=y_max,
-                    step_height=step_height,
-                    step_count=step_count,
-                )
-                section_bounds[section_count] = np.array([cursor_x - 0.1, end_x + 0.3], dtype=np.float32)
-                section_tags[section_count] = self.PARKOUR_SECTION_IDS["stairs"]
-                section_jump_expected[section_count] = False
-                waypoint_x = min(end_x + 0.4, goal_x)
-                waypoints[waypoint_count] = np.array(
-                    [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
-                    dtype=np.float32,
-                )
-                waypoint_count += 1
-                section_count += 1
-                cursor_x = end_x + [0.9, 0.75, 0.6][min(difficulty_row, 2)]
-        elif family == "hurdle_block":
-            block_heights = [0.12, 0.20, 0.28]
-            block_height = block_heights[min(difficulty_row, len(block_heights) - 1)]
-            block_length = 0.25
-            y_half = [0.62, 0.72, 0.82][min(difficulty_row, 2)]
-            for _ in range(obstacle_count):
-                x0 = cursor_x
-                x1 = x0 + block_length
-                block_y_min = lane_center_y - y_half
-                block_y_max = lane_center_y + y_half
-                self._fill_rect_height(terrain, x0, x1, block_y_min, block_y_max, block_height)
-                self._mark_rect_perimeter(edge_mask, x0, x1, block_y_min, block_y_max)
-                section_bounds[section_count] = np.array([x0 - 0.2, x1 + 0.35], dtype=np.float32)
-                section_tags[section_count] = self.PARKOUR_SECTION_IDS["jump"]
-                section_jump_expected[section_count] = True
-                waypoint_x = min(x1 + [0.7, 0.62, 0.55][min(difficulty_row, 2)], goal_x)
-                waypoints[waypoint_count] = np.array(
-                    [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
-                    dtype=np.float32,
-                )
-                waypoint_count += 1
-                section_count += 1
-                cursor_x = x1 + [0.9, 0.75, 0.65][min(difficulty_row, 2)]
-        elif family == "gap":
-            gap_widths = [0.20, 0.35, 0.50]
-            gap_width = gap_widths[min(difficulty_row, len(gap_widths) - 1)]
-            gap_y_half = [1.0, 1.07, 1.15][min(difficulty_row, 2)]
-            for _ in range(obstacle_count):
-                x0 = cursor_x
-                x1 = x0 + gap_width
-                gap_y_min = lane_center_y - gap_y_half
-                gap_y_max = lane_center_y + gap_y_half
-                self._fill_rect_height(terrain, x0, x1, gap_y_min, gap_y_max, -5.0)
-                self._mark_gap_edges(edge_mask, x0, x1, gap_y_min, gap_y_max)
-                section_bounds[section_count] = np.array([x0 - 0.2, x1 + 0.45], dtype=np.float32)
-                section_tags[section_count] = self.PARKOUR_SECTION_IDS["jump"]
-                section_jump_expected[section_count] = True
-                waypoint_x = min(x1 + [0.8, 0.7, 0.6][min(difficulty_row, 2)], goal_x)
-                waypoints[waypoint_count] = np.array(
-                    [waypoint_x, lane_center_y, self._sample_local_height(terrain, waypoint_x, lane_center_y)],
-                    dtype=np.float32,
-                )
-                waypoint_count += 1
-                section_count += 1
-                cursor_x = x1 + [0.95, 0.8, 0.7][min(difficulty_row, 2)]
-        elif family != "flat":
-            raise ValueError(f"Unsupported parkour family '{family}'")
-
-        terminal_goal = np.array(
-            [goal_x, lane_center_y, self._sample_local_height(terrain, goal_x, lane_center_y)],
-            dtype=np.float32,
-        )
-        terminal_index = min(waypoint_count, self.max_waypoints - 1)
-        waypoints[terminal_index] = terminal_goal
-        waypoint_count = terminal_index + 1
-        spawn_pose = np.array(
-            [spawn_x, lane_center_y, self._sample_local_height(terrain, spawn_x, lane_center_y), 0.0],
-            dtype=np.float32,
-        )
-        metadata = {
-            "family": self.PARKOUR_FAMILY_IDS[family],
-            "difficulty_row": difficulty_row,
-            "spawn_pose": spawn_pose,
-            "safe_spawn_region": np.array([0.6, 1.2, lane_center_y - 0.3, lane_center_y + 0.3], dtype=np.float32),
-            "lane_bounds": np.array([0.4, self.env_length - 0.4, y_min, y_max], dtype=np.float32),
-            "waypoints": waypoints,
-            "waypoint_count": waypoint_count,
-            "terminal_goal": terminal_goal,
-            "section_bounds": section_bounds,
-            "section_tags": section_tags,
-            "jump_expected_mask": section_jump_expected,
-            "edge_mask": edge_mask,
-        }
-        return terrain, metadata
-
     def add_terrain_to_map(self, terrain, row, col, metadata=None):
         i = row
         j = col
@@ -351,21 +220,21 @@ class Terrain:
         y2 = int((self.env_width/2. + 1) / terrain.horizontal_scale)
         env_origin_z = np.max(terrain.height_field_raw[x1:x2, y1:y2])*terrain.vertical_scale
         if metadata is not None:
-            env_origin_z = float(metadata["spawn_pose"][2])
+            env_origin_z = float(metadata.spawn_pose[2])
         self.env_origins[i, j] = [env_origin_x, env_origin_y, env_origin_z]
         if metadata is not None:
-            self.lane_family[i, j] = metadata["family"]
-            self.lane_difficulty_row[i, j] = metadata["difficulty_row"]
-            self.lane_spawn_pose[i, j] = metadata["spawn_pose"]
-            self.lane_safe_spawn_region[i, j] = metadata["safe_spawn_region"]
-            self.lane_bounds[i, j] = metadata["lane_bounds"]
-            self.lane_waypoints[i, j] = metadata["waypoints"]
-            self.lane_waypoint_counts[i, j] = metadata["waypoint_count"]
-            self.lane_terminal_goal[i, j] = metadata["terminal_goal"]
-            self.lane_section_bounds[i, j] = metadata["section_bounds"]
-            self.lane_section_tags[i, j] = metadata["section_tags"]
-            self.lane_jump_expected_mask[i, j] = metadata["jump_expected_mask"]
-            self.lane_edge_masks[i, j] = metadata["edge_mask"]
+            self.lane_family[i, j] = metadata.family
+            self.lane_difficulty_row[i, j] = metadata.difficulty_row
+            self.lane_spawn_pose[i, j] = metadata.spawn_pose
+            self.lane_safe_spawn_region[i, j] = metadata.safe_spawn_region
+            self.lane_bounds[i, j] = metadata.lane_bounds
+            self.lane_waypoints[i, j] = metadata.waypoints
+            self.lane_waypoint_counts[i, j] = metadata.waypoint_count
+            self.lane_terminal_goal[i, j] = metadata.terminal_goal
+            self.lane_section_bounds[i, j] = metadata.section_bounds
+            self.lane_section_tags[i, j] = metadata.section_tags
+            self.lane_jump_expected_mask[i, j] = metadata.jump_expected_mask
+            self.lane_edge_masks[i, j] = metadata.edge_mask
         
         if self.type == "trimesh":
             # apply translation to the trimesh, align with the env origin
@@ -450,78 +319,3 @@ class Terrain:
             (self.cfg.num_rows, self.cfg.num_cols, self.length_per_env_pixels, self.width_per_env_pixels),
             dtype=np.uint8,
         )
-
-    def _lerp(self, start: float, end: float, alpha: float) -> float:
-        return float(start + (end - start) * alpha)
-
-    def _parkour_difficulty_series(self, difficulty_row: int, count: int):
-        if count <= 0:
-            return np.zeros((0,), dtype=np.float32)
-        max_row = max(self.cfg.num_rows - 1, 1)
-        row_fraction = difficulty_row / max_row
-        start = self._lerp(0.10, 0.45, row_fraction)
-        end = self._lerp(0.60, 1.00, row_fraction)
-        return np.linspace(start, end, count, dtype=np.float32)
-
-    def _build_stairs_feature(self, terrain, start_x, y_min, y_max, step_height, step_count):
-        row_fraction = max(step_count - 2, 0) / 2.0
-        step_tread = self._lerp(0.28, 0.38, row_fraction)
-        flat_top = self._lerp(0.18, 0.34, row_fraction)
-
-        current_height = 0.0
-        cursor_x = start_x
-        for _ in range(step_count):
-            current_height += step_height
-            self._fill_rect_height(terrain, cursor_x, cursor_x + step_tread, y_min, y_max, current_height)
-            cursor_x += step_tread
-
-        self._fill_rect_height(terrain, cursor_x, cursor_x + flat_top, y_min, y_max, current_height)
-        cursor_x += flat_top
-
-        for step_idx in range(step_count):
-            descending_height = current_height - step_height * (step_idx + 1)
-            self._fill_rect_height(
-                terrain,
-                cursor_x,
-                cursor_x + step_tread,
-                y_min,
-                y_max,
-                max(descending_height, 0.0),
-            )
-            cursor_x += step_tread
-
-        return cursor_x, current_height
-
-    def _meters_to_cell(self, x: float, upper_bound: int) -> int:
-        return int(np.clip(np.round(x / self.cfg.horizontal_scale), 0, upper_bound - 1))
-
-    def _fill_rect_height(self, terrain, x_min, x_max, y_min, y_max, height_m):
-        px0 = self._meters_to_cell(x_min, terrain.width)
-        px1 = max(px0 + 1, self._meters_to_cell(x_max, terrain.width))
-        py0 = self._meters_to_cell(y_min, terrain.length)
-        py1 = max(py0 + 1, self._meters_to_cell(y_max, terrain.length))
-        height_cells = int(np.round(height_m / self.cfg.vertical_scale))
-        terrain.height_field_raw[px0:px1, py0:py1] = height_cells
-
-    def _mark_rect_perimeter(self, edge_mask, x_min, x_max, y_min, y_max):
-        px0 = self._meters_to_cell(x_min, edge_mask.shape[0])
-        px1 = max(px0 + 1, self._meters_to_cell(x_max, edge_mask.shape[0]))
-        py0 = self._meters_to_cell(y_min, edge_mask.shape[1])
-        py1 = max(py0 + 1, self._meters_to_cell(y_max, edge_mask.shape[1]))
-        edge_mask[px0:px1, py0] = 1
-        edge_mask[px0:px1, py1 - 1] = 1
-        edge_mask[px0, py0:py1] = 1
-        edge_mask[px1 - 1, py0:py1] = 1
-
-    def _mark_gap_edges(self, edge_mask, x_min, x_max, y_min, y_max):
-        px0 = self._meters_to_cell(x_min, edge_mask.shape[0])
-        px1 = max(px0 + 1, self._meters_to_cell(x_max, edge_mask.shape[0]))
-        py0 = self._meters_to_cell(y_min, edge_mask.shape[1])
-        py1 = max(py0 + 1, self._meters_to_cell(y_max, edge_mask.shape[1]))
-        edge_mask[px0:px0 + 1, py0:py1] = 1
-        edge_mask[max(px1 - 1, px0):px1, py0:py1] = 1
-
-    def _sample_local_height(self, terrain, x, y):
-        px = self._meters_to_cell(x, terrain.width)
-        py = self._meters_to_cell(y, terrain.length)
-        return float(terrain.height_field_raw[px, py] * self.cfg.vertical_scale)
