@@ -135,6 +135,10 @@ class ActorCriticParkour(nn.Module):
         actor_input = torch.cat((prop_obs, scandot_latent), dim=-1)
         return self.actor(actor_input)
 
+    def infer_scandot_latent(self, observations):
+        _, scandot_obs = self._split_actor_obs(observations)
+        return self.scandot_encoder(scandot_obs)
+
     def update_distribution(self, observations):
         mean = self._actor_mean(observations)
         self.distribution = Normal(mean, mean * 0.0 + self.std)

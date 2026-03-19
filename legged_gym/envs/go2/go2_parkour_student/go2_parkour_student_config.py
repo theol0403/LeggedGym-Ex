@@ -2,24 +2,22 @@ from legged_gym.envs.go2.go2_parkour_teacher.go2_parkour_teacher_config import (
     Go2ParkourTeacherCfg,
 )
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
-from legged_gym.envs.base.parkour_observation import (
-    ParkourObservationSpec,
-    parkour_prop_obs_dim,
-    parkour_critic_obs_dim,
-)
+from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 
 
 class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
     class env(Go2ParkourTeacherCfg.env):
         num_envs = 4096
-        num_observations = None   # computed below (prop_dim = 53)
-        num_privileged_obs = None  # computed below (num_scandots = 132)
-        num_critic_obs = None      # computed below (teacher critic_dim = 232)
-        num_depth_obs = None       # computed below (H * W)
-        num_latent_dims = 32       # scandot_encoder output dim
+        frame_stack = 10
+        num_observations = None
+        num_privileged_obs = None
+        num_teacher_actor_obs = None
+        num_history_obs = None
+        num_latent_dims = 32
         num_actions = 12
         episode_length_s = 20.0
         env_spacing = 1.0
+        student_depth_shape = None
 
     class terrain(Go2ParkourTeacherCfg.terrain):
         pass
@@ -56,16 +54,21 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
 
         class depth_camera_config(LeggedRobotCfg.sensor.depth_camera_config):
             num_sensors = 1
-            num_history = 1
-            near_clip = 0.1
-            far_clip = 3.0
+            num_history = 2
+            near_clip = 0.0
+            far_clip = 2.0
             near_plane = 0.1
-            far_plane = 3.0
-            resolution = (87, 58)  # (W, H)
-            horizontal_fov_deg = 75
-            pos = (0.3, 0.0, 0.1)
+            far_plane = 2.0
+            resolution = (106, 60)  # raw (W, H)
+            processed_resolution = (87, 58)  # final (W, H)
+            crop_top = 0
+            crop_bottom = 2
+            crop_left = 4
+            crop_right = 4
+            horizontal_fov_deg = 87
+            pos = (0.27, 0.0, 0.03)
             euler = (0.0, 1.57, 0.0)  # forward-facing
-            decimation = 1
+            decimation = 5
             calculate_depth = True
             segmentation_camera = False
             return_pointcloud = False
@@ -76,34 +79,46 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
 class Go2ParkourStudentCfgPPO(LeggedRobotCfgPPO):
     runner_class_name = "ParkourStudentRunner"
 
-    class policy(LeggedRobotCfgPPO.policy):
-        scandot_encoder_hidden_dims = [128, 64, 32]
-        depth_image_shape = [1, 58, 87]  # (C, H, W)
-        depth_encoder_hidden_dim = 32
+    class policy:
+        clip_actions = LeggedRobotCfg.normalization.clip_actions
+        activation = "elu"
+        student_depth_shape = [2, 58, 87]
+        proprio_history_frames = 10
+        proprio_history_hidden_dims = [128, 64]
+        depth_encoder_hidden_dims = [128, 64]
+        student_latent_hidden_dims = [256, 128]
         actor_hidden_dims = [512, 256, 128]
-        critic_hidden_dims = [1024, 512, 256]
-        teacher_checkpoint = None  # set to path of teacher .pt to init weights
 
-    class algorithm(LeggedRobotCfgPPO.algorithm):
-        entropy_coef = 0.01
+    class algorithm:
         learning_rate = 1.0e-3
-        encoder_lr = 1.0e-3
-        num_encoder_epochs = 2
+        action_loss_coef = 1.0
+        latent_loss_coef = 0.25
+        max_grad_norm = 1.0
 
     class runner(LeggedRobotCfgPPO.runner):
         policy_class_name = "ActorCriticParkourStudent"
-        algorithm_class_name = "PPO_ParkourStudent"
+        algorithm_class_name = "ParkourDistillation"
         run_name = "student_genesis"
         experiment_name = "go2_parkour_student"
         num_steps_per_env = 48
         save_interval = 200
         max_iterations = 5000
+        teacher_task = "go2_parkour_teacher"
+        teacher_load_run = -1
+        teacher_ckpt = -1
 
 
 # --- Compute dimensions from config ---
 _OBS_SPEC = ParkourObservationSpec.from_cfg(Go2ParkourStudentCfg)
 Go2ParkourStudentCfg.env.num_observations = _OBS_SPEC.prop_dim
-Go2ParkourStudentCfg.env.num_privileged_obs = _OBS_SPEC.num_scandots
-Go2ParkourStudentCfg.env.num_critic_obs = _OBS_SPEC.critic_dim
-_depth_res = Go2ParkourStudentCfg.sensor.depth_camera_config.resolution  # (W, H)
-Go2ParkourStudentCfg.env.num_depth_obs = _depth_res[1] * _depth_res[0]  # H * W
+Go2ParkourStudentCfg.env.num_privileged_obs = _OBS_SPEC.teacher_actor_dim
+Go2ParkourStudentCfg.env.num_teacher_actor_obs = _OBS_SPEC.teacher_actor_dim
+Go2ParkourStudentCfg.env.num_history_obs = (
+    Go2ParkourStudentCfg.env.num_observations * Go2ParkourStudentCfg.env.frame_stack
+)
+_student_depth_res = Go2ParkourStudentCfg.sensor.depth_camera_config.processed_resolution
+Go2ParkourStudentCfg.env.student_depth_shape = [
+    Go2ParkourStudentCfg.sensor.depth_camera_config.num_history,
+    _student_depth_res[1],
+    _student_depth_res[0],
+]

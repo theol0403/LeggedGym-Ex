@@ -1,4 +1,5 @@
 import torch
+from collections import deque
 
 from legged_gym.envs.base.legged_robot_parkour import LeggedRobotParkour
 from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
@@ -6,34 +7,34 @@ from legged_gym.utils.math_utils import torch_rand_float
 
 
 class Go2ParkourStudent(LeggedRobotParkour):
-    """Parkour environment for depth-based student training.
-
-    Actor obs are proprioceptive-only (no scandots).  Scandots are provided
-    as privileged_obs for the scandot_encoder supervision target.  Depth images
-    from the simulator camera are provided as the encoder input (stored in the
-    ``depth_obs`` buffer and returned in the obs_history slot for TSRunner
-    compatibility).
-    """
-
     def _parse_cfg(self, cfg):
         super()._parse_cfg(cfg)
-        self.num_depth_obs = self.cfg.env.num_depth_obs
+        self.num_teacher_actor_obs = self.cfg.env.num_teacher_actor_obs
+        self.num_history_obs = self.cfg.env.num_history_obs
         self.num_latent_dims = self.cfg.env.num_latent_dims
-        self.num_critic_obs = self.cfg.env.num_critic_obs
-        # Alias so TSRunner can read it as num_history_obs
-        self.num_history_obs = self.num_depth_obs
+        self.student_depth_shape = tuple(self.cfg.env.student_depth_shape)
 
     def _init_buffers(self):
         self.obs_spec = ParkourObservationSpec.from_cfg(self.cfg)
         super()._init_buffers()
 
-        self.depth_obs = torch.zeros(
-            self.num_envs, self.num_depth_obs,
-            device=self.device, dtype=torch.float,
+        self.teacher_actor_obs_buf = self.privileged_obs_buf
+        self.obs_history_deque = deque(maxlen=self.cfg.env.frame_stack)
+        for _ in range(self.cfg.env.frame_stack):
+            self.obs_history_deque.append(
+                torch.zeros(self.num_envs, self.num_obs, device=self.device, dtype=torch.float)
+            )
+        self.obs_history = torch.zeros(
+            self.num_envs,
+            self.num_history_obs,
+            device=self.device,
+            dtype=torch.float,
         )
-        self.critic_obs_buf = torch.zeros(
-            self.num_envs, self.num_critic_obs,
-            device=self.device, dtype=torch.float,
+        self.student_depth = torch.zeros(
+            self.num_envs,
+            *self.student_depth_shape,
+            device=self.device,
+            dtype=torch.float,
         )
 
     def compute_observations(self):
@@ -59,25 +60,17 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.actions,
             foot_contacts,
         )
-        self.obs_buf = torch.cat(prop_parts, dim=-1)
+        actor_obs = torch.cat(prop_parts, dim=-1)
 
         if self.add_noise:
-            self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec
+            actor_obs += (2 * torch.rand_like(actor_obs) - 1) * self.noise_scale_vec
 
-        # Privileged obs = scandots (for scandot_encoder supervision)
-        self.privileged_obs_buf = scandot_obs
-
-        # Depth obs from simulator depth camera
-        self.depth_obs = self.simulator._depth_images[:, 0].reshape(self.num_envs, -1)
-
-        # Critic obs = full teacher-style privileged obs
-        actor_obs_with_scandots = torch.cat(prop_parts + (scandot_obs,), dim=-1)
-        self.critic_obs_buf = torch.cat((
-            actor_obs_with_scandots,
-            self.simulator.base_lin_vel * self.obs_scales.lin_vel,
-            self._get_privileged_dynamics(),
-            self.simulator.link_contact_states,
-        ), dim=-1)
+        self.obs_buf = actor_obs
+        self.teacher_actor_obs_buf = torch.cat(prop_parts + (scandot_obs,), dim=-1)
+        self.privileged_obs_buf = self.teacher_actor_obs_buf
+        self.obs_history_deque.append(self.obs_buf)
+        self.obs_history = torch.cat(list(self.obs_history_deque), dim=-1)
+        self.student_depth.copy_(self.simulator.get_depth_images())
 
     def step(self, actions):
         actions = self._pre_sim_step(actions)
@@ -86,26 +79,34 @@ class Go2ParkourStudent(LeggedRobotParkour):
 
         clip_obs = self.cfg.normalization.clip_observations
         self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
-        if self.privileged_obs_buf is not None:
-            self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
+        self.teacher_actor_obs_buf = torch.clip(self.teacher_actor_obs_buf, -clip_obs, clip_obs)
+        self.privileged_obs_buf = self.teacher_actor_obs_buf
         return (
-            self.obs_buf, self.privileged_obs_buf, self.depth_obs,
-            self.critic_obs_buf, self.rew_buf, self.reset_buf, self.extras,
+            self.obs_buf,
+            self.teacher_actor_obs_buf,
+            self.obs_history,
+            self.student_depth,
+            self.rew_buf,
+            self.reset_buf,
+            self.extras,
         )
 
     def reset(self):
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
-        obs, priv, depth, critic, _, _, _ = self.step(
+        obs, teacher_actor_obs, obs_history, student_depth, _, _, _ = self.step(
             torch.zeros(self.num_envs, self.num_actions, device=self.device, requires_grad=False)
         )
-        return obs, priv, depth, critic
+        return obs, teacher_actor_obs, obs_history, student_depth
 
     def get_observations(self):
-        return self.obs_buf, self.privileged_obs_buf, self.depth_obs, self.critic_obs_buf
+        return self.obs_buf, self.teacher_actor_obs_buf, self.obs_history, self.student_depth
 
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)
-        self.depth_obs[env_ids] = 0.0
+        for i in range(self.obs_history_deque.maxlen):
+            self.obs_history_deque[i][env_ids] = 0.0
+        self.obs_history[env_ids] = 0.0
+        self.student_depth[env_ids] = 0.0
 
     def _reset_dofs(self, env_ids):
         dof_pos = torch.zeros(
@@ -132,6 +133,11 @@ class Go2ParkourStudent(LeggedRobotParkour):
             raise RuntimeError(
                 f"Configured student actor obs dim {self.num_obs} does not match "
                 f"parkour prop spec {self.obs_spec.prop_dim}."
+            )
+        if self.num_teacher_actor_obs != self.obs_spec.teacher_actor_dim:
+            raise RuntimeError(
+                f"Configured teacher actor obs dim {self.num_teacher_actor_obs} does not match "
+                f"parkour actor spec {self.obs_spec.teacher_actor_dim}."
             )
 
     def _get_noise_scale_vec(self):

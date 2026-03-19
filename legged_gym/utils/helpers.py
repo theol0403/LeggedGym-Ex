@@ -142,8 +142,12 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.runner.checkpoint = args.ckpt
         if getattr(args, "load_run", None) is not None:
             cfg_train.runner.load_run = args.load_run
-        if getattr(args, "teacher_checkpoint", None) is not None:
-            cfg_train.policy.teacher_checkpoint = args.teacher_checkpoint
+        if getattr(args, "teacher_task", None) is not None:
+            cfg_train.runner.teacher_task = args.teacher_task
+        if getattr(args, "teacher_load_run", None) is not None:
+            cfg_train.runner.teacher_load_run = args.teacher_load_run
+        if getattr(args, "teacher_ckpt", None) is not None:
+            cfg_train.runner.teacher_ckpt = args.teacher_ckpt
 
     return env_cfg, cfg_train
 
@@ -198,8 +202,12 @@ def get_args():
                         help="force the Genesis parkour task to sample a single obstacle family")
     parser.add_argument('--parkour_force_row', type=int, default=None,
                         help="force the Genesis parkour task to sample a single curriculum row")
-    parser.add_argument('--teacher_checkpoint', type=str, default=None,
-                        help="path to teacher model .pt checkpoint for student weight initialization")
+    parser.add_argument('--teacher_task',    type=str, default=None,
+                        help="teacher task used to resolve the frozen parkour teacher checkpoint")
+    parser.add_argument('--teacher_load_run', type=str, default=None,
+                        help="teacher run to load, default: latest run for the teacher task")
+    parser.add_argument('--teacher_ckpt',    type=int, default=None,
+                        help="teacher checkpoint to load, default: latest checkpoint for the teacher run")
 
     return parser.parse_args()
 
@@ -274,6 +282,42 @@ class PolicyExporterTS(torch.nn.Module):
                               input_names=input_names,
                               output_names=output_names,
                               opset_version=11)
+
+
+class PolicyExporterParkourStudent(torch.nn.Module):
+    def __init__(self, actor_critic):
+        super().__init__()
+        self.actor_critic = copy.deepcopy(actor_critic)
+
+    def forward(self, obs, student_depth, obs_history):
+        return self.actor_critic.act_inference(obs, student_depth, obs_history)
+
+    def export(self, path, env_cfg, export_onnx=False, train_cfg=None):
+        os.makedirs(path, exist_ok=True)
+        filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".pt"
+        path_pt = os.path.join(path, filename)
+        self.to("cpu")
+        traced_script_module = torch.jit.script(self)
+        traced_script_module.save(path_pt)
+
+        if export_onnx:
+            filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
+            path_onnx = os.path.join(path, filename)
+            input_names = ["obs_input", "student_depth_input", "obs_history_input"]
+            output_names = ["nn_output"]
+            dummy_obs = torch.randn(1, env_cfg.env.num_observations)
+            dummy_depth = torch.randn(1, *env_cfg.env.student_depth_shape)
+            dummy_history = torch.randn(1, env_cfg.env.num_history_obs)
+            torch.onnx.export(
+                self,
+                (dummy_obs, dummy_depth, dummy_history),
+                path_onnx,
+                verbose=True,
+                export_params=True,
+                input_names=input_names,
+                output_names=output_names,
+                opset_version=11,
+            )
 
 
 class PolicyExporterEE(torch.nn.Module):

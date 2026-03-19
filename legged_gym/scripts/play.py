@@ -32,7 +32,6 @@ def override_configs(env_cfg, train_cfg, args):
         or (SIMULATOR == "genesis" and args.depth_debug)
     )
     sensor_debug = enable_depth_debug or enable_rgb_debug
-    had_depth_sensor = env_cfg.sensor.add_depth
     if sensor_debug and SIMULATOR == "isaaclab":
         raise NotImplementedError("Camera debug rendering is not implemented for Isaac Lab")
     if enable_rgb_debug and SIMULATOR != "genesis":
@@ -41,9 +40,7 @@ def override_configs(env_cfg, train_cfg, args):
     # number of environments
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 16)
     if enable_depth_debug:
-        use_debug_depth_camera = SIMULATOR == "genesis" and not had_depth_sensor and not args.debug
-        env_cfg.sensor.debug_depth_via_camera = use_debug_depth_camera
-        env_cfg.sensor.add_depth = had_depth_sensor or not use_debug_depth_camera
+        env_cfg.sensor.add_depth = True
     if enable_rgb_debug:
         env_cfg.sensor.add_rgb = True
         _copy_camera_debug_config(env_cfg.sensor.rgb_camera_config, env_cfg.sensor.depth_camera_config)
@@ -151,6 +148,8 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
     runner_class_name = train_cfg.runner_class_name
     if runner_class_name == "TSRunner":
         obs_buf, privileged_obs_buf, obs_history, critic_obs = env.get_observations()
+    elif runner_class_name == "ParkourStudentRunner":
+        obs_buf, teacher_actor_obs, obs_history, student_depth = env.get_observations()
     elif runner_class_name == "EERunner":
         estimator_features, _, _ = env.get_observations()
     elif runner_class_name == "DreamWaQRunner":
@@ -177,6 +176,9 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
         if runner_class_name == "TSRunner":
             with torch.inference_mode():
                 actions = policy(obs_buf, obs_history)
+        elif runner_class_name == "ParkourStudentRunner":
+            with torch.inference_mode():
+                actions = policy(obs_buf, student_depth, obs_history)
         elif runner_class_name == "EERunner":
             with torch.inference_mode():
                 actions = policy(estimator_features.detach())
@@ -192,6 +194,8 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
 
         if runner_class_name == "TSRunner":
             obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
+        elif runner_class_name == "ParkourStudentRunner":
+            obs_buf, teacher_actor_obs, obs_history, student_depth, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "EERunner":
             estimator_features, estimator_labels, _, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "DreamWaQRunner":
@@ -257,6 +261,8 @@ def export_policy(alg_runner, path: str, args, env_cfg, train_cfg):
     policy_class_name = train_cfg.runner.policy_class_name
     if policy_class_name == "ActorCriticTS":
         exporter = PolicyExporterTS(alg_runner.alg.actor_critic)
+    elif policy_class_name == "ActorCriticParkourStudent":
+        exporter = PolicyExporterParkourStudent(alg_runner.alg.actor_critic)
     elif policy_class_name == "ActorCriticEE":
         exporter = PolicyExporterEE(alg_runner.alg.actor_critic)
     elif policy_class_name == "ActorCriticDreamWaQ":

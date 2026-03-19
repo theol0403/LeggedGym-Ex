@@ -1,9 +1,19 @@
 import os
+import inspect
 
 from legged_gym import *
 from legged_gym.envs import *
 from legged_gym.utils import get_args, task_registry, ensure_runtime_initialized
 import shutil
+
+
+def _backup_task_sources(log_dir, env, env_cfg):
+    backup_paths = []
+    for source in (inspect.getfile(env.__class__), inspect.getfile(env_cfg.__class__)):
+        if os.path.isfile(source) and source not in backup_paths:
+            backup_paths.append(source)
+    for source in backup_paths:
+        shutil.copy2(source, log_dir)
 
 def train(args):
     ensure_runtime_initialized(args)
@@ -11,18 +21,11 @@ def train(args):
     env, env_cfg = task_registry.make_env(name=args.task, args=args)
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args)
     
-    # Copy env.py and env_config.py to log_dir for backup
+    # Copy task sources to log_dir for backup
     log_dir = ppo_runner.log_dir
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    if env_cfg.asset.name == args.task:
-        robot_file_path = os.path.join(LEGGED_GYM_ROOT_DIR, "legged_gym", "envs", env_cfg.asset.name, args.task + ".py")
-        robot_config_path = os.path.join(LEGGED_GYM_ROOT_DIR, "legged_gym", "envs", env_cfg.asset.name, args.task + "_config.py")
-    else:
-        robot_file_path = os.path.join(LEGGED_GYM_ROOT_DIR, "legged_gym", "envs", env_cfg.asset.name, args.task, args.task + ".py")
-        robot_config_path = os.path.join(LEGGED_GYM_ROOT_DIR, "legged_gym", "envs", env_cfg.asset.name, args.task, args.task + "_config.py")
-    shutil.copy(robot_file_path, log_dir)
-    shutil.copy(robot_config_path, log_dir)
+    _backup_task_sources(log_dir, env, env_cfg)
     
     # Start training session
     try:

@@ -1,38 +1,27 @@
 import torch
 import torch.nn as nn
-from torch.distributions import Normal
 
 from .actor_critic import get_activation
 
 
 class ActorCriticParkourStudent(nn.Module):
-    """Actor-critic for parkour student training via depth-based distillation.
-
-    During PPO rollouts the actor uses the scandot_encoder (privileged) latent.
-    A separate depth_encoder CNN is trained via supervised MSE to match the
-    scandot_encoder output so that at deployment only depth images are needed.
-    """
-
     is_recurrent = False
-    history_encoder_type = "CNN"
 
     def __init__(
         self,
         num_actor_obs,
         num_actions,
-        num_privilege_encoder_input,
-        num_history_encoder_input,  # = num_depth_obs (flattened), unused for CNN sizing
+        num_teacher_actor_obs,
+        num_history_obs,
         num_latent_dims,
-        num_critic_obs,
-        scandot_encoder_hidden_dims=[128, 64, 32],
-        depth_image_shape=(1, 58, 87),
-        depth_encoder_hidden_dim=32,
+        student_depth_shape=(2, 58, 87),
+        proprio_history_frames=10,
+        proprio_history_hidden_dims=[128, 64],
+        depth_encoder_hidden_dims=[128, 64],
+        student_latent_hidden_dims=[256, 128],
         actor_hidden_dims=[512, 256, 128],
-        critic_hidden_dims=[1024, 512, 256],
         activation="elu",
-        init_noise_std=1.0,
         clip_actions=100.0,
-        teacher_checkpoint=None,
         **kwargs,
     ):
         if kwargs:
@@ -43,35 +32,41 @@ class ActorCriticParkourStudent(nn.Module):
         super().__init__()
 
         activation_layer = get_activation(activation)
-        self.depth_image_shape = tuple(depth_image_shape)
-        latent_dim = num_latent_dims
+        self.num_obs = int(num_actor_obs)
+        self.num_teacher_actor_obs = int(num_teacher_actor_obs)
+        self.num_history_obs = int(num_history_obs)
+        self.num_latent_dims = int(num_latent_dims)
+        self.student_depth_shape = tuple(student_depth_shape)
+        self.proprio_history_frames = int(proprio_history_frames)
 
-        # --- Scandot encoder (same architecture as teacher) ---
-        self.scandot_encoder = self._build_mlp(
-            input_dim=num_privilege_encoder_input,
-            hidden_dims=scandot_encoder_hidden_dims,
-            output_dim=None,
-            activation=activation_layer,
-            final_activation=True,
-        )
-        scandot_latent_dim = scandot_encoder_hidden_dims[-1]
-        if scandot_latent_dim != latent_dim:
+        if self.num_history_obs != self.num_obs * self.proprio_history_frames:
             raise ValueError(
-                f"scandot_encoder output dim ({scandot_latent_dim}) must match "
-                f"num_latent_dims ({latent_dim})"
+                "ActorCriticParkourStudent expects obs_history to be "
+                f"{self.num_obs} * {self.proprio_history_frames}, got {self.num_history_obs}."
             )
 
-        # --- Depth encoder (CNN) ---
-        C, H, W = self.depth_image_shape
-        self.depth_encoder = self._build_depth_cnn(
-            in_channels=C, height=H, width=W,
-            latent_dim=latent_dim,
+        history_latent_dim = proprio_history_hidden_dims[-1]
+        depth_latent_dim = depth_encoder_hidden_dims[-1]
+
+        self.proprio_history_encoder = self._build_history_encoder(
+            num_obs=self.num_obs,
+            num_frames=self.proprio_history_frames,
+            hidden_dims=proprio_history_hidden_dims,
             activation=activation_layer,
         )
-
-        # --- Actor ---
+        self.depth_encoder = self._build_depth_encoder(
+            depth_shape=self.student_depth_shape,
+            hidden_dims=depth_encoder_hidden_dims,
+            activation=activation_layer,
+        )
+        self.student_latent_encoder = self._build_mlp(
+            input_dim=self.num_obs + history_latent_dim + depth_latent_dim,
+            hidden_dims=student_latent_hidden_dims,
+            output_dim=self.num_latent_dims,
+            activation=activation_layer,
+        )
         self.actor = self._build_mlp(
-            input_dim=num_actor_obs + latent_dim,
+            input_dim=self.num_obs + self.num_latent_dims,
             hidden_dims=actor_hidden_dims,
             output_dim=num_actions,
             activation=activation_layer,
@@ -81,35 +76,10 @@ class ActorCriticParkourStudent(nn.Module):
             nn.Hardtanh(min_val=-clip_actions, max_val=clip_actions),
         )
 
-        # --- Critic ---
-        self.critic = self._build_mlp(
-            input_dim=num_critic_obs,
-            hidden_dims=critic_hidden_dims,
-            output_dim=1,
-            activation=activation_layer,
-        )
-
-        print(f"Scandot Encoder MLP: {self.scandot_encoder}")
-        print(f"Depth Encoder CNN: {self.depth_encoder}")
+        print(f"Proprio History Encoder: {self.proprio_history_encoder}")
+        print(f"Depth Encoder: {self.depth_encoder}")
+        print(f"Student Latent Encoder: {self.student_latent_encoder}")
         print(f"Actor MLP: {self.actor}")
-        print(f"Critic MLP: {self.critic}")
-
-        # Action noise
-        self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
-        self.distribution = None
-        Normal.set_default_validate_args = False
-
-    # ---------- Aliases for PPO_TS compatibility ----------
-
-    @property
-    def privilege_encoder(self):
-        return self.scandot_encoder
-
-    @property
-    def history_encoder(self):
-        return self.depth_encoder
-
-    # ---------- Network builders ----------
 
     @staticmethod
     def _build_mlp(input_dim, hidden_dims, output_dim, activation, final_activation=False):
@@ -128,7 +98,8 @@ class ActorCriticParkourStudent(nn.Module):
         return nn.Sequential(*layers)
 
     @staticmethod
-    def _build_depth_cnn(in_channels, height, width, latent_dim, activation):
+    def _build_depth_encoder(depth_shape, hidden_dims, activation):
+        in_channels, height, width = depth_shape
         conv_layers = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=5, stride=2),
             type(activation)(),
@@ -138,73 +109,66 @@ class ActorCriticParkourStudent(nn.Module):
             type(activation)(),
             nn.Flatten(),
         )
-        # Compute flattened size after convolutions
         with torch.no_grad():
             dummy = torch.zeros(1, in_channels, height, width)
             flat_size = conv_layers(dummy).shape[1]
-        return nn.Sequential(
-            conv_layers,
-            nn.Linear(flat_size, 128),
+        projection_layers = []
+        prev_dim = flat_size
+        for hidden_dim in hidden_dims:
+            projection_layers.append(nn.Linear(prev_dim, hidden_dim))
+            projection_layers.append(type(activation)())
+            prev_dim = hidden_dim
+        return nn.Sequential(conv_layers, *projection_layers)
+
+    @staticmethod
+    def _build_history_encoder(num_obs, num_frames, hidden_dims, activation):
+        conv_stack = nn.Sequential(
+            nn.Conv1d(num_obs, 64, kernel_size=3, padding=1),
             type(activation)(),
-            nn.Linear(128, latent_dim),
+            nn.Conv1d(64, 64, kernel_size=3, padding=1),
+            type(activation)(),
+            nn.Flatten(),
+        )
+        with torch.no_grad():
+            dummy = torch.zeros(1, num_obs, num_frames)
+            flat_size = conv_stack(dummy).shape[1]
+        projection_layers = []
+        prev_dim = flat_size
+        for hidden_dim in hidden_dims:
+            projection_layers.append(nn.Linear(prev_dim, hidden_dim))
+            projection_layers.append(type(activation)())
+            prev_dim = hidden_dim
+        return nn.Sequential(conv_stack, *projection_layers)
+
+    def _reshape_obs_history(self, obs_history):
+        return obs_history.view(-1, self.proprio_history_frames, self.num_obs).transpose(1, 2)
+
+    def infer_student_latent(self, observations, student_depth, obs_history):
+        depth_latent = self.depth_encoder(student_depth)
+        history_latent = self.proprio_history_encoder(self._reshape_obs_history(obs_history))
+        encoder_input = torch.cat((observations, history_latent, depth_latent), dim=-1)
+        return self.student_latent_encoder(encoder_input)
+
+    def actor_from_latent(self, observations, student_latent):
+        return self.actor(torch.cat((observations, student_latent), dim=-1))
+
+    def act(self, observations, student_depth, obs_history):
+        return self.actor_from_latent(
+            observations,
+            self.infer_student_latent(observations, student_depth, obs_history),
         )
 
-    # ---------- Distribution interface ----------
+    def act_inference(self, observations, student_depth, obs_history):
+        return self.act(observations, student_depth, obs_history)
 
-    def reset(self, dones=None):
-        pass
-
-    def forward(self):
-        raise NotImplementedError
-
-    @property
-    def action_mean(self):
-        return self.distribution.mean
-
-    @property
-    def action_std(self):
-        return self.distribution.stddev
-
-    @property
-    def entropy(self):
-        return self.distribution.entropy().sum(dim=-1)
-
-    def get_actions_log_prob(self, actions):
-        return self.distribution.log_prob(actions).sum(dim=-1)
-
-    # ---------- Actor forward paths ----------
-
-    def update_distribution(self, observations, privilege_observations):
-        latent = self.scandot_encoder(privilege_observations)
-        mean = self.actor(torch.cat((observations, latent), dim=-1))
-        self.distribution = Normal(mean, mean * 0.0 + self.std)
-
-    def act(self, observations, privilege_observations, **kwargs):
-        self.update_distribution(observations, privilege_observations)
-        return self.distribution.sample()
-
-    def act_student(self, observations, depth_obs, **kwargs):
-        depth_image = depth_obs.view(-1, *self.depth_image_shape)
-        latent = self.depth_encoder(depth_image)
-        return self.actor(torch.cat((observations, latent), dim=-1))
-
-    def act_inference(self, observations, depth_obs, **kwargs):
-        return self.act_student(observations, depth_obs, **kwargs)
-
-    # ---------- Critic ----------
-
-    def evaluate(self, critic_observations, **kwargs):
-        return self.critic(critic_observations)
-
-    # ---------- Teacher weight loading ----------
-
-    def load_teacher_weights(self, teacher_state_dict):
-        """Load matching weights from a trained ActorCriticParkour teacher checkpoint."""
-        own = self.state_dict()
-        loaded = 0
-        for key, value in teacher_state_dict.items():
-            if key in own and own[key].shape == value.shape:
-                own[key] = value
-                loaded += 1
-        self.load_state_dict(own)
-        print(f"Loaded {loaded} teacher weight tensors into student.")
+    def load_teacher_actor_weights(self, teacher_state_dict):
+        actor_state = {
+            key.removeprefix("actor."): value
+            for key, value in teacher_state_dict.items()
+            if key.startswith("actor.")
+        }
+        missing, unexpected = self.actor.load_state_dict(actor_state, strict=False)
+        if unexpected:
+            raise RuntimeError(f"Unexpected teacher actor weights: {unexpected}")
+        if missing:
+            print(f"Missing actor weights during teacher init: {missing}")

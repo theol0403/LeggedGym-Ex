@@ -255,7 +255,6 @@ class LeggedRobotCfg(BaseConfig):
     class sensor:
         add_depth = False
         add_rgb = False
-        debug_depth_via_camera = False
         use_warp = False       # whether to use warp-based model
         class camera_config:
             resolution = (80, 60)
@@ -271,6 +270,11 @@ class LeggedRobotCfg(BaseConfig):
             far_clip = 10.0
             near_plane = 0.1
             far_plane = 10.0
+            processed_resolution = None
+            crop_top = 0
+            crop_bottom = 0
+            crop_left = 0
+            crop_right = 0
             decimation = 5
             # Warp only
             calculate_depth = True

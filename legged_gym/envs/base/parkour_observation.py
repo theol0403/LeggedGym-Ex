@@ -44,6 +44,10 @@ class ParkourObservationSpec:
         return self.prop_dim + self.num_scandots
 
     @property
+    def teacher_actor_dim(self) -> int:
+        return self.actor_dim
+
+    @property
     def critic_dim(self) -> int:
         return (
             self.actor_dim
