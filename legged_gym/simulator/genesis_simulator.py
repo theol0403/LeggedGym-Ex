@@ -289,6 +289,7 @@ class GenesisSimulator(Simulator):
             self._camera_render_env_indices = []
     def _create_sim(self):
         enable_self_collision = not self._cfg.asset.self_collisions
+        enable_visual_geometry = self._requires_visual_geometry()
 
         # create scene
         self._scene = gs.Scene(
@@ -317,7 +318,7 @@ class GenesisSimulator(Simulator):
                 batch_dofs_info=self._batch_dofs_links_info,
                 batch_links_info=self._batch_dofs_links_info,
             ),
-            renderer=gs.renderers.BatchRenderer() if self._uses_batch_camera_rendering() else None,
+            renderer=gs.renderers.BatchRenderer(use_rasterizer=True) if self._uses_batch_camera_rendering() else None,
             show_viewer=not self._headless,
         )
 
@@ -328,7 +329,7 @@ class GenesisSimulator(Simulator):
                 gs.morphs.URDF(
                     file="urdf/plane/plane.urdf", 
                     fixed=True,
-                    visualization=not self._headless)
+                    visualization=enable_visual_geometry)
                 )
         elif mesh_type == 'heightfield':
             self._terrain = Terrain(self._cfg.terrain)
@@ -374,7 +375,7 @@ class GenesisSimulator(Simulator):
                 pos=np.array(self._cfg.init_state.pos),
                 quat=np.array([1.0, 0.0, 0.0, 0.0]),  # wxyz
                 fixed=self._cfg.asset.fix_base_link,
-                visualization=not self._headless,
+                visualization=self._requires_visual_geometry(),
             ),
             # visualize_contact=self._debug,
         )
@@ -1041,7 +1042,7 @@ class GenesisSimulator(Simulator):
                 horizontal_scale=self._cfg.terrain.horizontal_scale,
                 vertical_scale=self._cfg.terrain.vertical_scale,
                 height_field=self._terrain.height_field_raw,
-                visualization=not self._headless,
+                visualization=self._requires_visual_geometry(),
             ),
         )
         self._height_samples = torch.tensor(self._terrain.heightsamples).view(
@@ -1072,6 +1073,9 @@ class GenesisSimulator(Simulator):
 
     def _uses_batch_camera_rendering(self):
         return self._cfg.sensor.add_depth or self._requires_rgb_camera_stream()
+
+    def _requires_visual_geometry(self):
+        return (not self._headless) or self._uses_batch_camera_rendering()
 
     def _requires_rgb_camera_stream(self):
         return getattr(self._cfg.sensor, "add_rgb", False) or getattr(

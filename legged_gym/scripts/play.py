@@ -26,11 +26,7 @@ def override_configs(env_cfg, train_cfg, args):
     command_mode = resolve_command_mode(args)
     enable_depth_debug = bool(args.depth_debug)
     enable_inferred_depth_debug = args.depth_model_type is not None
-    enable_rgb_debug = bool(
-        args.rgb_debug
-        or enable_inferred_depth_debug
-        or (SIMULATOR == "genesis" and args.depth_debug)
-    )
+    enable_rgb_debug = bool(args.rgb_debug or enable_inferred_depth_debug)
     sensor_debug = enable_depth_debug or enable_rgb_debug
     if sensor_debug and SIMULATOR == "isaaclab":
         raise NotImplementedError("Camera debug rendering is not implemented for Isaac Lab")

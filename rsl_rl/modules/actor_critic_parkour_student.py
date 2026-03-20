@@ -25,9 +25,9 @@ class ActorCriticParkourStudent(nn.Module):
         **kwargs,
     ):
         if kwargs:
-            print(
-                "ActorCriticParkourStudent.__init__ got unexpected arguments, "
-                "which will be ignored: " + str(list(kwargs.keys()))
+            raise TypeError(
+                "ActorCriticParkourStudent received unexpected arguments: "
+                + str(sorted(kwargs.keys()))
             )
         super().__init__()
 
@@ -75,11 +75,6 @@ class ActorCriticParkourStudent(nn.Module):
             "clip_actions",
             nn.Hardtanh(min_val=-clip_actions, max_val=clip_actions),
         )
-
-        print(f"Proprio History Encoder: {self.proprio_history_encoder}")
-        print(f"Depth Encoder: {self.depth_encoder}")
-        print(f"Student Latent Encoder: {self.student_latent_encoder}")
-        print(f"Actor MLP: {self.actor}")
 
     @staticmethod
     def _build_mlp(input_dim, hidden_dims, output_dim, activation, final_activation=False):
@@ -168,7 +163,8 @@ class ActorCriticParkourStudent(nn.Module):
             if key.startswith("actor.")
         }
         missing, unexpected = self.actor.load_state_dict(actor_state, strict=False)
-        if unexpected:
-            raise RuntimeError(f"Unexpected teacher actor weights: {unexpected}")
-        if missing:
-            print(f"Missing actor weights during teacher init: {missing}")
+        if missing or unexpected:
+            raise RuntimeError(
+                "Teacher actor initialization mismatch. "
+                f"Missing keys: {missing}. Unexpected keys: {unexpected}."
+            )

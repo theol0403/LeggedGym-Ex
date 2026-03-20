@@ -1,3 +1,5 @@
+import inspect
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -20,7 +22,17 @@ class ParkourDistillation:
         self.action_loss_coef = action_loss_coef
         self.latent_loss_coef = latent_loss_coef
         self.max_grad_norm = max_grad_norm
-        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=learning_rate)
+        self.optimizer = self._build_optimizer()
+
+    def _build_optimizer(self):
+        optimizer_kwargs = {"lr": self.learning_rate}
+        if str(self.device).startswith("cuda"):
+            try:
+                if "fused" in inspect.signature(optim.Adam).parameters:
+                    optimizer_kwargs["fused"] = True
+            except (TypeError, ValueError):
+                pass
+        return optim.Adam(self.actor_critic.parameters(), **optimizer_kwargs)
 
     def act(self, observations, student_depth, obs_history):
         return self.actor_critic.act(observations, student_depth, obs_history)

@@ -1,5 +1,4 @@
 import torch
-from collections import deque
 
 from legged_gym.envs.base.legged_robot_parkour import LeggedRobotParkour
 from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
@@ -19,23 +18,22 @@ class Go2ParkourStudent(LeggedRobotParkour):
         super()._init_buffers()
 
         self.teacher_actor_obs_buf = self.privileged_obs_buf
-        self.obs_history_deque = deque(maxlen=self.cfg.env.frame_stack)
-        for _ in range(self.cfg.env.frame_stack):
-            self.obs_history_deque.append(
-                torch.zeros(self.num_envs, self.num_obs, device=self.device, dtype=torch.float)
-            )
         self.obs_history = torch.zeros(
             self.num_envs,
             self.num_history_obs,
             device=self.device,
             dtype=torch.float,
         )
-        self.student_depth = torch.zeros(
-            self.num_envs,
-            *self.student_depth_shape,
-            device=self.device,
-            dtype=torch.float,
-        )
+        self.student_depth = self.simulator.get_depth_images()
+        if tuple(self.student_depth.shape[1:]) != self.student_depth_shape:
+            raise RuntimeError(
+                f"Simulator depth shape {tuple(self.student_depth.shape[1:])} does not match "
+                f"configured student depth shape {self.student_depth_shape}."
+            )
+
+    def _push_obs_history(self):
+        self.obs_history[:, :-self.num_obs].copy_(self.obs_history[:, self.num_obs :].clone())
+        self.obs_history[:, -self.num_obs :].copy_(self.obs_buf)
 
     def compute_observations(self):
         foot_contacts = (
@@ -68,9 +66,7 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self.obs_buf = actor_obs
         self.teacher_actor_obs_buf = torch.cat(prop_parts + (scandot_obs,), dim=-1)
         self.privileged_obs_buf = self.teacher_actor_obs_buf
-        self.obs_history_deque.append(self.obs_buf)
-        self.obs_history = torch.cat(list(self.obs_history_deque), dim=-1)
-        self.student_depth.copy_(self.simulator.get_depth_images())
+        self._push_obs_history()
 
     def step(self, actions):
         actions = self._pre_sim_step(actions)
@@ -103,8 +99,6 @@ class Go2ParkourStudent(LeggedRobotParkour):
 
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)
-        for i in range(self.obs_history_deque.maxlen):
-            self.obs_history_deque[i][env_ids] = 0.0
         self.obs_history[env_ids] = 0.0
         self.student_depth[env_ids] = 0.0
 

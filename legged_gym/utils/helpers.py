@@ -167,7 +167,7 @@ def get_args():
     parser.add_argument('--sync_wandb',     action='store_true', default=False, help="synchronize training log with wandb")
     parser.add_argument('--export_onnx',    action='store_true', default=False, help="export policy as onnx (besides jit)")
     parser.add_argument('--debug',          action='store_true', default=False, help="enable debug mode")
-    parser.add_argument('--depth_debug',    action='store_true', default=False, help="enable debug camera rendering; on Genesis this enables depth and RGB by default")
+    parser.add_argument('--depth_debug',    action='store_true', default=False, help="enable depth camera debug rendering")
     parser.add_argument('--rgb_debug',      action='store_true', default=False, help="enable RGB camera debug rendering when supported")
     parser.add_argument('--depth_model_type', type=str, default=None,
                         choices=[

@@ -1,7 +1,8 @@
 from legged_gym.envs.go2.go2_parkour_teacher.go2_parkour_teacher_config import (
     Go2ParkourTeacherCfg,
 )
-from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
+from legged_gym.envs.base.base_config import BaseConfig
+from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg
 from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 
 
@@ -51,6 +52,10 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
 
     class sensor(LeggedRobotCfg.sensor):
         add_depth = True
+        add_rgb = False
+
+        class depth_estimation(LeggedRobotCfg.sensor.depth_estimation):
+            enabled = False
 
         class depth_camera_config(LeggedRobotCfg.sensor.depth_camera_config):
             num_sensors = 1
@@ -76,7 +81,8 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
             link_idx_local = 0
 
 
-class Go2ParkourStudentCfgPPO(LeggedRobotCfgPPO):
+class Go2ParkourStudentCfgPPO(BaseConfig):
+    seed = 1
     runner_class_name = "ParkourStudentRunner"
 
     class policy:
@@ -95,14 +101,19 @@ class Go2ParkourStudentCfgPPO(LeggedRobotCfgPPO):
         latent_loss_coef = 0.25
         max_grad_norm = 1.0
 
-    class runner(LeggedRobotCfgPPO.runner):
+    class runner:
         policy_class_name = "ActorCriticParkourStudent"
         algorithm_class_name = "ParkourDistillation"
         run_name = "student_genesis"
         experiment_name = "go2_parkour_student"
+        sync_wandb = False
         num_steps_per_env = 48
-        save_interval = 200
+        save_interval = 500
         max_iterations = 5000
+        resume = False
+        load_run = -1
+        checkpoint = -1
+        resume_path = None
         teacher_task = "go2_parkour_teacher"
         teacher_load_run = -1
         teacher_ckpt = -1

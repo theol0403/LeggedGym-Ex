@@ -13,7 +13,18 @@ from rsl_rl.runners.on_policy_runner import OnPolicyRunner
 
 
 class ParkourStudentRunner(OnPolicyRunner):
+    def _configure_torch_fast_path(self):
+        if not str(self.device).startswith("cuda"):
+            return
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+
+    def _move_student_batch_to_device(self, batch):
+        return tuple(tensor.to(self.device, non_blocking=True) for tensor in batch)
+
     def _init_agent_and_algo(self):
+        self._configure_torch_fast_path()
         self.teacher = self._load_frozen_teacher()
         actor_critic = ActorCriticParkourStudent(
             self.env.num_obs,
@@ -24,9 +35,7 @@ class ParkourStudentRunner(OnPolicyRunner):
             **self.policy_cfg,
         ).to(self.device)
         actor_critic.load_teacher_actor_weights(self.teacher.state_dict())
-
-        alg_class = eval(self.cfg["algorithm_class_name"])
-        self.alg = alg_class(actor_critic, device=self.device, **self.alg_cfg)
+        self.alg = ParkourDistillation(actor_critic, device=self.device, **self.alg_cfg)
 
     def _init_storage(self):
         return None
@@ -35,7 +44,7 @@ class ParkourStudentRunner(OnPolicyRunner):
         from legged_gym.utils.task_registry import task_registry
 
         teacher_task = self.cfg.get("teacher_task", "go2_parkour_teacher")
-        _, teacher_train_cfg = task_registry.get_cfgs(teacher_task)
+        teacher_env_cfg, teacher_train_cfg = task_registry.get_cfgs(teacher_task)
         teacher_log_root = os.path.join(
             LEGGED_GYM_ROOT_DIR,
             "logs",
@@ -48,10 +57,23 @@ class ParkourStudentRunner(OnPolicyRunner):
         )
         print(f"Loading frozen teacher from: {teacher_ckpt}")
 
+        if teacher_env_cfg.env.num_observations != self.env.num_teacher_actor_obs:
+            raise RuntimeError(
+                "Teacher actor observation dimension mismatch: "
+                f"teacher task has {teacher_env_cfg.env.num_observations}, "
+                f"student task expects {self.env.num_teacher_actor_obs}."
+            )
+        if teacher_env_cfg.env.num_actions != self.env.num_actions:
+            raise RuntimeError(
+                "Teacher action dimension mismatch: "
+                f"teacher task has {teacher_env_cfg.env.num_actions}, "
+                f"student task expects {self.env.num_actions}."
+            )
+
         teacher = ActorCriticParkour(
-            num_actor_obs=self.env.num_teacher_actor_obs,
-            num_critic_obs=teacher_train_cfg.env.num_privileged_obs,
-            num_actions=self.env.num_actions,
+            num_actor_obs=teacher_env_cfg.env.num_observations,
+            num_critic_obs=teacher_env_cfg.env.num_privileged_obs,
+            num_actions=teacher_env_cfg.env.num_actions,
             **class_to_dict(teacher_train_cfg.policy),
         ).to(self.device)
         state = torch.load(teacher_ckpt, map_location=self.device)
@@ -65,15 +87,13 @@ class ParkourStudentRunner(OnPolicyRunner):
         with torch.no_grad():
             teacher_latent = self.teacher.infer_scandot_latent(teacher_actor_obs)
             teacher_actions = self.teacher.act_inference(teacher_actor_obs)
-        return teacher_actions, teacher_latent
+        return teacher_actions.detach(), teacher_latent.detach()
 
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         self._pre_learn(init_at_random_ep_len)
-        obs, teacher_actor_obs, obs_history, student_depth = self.env.get_observations()
-        obs = obs.to(self.device)
-        teacher_actor_obs = teacher_actor_obs.to(self.device)
-        obs_history = obs_history.to(self.device)
-        student_depth = student_depth.to(self.device)
+        obs, teacher_actor_obs, obs_history, student_depth = self._move_student_batch_to_device(
+            self.env.get_observations()
+        )
         self.alg.actor_critic.train()
 
         ep_infos = []
@@ -111,12 +131,11 @@ class ParkourStudentRunner(OnPolicyRunner):
                     student_actions
                 )
                 collection_time += time.time() - step_start
-                obs = obs.to(self.device)
-                teacher_actor_obs = teacher_actor_obs.to(self.device)
-                obs_history = obs_history.to(self.device)
-                student_depth = student_depth.to(self.device)
-                rewards = rewards.to(self.device)
-                dones = dones.to(self.device)
+                obs, teacher_actor_obs, obs_history, student_depth = self._move_student_batch_to_device(
+                    (obs, teacher_actor_obs, obs_history, student_depth)
+                )
+                rewards = rewards.to(self.device, non_blocking=True)
+                dones = dones.to(self.device, non_blocking=True)
 
                 if self.log_dir is not None:
                     if "episode" in infos:

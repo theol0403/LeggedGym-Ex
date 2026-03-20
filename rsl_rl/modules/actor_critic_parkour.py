@@ -24,9 +24,9 @@ class ActorCriticParkour(nn.Module):
         **kwargs,
     ):
         if kwargs:
-            print(
-                "ActorCriticParkour.__init__ got unexpected arguments, which will be ignored: "
-                + str([key for key in kwargs.keys()])
+            raise TypeError(
+                "ActorCriticParkour received unexpected arguments: "
+                + str(sorted(kwargs.keys()))
             )
         super().__init__()
 
@@ -75,11 +75,6 @@ class ActorCriticParkour(nn.Module):
             output_dim=1,
             activation=activation_layer,
         )
-
-        print(f"Scandot Encoder MLP: {self.scandot_encoder}")
-        print(f"Actor MLP: {self.actor}")
-        print(f"Critic MLP: {self.critic}")
-
         self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
         self.distribution = None
         Normal.set_default_validate_args = False
