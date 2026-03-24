@@ -9,31 +9,49 @@ class Go2ParkourStudent(LeggedRobotParkour):
     def _parse_cfg(self, cfg):
         super()._parse_cfg(cfg)
         self.num_teacher_actor_obs = self.cfg.env.num_teacher_actor_obs
-        self.num_history_obs = self.cfg.env.num_history_obs
+        self.num_history_obs = int(self.cfg.env.num_history_obs)
         self.num_latent_dims = self.cfg.env.num_latent_dims
         self.student_depth_shape = tuple(self.cfg.env.student_depth_shape)
+        self._depth_render_interval = max(1, int(self.cfg.sensor.depth_camera_config.decimation))
 
     def _init_buffers(self):
         self.obs_spec = ParkourObservationSpec.from_cfg(self.cfg)
         super()._init_buffers()
 
         self.teacher_actor_obs_buf = self.privileged_obs_buf
-        self.obs_history = torch.zeros(
-            self.num_envs,
-            self.num_history_obs,
-            device=self.device,
-            dtype=torch.float,
-        )
         self.student_depth = self.simulator.get_depth_images()
         if tuple(self.student_depth.shape[1:]) != self.student_depth_shape:
             raise RuntimeError(
                 f"Simulator depth shape {tuple(self.student_depth.shape[1:])} does not match "
                 f"configured student depth shape {self.student_depth_shape}."
             )
+        self._depth_rendered_this_step = False
 
-    def _push_obs_history(self):
-        self.obs_history[:, :-self.num_obs].copy_(self.obs_history[:, self.num_obs :].clone())
-        self.obs_history[:, -self.num_obs :].copy_(self.obs_buf)
+    def post_physics_step(self):
+        """Same as LeggedRobot but depth camera renders at a reduced rate."""
+        self.episode_length_buf += 1
+        self.common_step_counter += 1
+
+        self.simulator.post_physics_step()
+        self._post_physics_step_callback()
+
+        self.check_termination()
+        self.compute_reward()
+        env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
+        self.reset_idx(env_ids)
+
+        if ((self.common_step_counter - 1) % self._depth_render_interval) == 0:
+            self.simulator.update_sensors()
+            self._depth_rendered_this_step = True
+        else:
+            self._depth_rendered_this_step = False
+
+        self.compute_observations()
+
+        if self.debug:
+            self.simulator.draw_debug_vis()
+        if self.debug_sensor_images:
+            self.simulator.draw_debug_sensor_images()
 
     def compute_observations(self):
         foot_contacts = (
@@ -48,7 +66,6 @@ class Go2ParkourStudent(LeggedRobotParkour):
             scandots_cfg.clip_max,
         )
 
-        # Proprioceptive actor obs (no scandots)
         prop_parts = (
             self.commands * self.commands_scale,
             self.simulator.projected_gravity,
@@ -66,7 +83,6 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self.obs_buf = actor_obs
         self.teacher_actor_obs_buf = torch.cat(prop_parts + (scandot_obs,), dim=-1)
         self.privileged_obs_buf = self.teacher_actor_obs_buf
-        self._push_obs_history()
 
     def step(self, actions):
         actions = self._pre_sim_step(actions)
@@ -77,11 +93,18 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
         self.teacher_actor_obs_buf = torch.clip(self.teacher_actor_obs_buf, -clip_obs, clip_obs)
         self.privileged_obs_buf = self.teacher_actor_obs_buf
+
+        depth_updated = torch.full(
+            (self.num_envs,),
+            self._depth_rendered_this_step,
+            device=self.device,
+            dtype=torch.bool,
+        )
         return (
             self.obs_buf,
             self.teacher_actor_obs_buf,
-            self.obs_history,
             self.student_depth,
+            depth_updated,
             self.rew_buf,
             self.reset_buf,
             self.extras,
@@ -89,27 +112,37 @@ class Go2ParkourStudent(LeggedRobotParkour):
 
     def reset(self):
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
-        obs, teacher_actor_obs, obs_history, student_depth, _, _, _ = self.step(
+        obs, teacher_actor_obs, student_depth, depth_updated, _, _, _ = self.step(
             torch.zeros(self.num_envs, self.num_actions, device=self.device, requires_grad=False)
         )
-        return obs, teacher_actor_obs, obs_history, student_depth
+        return obs, teacher_actor_obs, student_depth, depth_updated
 
     def get_observations(self):
-        return self.obs_buf, self.teacher_actor_obs_buf, self.obs_history, self.student_depth
+        depth_updated = torch.full(
+            (self.num_envs,),
+            self._depth_rendered_this_step,
+            device=self.device,
+            dtype=torch.bool,
+        )
+        return self.obs_buf, self.teacher_actor_obs_buf, self.student_depth, depth_updated
 
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)
-        self.obs_history[env_ids] = 0.0
-        self.student_depth[env_ids] = 0.0
+        if len(env_ids) > 0:
+            self.student_depth[env_ids] = 0.0
 
     def _reset_dofs(self, env_ids):
         dof_pos = torch.zeros(
             (len(env_ids), self.num_actions),
-            dtype=torch.float, device=self.device, requires_grad=False,
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
         )
         dof_vel = torch.zeros(
             (len(env_ids), self.num_actions),
-            dtype=torch.float, device=self.device, requires_grad=False,
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
         )
         dof_pos[:, [0, 3, 6, 9]] = self.simulator.default_dof_pos[:, [0, 3, 6, 9]] + torch_rand_float(
             -0.2, 0.2, (len(env_ids), 4), self.device
@@ -139,19 +172,18 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
-        # Student obs_buf layout: commands(7) gravity(3) ang_vel(3) dof_pos(12) dof_vel(12) actions(12) contacts(4)
         offset = 0
-        noise_vec[offset:offset + 7] = 0.0  # commands
+        noise_vec[offset : offset + 7] = 0.0
         offset += 7
-        noise_vec[offset:offset + 3] = noise_scales.gravity * noise_level
+        noise_vec[offset : offset + 3] = noise_scales.gravity * noise_level
         offset += 3
-        noise_vec[offset:offset + 3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[offset : offset + 3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
         offset += 3
-        noise_vec[offset:offset + 12] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[offset : offset + 12] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
         offset += 12
-        noise_vec[offset:offset + 12] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        noise_vec[offset : offset + 12] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
         offset += 12
-        noise_vec[offset:offset + 12] = 0.0  # actions
+        noise_vec[offset : offset + 12] = 0.0
         offset += 12
-        noise_vec[offset:offset + 4] = 0.0  # foot contacts
+        noise_vec[offset : offset + 4] = 0.0
         return noise_vec

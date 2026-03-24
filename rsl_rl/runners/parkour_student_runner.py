@@ -35,7 +35,9 @@ class ParkourStudentRunner(OnPolicyRunner):
             **self.policy_cfg,
         ).to(self.device)
         actor_critic.load_teacher_actor_weights(self.teacher.state_dict())
-        self.alg = ParkourDistillation(actor_critic, device=self.device, **self.alg_cfg)
+        alg_cfg = dict(self.alg_cfg)
+        self._yaw_threshold = float(alg_cfg.pop("yaw_threshold", 0.6))
+        self.alg = ParkourDistillation(actor_critic, device=self.device, **alg_cfg)
 
     def _init_storage(self):
         return None
@@ -87,11 +89,11 @@ class ParkourStudentRunner(OnPolicyRunner):
         with torch.no_grad():
             teacher_latent = self.teacher.infer_scandot_latent(teacher_actor_obs)
             teacher_actions = self.teacher.act_inference(teacher_actor_obs)
-        return teacher_actions.detach(), teacher_latent.detach()
+        return teacher_actions, teacher_latent
 
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         self._pre_learn(init_at_random_ep_len)
-        obs, teacher_actor_obs, obs_history, student_depth = self._move_student_batch_to_device(
+        obs, teacher_actor_obs, student_depth, depth_updated = self._move_student_batch_to_device(
             self.env.get_observations()
         )
         self.alg.actor_critic.train()
@@ -104,38 +106,52 @@ class ParkourStudentRunner(OnPolicyRunner):
 
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
-            collection_time = 0.0
-            learn_time = 0.0
-            total_loss = 0.0
-            action_loss = 0.0
-            latent_loss = 0.0
+            self.alg.actor_critic.detach_gru_hidden()
+            self.alg.begin_rollout()
 
+            iter_start = time.time()
             for _ in range(self.num_steps_per_env):
                 teacher_actions, teacher_latent = self._teacher_targets(teacher_actor_obs)
 
-                learn_start = time.time()
-                student_actions, metrics = self.alg.update(
-                    observations=obs,
-                    student_depth=student_depth,
-                    obs_history=obs_history,
-                    teacher_actions=teacher_actions,
-                    teacher_latent=teacher_latent,
+                latent, _yaw_raw, yaw_scaled = self.alg.actor_critic.forward_depth(student_depth, obs)
+                oracle_heading = obs[:, 4:6]
+                obs_actor = self.alg.actor_critic.apply_mts_yaw_to_obs(
+                    obs, yaw_scaled, oracle_heading, self._yaw_threshold
                 )
-                learn_time += time.time() - learn_start
-                total_loss += metrics["loss"]
-                action_loss += metrics["action_loss"]
-                latent_loss += metrics["latent_loss"]
+                student_actions = self.alg.actor_critic.actor_from_latent(obs_actor, latent)
 
-                step_start = time.time()
-                obs, teacher_actor_obs, obs_history, student_depth, rewards, dones, infos = self.env.step(
-                    student_actions
+                self.alg.accumulate_step(
+                    student_actions=student_actions,
+                    teacher_actions=teacher_actions,
+                    student_latent=latent,
+                    teacher_latent=teacher_latent,
+                    predicted_yaw=yaw_scaled,
+                    oracle_yaw=oracle_heading,
+                    num_steps=self.num_steps_per_env,
                 )
-                collection_time += time.time() - step_start
-                obs, teacher_actor_obs, obs_history, student_depth = self._move_student_batch_to_device(
-                    (obs, teacher_actor_obs, obs_history, student_depth)
+
+                # GRU hidden state's graph was freed by backward(); detach for next step
+                self.alg.actor_critic.detach_gru_hidden()
+
+                (
+                    obs,
+                    teacher_actor_obs,
+                    student_depth,
+                    _depth_updated,
+                    rewards,
+                    dones,
+                    infos,
+                ) = self.env.step(student_actions.detach())
+
+                obs, teacher_actor_obs, student_depth = self._move_student_batch_to_device(
+                    (obs, teacher_actor_obs, student_depth)
                 )
                 rewards = rewards.to(self.device, non_blocking=True)
                 dones = dones.to(self.device, non_blocking=True)
+
+                done_ids = (dones > 0).nonzero(as_tuple=False).flatten()
+                if len(done_ids) > 0:
+                    self.alg.actor_critic.reset_gru(done_ids)
 
                 if self.log_dir is not None:
                     if "episode" in infos:
@@ -148,23 +164,22 @@ class ParkourStudentRunner(OnPolicyRunner):
                     cur_reward_sum[new_ids] = 0
                     cur_episode_length[new_ids] = 0
 
-            mean_total_loss = total_loss / self.num_steps_per_env
-            mean_action_loss = action_loss / self.num_steps_per_env
-            mean_latent_loss = latent_loss / self.num_steps_per_env
+            metrics = self.alg.finish_rollout()
+            iteration_time = time.time() - iter_start
 
             if self.log_dir is not None:
                 self.log(
                     {
                         "it": it,
                         "num_learning_iterations": num_learning_iterations,
-                        "collection_time": collection_time,
-                        "learn_time": learn_time,
+                        "iteration_time": iteration_time,
                         "ep_infos": ep_infos,
                         "rewbuffer": rewbuffer,
                         "lenbuffer": lenbuffer,
-                        "mean_total_loss": mean_total_loss,
-                        "mean_action_loss": mean_action_loss,
-                        "mean_latent_loss": mean_latent_loss,
+                        "mean_total_loss": metrics["loss"],
+                        "mean_action_loss": metrics["action_loss"],
+                        "mean_latent_loss": metrics["latent_loss"],
+                        "mean_yaw_loss": metrics["yaw_loss"],
                     }
                 )
                 self._maybe_save_best_success_model(it, ep_infos)
@@ -177,8 +192,8 @@ class ParkourStudentRunner(OnPolicyRunner):
 
     def log(self, locs, width=80, pad=35):
         self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
-        self.tot_time += locs["collection_time"] + locs["learn_time"]
-        iteration_time = locs["collection_time"] + locs["learn_time"]
+        iteration_time = locs["iteration_time"]
+        self.tot_time += iteration_time
 
         ep_string = ""
         if locs["ep_infos"]:
@@ -199,10 +214,9 @@ class ParkourStudentRunner(OnPolicyRunner):
         self.writer.add_scalar("Loss/total", locs["mean_total_loss"], locs["it"])
         self.writer.add_scalar("Loss/action", locs["mean_action_loss"], locs["it"])
         self.writer.add_scalar("Loss/latent", locs["mean_latent_loss"], locs["it"])
+        self.writer.add_scalar("Loss/yaw", locs["mean_yaw_loss"], locs["it"])
         self.writer.add_scalar("Loss/learning_rate", self.alg.learning_rate, locs["it"])
         self.writer.add_scalar("Perf/total_fps", fps, locs["it"])
-        self.writer.add_scalar("Perf/collection time", locs["collection_time"], locs["it"])
-        self.writer.add_scalar("Perf/learning_time", locs["learn_time"], locs["it"])
         if len(locs["rewbuffer"]) > 0:
             self.writer.add_scalar("Train/mean_reward", statistics.mean(locs["rewbuffer"]), locs["it"])
             self.writer.add_scalar("Train/mean_episode_length", statistics.mean(locs["lenbuffer"]), locs["it"])
@@ -214,11 +228,11 @@ class ParkourStudentRunner(OnPolicyRunner):
         log_string = (
             f"{'#' * width}\n"
             f"{heading.center(width, ' ')}\n\n"
-            f"{'Computation:':>{pad}} {fps:.0f} steps/s (collection: {locs['collection_time']:.3f}s, "
-            f"learning {locs['learn_time']:.3f}s)\n"
+            f"{'Computation:':>{pad}} {fps:.0f} steps/s (iter: {iteration_time:.3f}s)\n"
             f"{'Total loss:':>{pad}} {locs['mean_total_loss']:.4f}\n"
             f"{'Action loss:':>{pad}} {locs['mean_action_loss']:.4f}\n"
             f"{'Latent loss:':>{pad}} {locs['mean_latent_loss']:.4f}\n"
+            f"{'Yaw loss:':>{pad}} {locs['mean_yaw_loss']:.4f}\n"
         )
         if len(locs["rewbuffer"]) > 0:
             log_string += (

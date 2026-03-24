@@ -73,7 +73,7 @@ class Terrain:
             self.parkour_curriculum()
         elif cfg.curriculum:
             print("Generating curriculum terrain...")
-            self.curiculum()
+            self.curriculum()
         elif cfg.selected:
             print("Generating selected terrain...")
             self.selected_terrain()
@@ -101,7 +101,7 @@ class Terrain:
             terrain = self.make_terrain(choice, difficulty)
             self.add_terrain_to_map(terrain, i, j)
         
-    def curiculum(self):
+    def curriculum(self):
         for j in range(self.cfg.num_cols):     # Y
             for i in range(self.cfg.num_rows): # X
                 difficulty = i / self.cfg.num_rows      # add difficulty along X axis, row

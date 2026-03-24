@@ -289,8 +289,8 @@ class PolicyExporterParkourStudent(torch.nn.Module):
         super().__init__()
         self.actor_critic = copy.deepcopy(actor_critic)
 
-    def forward(self, obs, student_depth, obs_history):
-        return self.actor_critic.act_inference(obs, student_depth, obs_history)
+    def forward(self, obs, student_depth):
+        return self.actor_critic.act_inference(obs, student_depth)
 
     def export(self, path, env_cfg, export_onnx=False, train_cfg=None):
         os.makedirs(path, exist_ok=True)
@@ -303,14 +303,13 @@ class PolicyExporterParkourStudent(torch.nn.Module):
         if export_onnx:
             filename = str(train_cfg.runner.load_run) + "_ite" + str(train_cfg.runner.checkpoint) + ".onnx"
             path_onnx = os.path.join(path, filename)
-            input_names = ["obs_input", "student_depth_input", "obs_history_input"]
+            input_names = ["obs_input", "student_depth_input"]
             output_names = ["nn_output"]
             dummy_obs = torch.randn(1, env_cfg.env.num_observations)
             dummy_depth = torch.randn(1, *env_cfg.env.student_depth_shape)
-            dummy_history = torch.randn(1, env_cfg.env.num_history_obs)
             torch.onnx.export(
                 self,
-                (dummy_obs, dummy_depth, dummy_history),
+                (dummy_obs, dummy_depth),
                 path_onnx,
                 verbose=True,
                 export_params=True,

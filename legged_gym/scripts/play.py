@@ -145,7 +145,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
     if runner_class_name == "TSRunner":
         obs_buf, privileged_obs_buf, obs_history, critic_obs = env.get_observations()
     elif runner_class_name == "ParkourStudentRunner":
-        obs_buf, teacher_actor_obs, obs_history, student_depth = env.get_observations()
+        obs_buf, teacher_actor_obs, student_depth, _depth_updated = env.get_observations()
     elif runner_class_name == "EERunner":
         estimator_features, _, _ = env.get_observations()
     elif runner_class_name == "DreamWaQRunner":
@@ -174,7 +174,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
                 actions = policy(obs_buf, obs_history)
         elif runner_class_name == "ParkourStudentRunner":
             with torch.inference_mode():
-                actions = policy(obs_buf, student_depth, obs_history)
+                actions = policy(obs_buf, student_depth)
         elif runner_class_name == "EERunner":
             with torch.inference_mode():
                 actions = policy(estimator_features.detach())
@@ -191,7 +191,9 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
         if runner_class_name == "TSRunner":
             obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "ParkourStudentRunner":
-            obs_buf, teacher_actor_obs, obs_history, student_depth, rews, dones, infos = env.step(actions.detach())
+            obs_buf, teacher_actor_obs, student_depth, _depth_updated, rews, dones, infos = env.step(
+                actions.detach()
+            )
         elif runner_class_name == "EERunner":
             estimator_features, estimator_labels, _, rews, dones, infos = env.step(actions.detach())
         elif runner_class_name == "DreamWaQRunner":

@@ -1,11 +1,96 @@
+"""Student policy: depth encoder (CNN + GRU) replaces teacher scandot encoder."""
+
+from __future__ import annotations
+
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 
 from .actor_critic import get_activation
+from .mlp_utils import build_mlp
+
+
+class DepthBackbone58x87(nn.Module):
+    """CNN depth encoder matching Extreme Parkour (58 x 87) -> 32-dim features."""
+
+    def __init__(self, output_dim=32, activation=nn.ELU):
+        super().__init__()
+        act = activation()
+        self.net = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=5),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            act,
+            nn.Conv2d(32, 64, kernel_size=3),
+            act,
+            nn.Flatten(),
+            nn.Linear(64 * 25 * 39, 128),
+            act,
+            nn.Linear(128, output_dim),
+        )
+
+    def forward(self, depth_bchw: torch.Tensor) -> torch.Tensor:
+        """depth_bchw: (B, 1, H, W) with H=58, W=87."""
+        return self.net(depth_bchw)
+
+
+class RecurrentDepthEncoder(nn.Module):
+    """CNN + proprio fusion + GRU + Tanh output (latent + yaw), matching the paper."""
+
+    def __init__(
+        self,
+        num_proprio_for_combo: int,
+        depth_backbone_output_dim: int = 32,
+        gru_hidden_dim: int = 512,
+        latent_dim: int = 32,
+        yaw_dim: int = 2,
+        activation=nn.ELU,
+    ):
+        super().__init__()
+        act = activation()
+        self.latent_dim = latent_dim
+        self.yaw_dim = yaw_dim
+        self.gru_hidden_dim = gru_hidden_dim
+        self.depth_backbone = DepthBackbone58x87(output_dim=depth_backbone_output_dim, activation=activation)
+        self.combination_mlp = nn.Sequential(
+            nn.Linear(depth_backbone_output_dim + num_proprio_for_combo, 128),
+            act,
+            nn.Linear(128, 32),
+        )
+        self.rnn = nn.GRU(input_size=32, hidden_size=gru_hidden_dim, num_layers=1, batch_first=True)
+        self.output_mlp = nn.Sequential(
+            nn.Linear(gru_hidden_dim, latent_dim + yaw_dim),
+            nn.Tanh(),
+        )
+
+    def init_hidden(self, batch_size: int, device, dtype) -> torch.Tensor:
+        return torch.zeros(1, batch_size, self.gru_hidden_dim, device=device, dtype=dtype)
+
+    def forward(
+        self,
+        depth_bchw: torch.Tensor,
+        proprio_masked: torch.Tensor,
+        hidden: Optional[torch.Tensor],
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Returns:
+            latent (B, latent_dim), yaw_raw (B, yaw_dim) in [-1, 1] from Tanh,
+            new_hidden (1, B, gru_hidden_dim)
+        """
+        backbone_feat = self.depth_backbone(depth_bchw)
+        combo = self.combination_mlp(torch.cat((backbone_feat, proprio_masked), dim=-1))
+        seq = combo.unsqueeze(1)
+        out, new_hidden = self.rnn(seq, hidden)
+        flat = self.output_mlp(out.squeeze(1))
+        latent = flat[:, : self.latent_dim]
+        yaw_raw = flat[:, self.latent_dim :]
+        return latent, yaw_raw, new_hidden
 
 
 class ActorCriticParkourStudent(nn.Module):
-    is_recurrent = False
+    """Student actor: proprio + depth latent (replaces scandot latent). GRU carries temporal state."""
+
+    is_recurrent = True
 
     def __init__(
         self,
@@ -14,20 +99,20 @@ class ActorCriticParkourStudent(nn.Module):
         num_teacher_actor_obs,
         num_history_obs,
         num_latent_dims,
-        student_depth_shape=(2, 58, 87),
-        proprio_history_frames=10,
-        proprio_history_hidden_dims=[128, 64],
-        depth_encoder_hidden_dims=[128, 64],
-        student_latent_hidden_dims=[256, 128],
-        actor_hidden_dims=[512, 256, 128],
+        student_depth_shape=(1, 58, 87),
+        depth_backbone_output_dim=32,
+        gru_hidden_dim=512,
+        yaw_output_dim=2,
+        yaw_scale=1.5,
+        heading_command_indices=(4, 5),
+        actor_hidden_dims=(512, 256, 128),
         activation="elu",
         clip_actions=100.0,
         **kwargs,
     ):
         if kwargs:
             raise TypeError(
-                "ActorCriticParkourStudent received unexpected arguments: "
-                + str(sorted(kwargs.keys()))
+                "ActorCriticParkourStudent received unexpected arguments: " + str(sorted(kwargs.keys()))
             )
         super().__init__()
 
@@ -35,39 +120,35 @@ class ActorCriticParkourStudent(nn.Module):
         self.num_obs = int(num_actor_obs)
         self.num_teacher_actor_obs = int(num_teacher_actor_obs)
         self.num_history_obs = int(num_history_obs)
-        self.num_latent_dims = int(num_latent_dims)
-        self.student_depth_shape = tuple(student_depth_shape)
-        self.proprio_history_frames = int(proprio_history_frames)
-
-        if self.num_history_obs != self.num_obs * self.proprio_history_frames:
+        if self.num_history_obs != 0:
             raise ValueError(
-                "ActorCriticParkourStudent expects obs_history to be "
-                f"{self.num_obs} * {self.proprio_history_frames}, got {self.num_history_obs}."
+                "ActorCriticParkourStudent no longer uses obs_history; set env.num_history_obs to 0."
             )
 
-        history_latent_dim = proprio_history_hidden_dims[-1]
-        depth_latent_dim = depth_encoder_hidden_dims[-1]
+        self.num_latent_dims = int(num_latent_dims)
+        self.student_depth_shape = tuple(student_depth_shape)
+        self.yaw_output_dim = int(yaw_output_dim)
+        self.yaw_scale = float(yaw_scale)
+        self.heading_command_indices = tuple(heading_command_indices)
 
-        self.proprio_history_encoder = self._build_history_encoder(
-            num_obs=self.num_obs,
-            num_frames=self.proprio_history_frames,
-            hidden_dims=proprio_history_hidden_dims,
-            activation=activation_layer,
+        _, h, w = self.student_depth_shape
+        if h != 58 or w != 87:
+            raise ValueError(
+                f"DepthBackbone58x87 expects shape (C,58,87); got student_depth_shape={self.student_depth_shape}."
+            )
+
+        self.recurrent_depth = RecurrentDepthEncoder(
+            num_proprio_for_combo=self.num_obs,
+            depth_backbone_output_dim=depth_backbone_output_dim,
+            gru_hidden_dim=gru_hidden_dim,
+            latent_dim=self.num_latent_dims,
+            yaw_dim=self.yaw_output_dim,
+            activation=type(activation_layer),
         )
-        self.depth_encoder = self._build_depth_encoder(
-            depth_shape=self.student_depth_shape,
-            hidden_dims=depth_encoder_hidden_dims,
-            activation=activation_layer,
-        )
-        self.student_latent_encoder = self._build_mlp(
-            input_dim=self.num_obs + history_latent_dim + depth_latent_dim,
-            hidden_dims=student_latent_hidden_dims,
-            output_dim=self.num_latent_dims,
-            activation=activation_layer,
-        )
-        self.actor = self._build_mlp(
+
+        self.actor = build_mlp(
             input_dim=self.num_obs + self.num_latent_dims,
-            hidden_dims=actor_hidden_dims,
+            hidden_dims=list(actor_hidden_dims),
             output_dim=num_actions,
             activation=activation_layer,
         )
@@ -76,85 +157,76 @@ class ActorCriticParkourStudent(nn.Module):
             nn.Hardtanh(min_val=-clip_actions, max_val=clip_actions),
         )
 
-    @staticmethod
-    def _build_mlp(input_dim, hidden_dims, output_dim, activation, final_activation=False):
-        layers = []
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            layers.append(nn.Linear(prev_dim, hidden_dim))
-            layers.append(type(activation)())
-            prev_dim = hidden_dim
-        if output_dim is not None:
-            layers.append(nn.Linear(prev_dim, output_dim))
-            if final_activation:
-                layers.append(type(activation)())
-        elif not final_activation and layers:
-            layers.pop()
-        return nn.Sequential(*layers)
+        self.register_buffer("_gru_hidden", torch.empty(0), persistent=False)
 
-    @staticmethod
-    def _build_depth_encoder(depth_shape, hidden_dims, activation):
-        in_channels, height, width = depth_shape
-        conv_layers = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=5, stride=2),
-            type(activation)(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2),
-            type(activation)(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=2),
-            type(activation)(),
-            nn.Flatten(),
-        )
-        with torch.no_grad():
-            dummy = torch.zeros(1, in_channels, height, width)
-            flat_size = conv_layers(dummy).shape[1]
-        projection_layers = []
-        prev_dim = flat_size
-        for hidden_dim in hidden_dims:
-            projection_layers.append(nn.Linear(prev_dim, hidden_dim))
-            projection_layers.append(type(activation)())
-            prev_dim = hidden_dim
-        return nn.Sequential(conv_layers, *projection_layers)
+    def _ensure_hidden(self, batch: int, device, dtype) -> torch.Tensor:
+        if self._gru_hidden.numel() == 0 or self._gru_hidden.shape[1] != batch:
+            self._gru_hidden = self.recurrent_depth.init_hidden(batch, device, dtype)
+        return self._gru_hidden
 
-    @staticmethod
-    def _build_history_encoder(num_obs, num_frames, hidden_dims, activation):
-        conv_stack = nn.Sequential(
-            nn.Conv1d(num_obs, 64, kernel_size=3, padding=1),
-            type(activation)(),
-            nn.Conv1d(64, 64, kernel_size=3, padding=1),
-            type(activation)(),
-            nn.Flatten(),
-        )
-        with torch.no_grad():
-            dummy = torch.zeros(1, num_obs, num_frames)
-            flat_size = conv_stack(dummy).shape[1]
-        projection_layers = []
-        prev_dim = flat_size
-        for hidden_dim in hidden_dims:
-            projection_layers.append(nn.Linear(prev_dim, hidden_dim))
-            projection_layers.append(type(activation)())
-            prev_dim = hidden_dim
-        return nn.Sequential(conv_stack, *projection_layers)
+    def reset_gru(self, env_ids: Optional[torch.Tensor] = None):
+        """Zero GRU hidden for given env indices (or all)."""
+        if self._gru_hidden.numel() == 0:
+            return
+        if env_ids is None or len(env_ids) == 0:
+            self._gru_hidden.zero_()
+        else:
+            self._gru_hidden[:, env_ids, :] = 0.0
 
-    def _reshape_obs_history(self, obs_history):
-        return obs_history.view(-1, self.proprio_history_frames, self.num_obs).transpose(1, 2)
+    def detach_gru_hidden(self):
+        if self._gru_hidden.numel() > 0:
+            self._gru_hidden = self._gru_hidden.detach()
 
-    def infer_student_latent(self, observations, student_depth, obs_history):
-        depth_latent = self.depth_encoder(student_depth)
-        history_latent = self.proprio_history_encoder(self._reshape_obs_history(obs_history))
-        encoder_input = torch.cat((observations, history_latent, depth_latent), dim=-1)
-        return self.student_latent_encoder(encoder_input)
+    def proprio_for_depth_encoder(self, observations: torch.Tensor) -> torch.Tensor:
+        """Mask heading errors (indices 4:6) so depth must predict yaw."""
+        out = observations.clone()
+        out[:, self.heading_command_indices[0] : self.heading_command_indices[1] + 1] = 0.0
+        return out
 
-    def actor_from_latent(self, observations, student_latent):
+    def predicted_yaw_scaled(self, yaw_raw: torch.Tensor) -> torch.Tensor:
+        return self.yaw_scale * yaw_raw
+
+    def apply_mts_yaw_to_obs(
+        self,
+        observations: torch.Tensor,
+        yaw_scaled: torch.Tensor,
+        oracle_heading: torch.Tensor,
+        yaw_threshold: float,
+    ) -> torch.Tensor:
+        """Mixture of Teacher and Student: use predicted yaw in obs when close to oracle."""
+        out = observations.clone()
+        diff = torch.norm(yaw_scaled - oracle_heading, dim=-1)
+        ok = diff < yaw_threshold
+        idx0, idx1 = self.heading_command_indices
+        out[ok, idx0] = yaw_scaled[ok, 0]
+        out[ok, idx1] = yaw_scaled[ok, 1]
+        return out
+
+    def forward_depth(
+        self,
+        student_depth: torch.Tensor,
+        observations: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        student_depth: (B, 1, 58, 87)
+        Returns latent, yaw_raw (Tanh), yaw_scaled (for loss / obs).
+        """
+        proprio_masked = self.proprio_for_depth_encoder(observations)
+        hidden = self._ensure_hidden(observations.shape[0], observations.device, observations.dtype)
+        latent, yaw_raw, new_h = self.recurrent_depth(student_depth, proprio_masked, hidden)
+        self._gru_hidden = new_h
+        yaw_scaled = self.predicted_yaw_scaled(yaw_raw)
+        return latent, yaw_raw, yaw_scaled
+
+    def actor_from_latent(self, observations: torch.Tensor, student_latent: torch.Tensor) -> torch.Tensor:
         return self.actor(torch.cat((observations, student_latent), dim=-1))
 
-    def act(self, observations, student_depth, obs_history):
-        return self.actor_from_latent(
-            observations,
-            self.infer_student_latent(observations, student_depth, obs_history),
-        )
+    def act(self, observations: torch.Tensor, student_depth: torch.Tensor) -> torch.Tensor:
+        latent, _, _ = self.forward_depth(student_depth, observations)
+        return self.actor_from_latent(observations, latent)
 
-    def act_inference(self, observations, student_depth, obs_history):
-        return self.act(observations, student_depth, obs_history)
+    def act_inference(self, observations: torch.Tensor, student_depth: torch.Tensor) -> torch.Tensor:
+        return self.act(observations, student_depth)
 
     def load_teacher_actor_weights(self, teacher_state_dict):
         actor_state = {

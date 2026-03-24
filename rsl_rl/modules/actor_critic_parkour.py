@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.distributions import Normal
 
 from .actor_critic import get_activation
+from .mlp_utils import build_mlp
 
 
 class ActorCriticParkour(nn.Module):
@@ -50,7 +51,7 @@ class ActorCriticParkour(nn.Module):
         self.scandot_end_idx = scandot_start_idx + self.num_scandots
         self.num_prop_obs = int(num_actor_obs - num_scandots)
 
-        self.scandot_encoder = self._build_mlp(
+        self.scandot_encoder = build_mlp(
             input_dim=self.num_scandots,
             hidden_dims=scandot_encoder_hidden_dims,
             output_dim=None,
@@ -59,7 +60,7 @@ class ActorCriticParkour(nn.Module):
         )
         self.scandot_latent_dim = scandot_encoder_hidden_dims[-1]
 
-        self.actor = self._build_mlp(
+        self.actor = build_mlp(
             input_dim=self.num_prop_obs + self.scandot_latent_dim,
             hidden_dims=actor_hidden_dims,
             output_dim=num_actions,
@@ -69,7 +70,7 @@ class ActorCriticParkour(nn.Module):
             "clip_actions",
             nn.Hardtanh(min_val=-clip_actions, max_val=clip_actions),
         )
-        self.critic = self._build_mlp(
+        self.critic = build_mlp(
             input_dim=num_critic_obs,
             hidden_dims=critic_hidden_dims,
             output_dim=1,
@@ -78,22 +79,6 @@ class ActorCriticParkour(nn.Module):
         self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
         self.distribution = None
         Normal.set_default_validate_args = False
-
-    @staticmethod
-    def _build_mlp(input_dim, hidden_dims, output_dim, activation, final_activation=False):
-        layers = []
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            layers.append(nn.Linear(prev_dim, hidden_dim))
-            layers.append(type(activation)())
-            prev_dim = hidden_dim
-        if output_dim is not None:
-            layers.append(nn.Linear(prev_dim, output_dim))
-            if final_activation:
-                layers.append(type(activation)())
-        elif not final_activation and layers:
-            layers.pop()
-        return nn.Sequential(*layers)
 
     def reset(self, dones=None):
         pass
