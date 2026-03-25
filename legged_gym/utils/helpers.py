@@ -190,6 +190,14 @@ def get_args():
                         help="inferred-depth model size; defaults to the config value when omitted")
     parser.add_argument('--depth_update_interval', type=int, default=1,
                         help="run inferred-depth updates every N rendered debug frames")
+    parser.add_argument(
+        '--depth_ablation',
+        type=str,
+        default='none',
+        choices=['none', 'zero', 'noise', 'shuffle'],
+        help="Parkour student: ablate depth before policy (none|zero|noise|shuffle). "
+        "Use for quick checks that behavior uses the depth stream.",
+    )
     parser.add_argument('--load_run',       type=str, default=None, help="run to load, default: last run")
     parser.add_argument('--ckpt',           type=int, default=-1, help="checkpoint to load, -1 means latest")
     parser.add_argument('--command_mode',   type=str, default='auto', choices=['auto', 'keyboard', 'joystick'],
@@ -208,6 +216,12 @@ def get_args():
                         help="force the Genesis parkour task to sample a single obstacle family")
     parser.add_argument('--parkour_force_row', type=int, default=None,
                         help="force the Genesis parkour task to sample a single curriculum row")
+    parser.add_argument('--parkour_gauntlet', action='store_true', default=False,
+                        help="activate gauntlet evaluation mode: extended corridor with many sequential obstacles")
+    parser.add_argument('--gauntlet_obstacles_per_family', type=int, default=4,
+                        help="number of obstacles per family in gauntlet mode (default: 4)")
+    parser.add_argument('--gauntlet_difficulty', type=int, default=3,
+                        help="difficulty row (0-3) used for obstacle parameters in gauntlet mode (default: 3)")
     parser.add_argument('--teacher_task',    type=str, default=None,
                         help="teacher task used to resolve the frozen parkour teacher checkpoint")
     parser.add_argument('--teacher_load_run', type=str, default=None,

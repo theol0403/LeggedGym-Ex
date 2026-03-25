@@ -63,7 +63,9 @@ class RecurrentDepthEncoder(nn.Module):
             nn.Tanh(),
         )
 
-    def init_hidden(self, batch_size: int, device, dtype) -> torch.Tensor:
+    def init_hidden(
+        self, batch_size: int, device: torch.device, dtype: torch.dtype
+    ) -> torch.Tensor:
         return torch.zeros(1, batch_size, self.gru_hidden_dim, device=device, dtype=dtype)
 
     def forward(
@@ -151,7 +153,9 @@ class ActorCriticParkourStudent(nn.Module):
 
         self.register_buffer("_gru_hidden", torch.empty(0), persistent=False)
 
-    def _ensure_hidden(self, batch: int, device, dtype) -> torch.Tensor:
+    def _ensure_hidden(
+        self, batch: int, device: torch.device, dtype: torch.dtype
+    ) -> torch.Tensor:
         if self._gru_hidden.numel() == 0 or self._gru_hidden.shape[1] != batch:
             self._gru_hidden = self.recurrent_depth.init_hidden(batch, device, dtype)
         return self._gru_hidden

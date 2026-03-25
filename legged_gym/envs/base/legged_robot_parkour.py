@@ -468,8 +468,10 @@ class LeggedRobotParkour(LeggedRobot):
         py = torch.clamp(py, 0, self.simulator.lane_edge_masks.shape[2] - 1)
         env_ids = self.env_ids_long.unsqueeze(1).expand_as(px)
         edge_hits = self.simulator.lane_edge_masks[env_ids, px, py]
-        obstacle_family_mask = (self.simulator.lane_family == PARKOUR_FAMILY_IDS["hurdle_block"]) | (
-            self.simulator.lane_family == PARKOUR_FAMILY_IDS["gap"]
+        obstacle_family_mask = (
+            (self.simulator.lane_family == PARKOUR_FAMILY_IDS["hurdle_block"])
+            | (self.simulator.lane_family == PARKOUR_FAMILY_IDS["gap"])
+            | (self.simulator.lane_family == -1)  # mixed gauntlet
         )
         row_mask = self.simulator.lane_difficulty_row >= 1
         active_mask = (obstacle_family_mask & row_mask).float().unsqueeze(1)

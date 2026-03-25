@@ -111,10 +111,25 @@ class Terrain:
                 self.add_terrain_to_map(terrain, i, j)
 
     def parkour_curriculum(self):
+        if self.gauntlet_mode:
+            self._build_gauntlet()
+            return
         for j, (family, variant_id) in enumerate(self.parkour_column_specs):
             for i in range(self.cfg.num_rows):
                 terrain, metadata = self._parkour_lane_builder.build_lane(family, i, variant_id=variant_id)
                 self.add_terrain_to_map(terrain, i, j, metadata=metadata)
+
+    def _build_gauntlet(self):
+        families = list(getattr(self.parkour_cfg, "gauntlet_active_families", self.parkour_cfg.families))
+        obs_per_family = int(getattr(self.parkour_cfg, "gauntlet_obstacles_per_family_count", 4))
+        difficulty = int(getattr(self.parkour_cfg, "gauntlet_difficulty", 3))
+        print(f"  Gauntlet: {obs_per_family} x {families} at difficulty {difficulty}")
+        terrain, metadata = self._parkour_lane_builder.build_gauntlet_lane(
+            families=families,
+            obstacles_per_family=obs_per_family,
+            difficulty_row=difficulty,
+        )
+        self.add_terrain_to_map(terrain, row=0, col=0, metadata=metadata)
 
     def selected_terrain(self):
         terrain_kwargs = dict(self.cfg.terrain_kwargs)
@@ -281,26 +296,33 @@ class Terrain:
             self.parkour_column_specs = []
             return
 
-        base_family_names = list(self.parkour_cfg.families)
-        variants_per_family = max(1, int(getattr(self.parkour_cfg, "variants_per_family", 1)))
+        self.gauntlet_mode = bool(getattr(self.parkour_cfg, "gauntlet_mode", False))
 
-        self.parkour_column_specs = []
-        self.family_variant_col_indices = {}
-        self.family_bucket_ids = {}
-        for family_name in base_family_names:
-            self.family_bucket_ids[family_name] = len(self.family_bucket_ids)
-            self.family_variant_col_indices[family_name] = []
-            for variant_id in range(variants_per_family):
-                col_idx = len(self.parkour_column_specs)
-                self.parkour_column_specs.append((family_name, variant_id))
-                self.family_variant_col_indices[family_name].append(col_idx)
+        if self.gauntlet_mode:
+            self.parkour_column_specs = [("gauntlet", 0)]
+            self.family_variant_col_indices = {"gauntlet": [0]}
+            self.family_bucket_ids = {"gauntlet": 0}
+        else:
+            base_family_names = list(self.parkour_cfg.families)
+            variants_per_family = max(1, int(getattr(self.parkour_cfg, "variants_per_family", 1)))
 
-        if self.cfg.num_cols != len(self.parkour_column_specs):
-            raise ValueError(
-                "Parkour terrain expects cfg.num_cols to match cfg.parkour.families * "
-                "terrain.parkour.variants_per_family. "
-                f"Got num_cols={self.cfg.num_cols}, column_specs={self.parkour_column_specs}."
-            )
+            self.parkour_column_specs = []
+            self.family_variant_col_indices = {}
+            self.family_bucket_ids = {}
+            for family_name in base_family_names:
+                self.family_bucket_ids[family_name] = len(self.family_bucket_ids)
+                self.family_variant_col_indices[family_name] = []
+                for variant_id in range(variants_per_family):
+                    col_idx = len(self.parkour_column_specs)
+                    self.parkour_column_specs.append((family_name, variant_id))
+                    self.family_variant_col_indices[family_name].append(col_idx)
+
+            if self.cfg.num_cols != len(self.parkour_column_specs):
+                raise ValueError(
+                    "Parkour terrain expects cfg.num_cols to match cfg.parkour.families * "
+                    "terrain.parkour.variants_per_family. "
+                    f"Got num_cols={self.cfg.num_cols}, column_specs={self.parkour_column_specs}."
+                )
         self.max_waypoints = int(self.parkour_cfg.max_waypoints)
         self.max_obstacles = int(self.parkour_cfg.max_obstacles)
         self.max_sections = int(self.parkour_cfg.max_sections)

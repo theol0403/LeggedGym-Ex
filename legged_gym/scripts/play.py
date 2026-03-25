@@ -5,6 +5,7 @@ import os
 
 from legged_gym.envs import *
 from legged_gym.utils import *
+from legged_gym.utils.student_depth_ablation import apply_student_depth_ablation
 
 import numpy as np
 import torch
@@ -40,7 +41,8 @@ def override_configs(env_cfg, train_cfg, args):
     if enable_rgb_debug:
         env_cfg.sensor.add_rgb = True
         _copy_camera_debug_config(env_cfg.sensor.rgb_camera_config, env_cfg.sensor.depth_camera_config)
-    env_cfg.sensor.depth_estimation.enabled = enable_inferred_depth_debug
+    if enable_inferred_depth_debug:
+        env_cfg.sensor.depth_estimation.enabled = True
     if args.depth_model_type is not None:
         env_cfg.sensor.depth_estimation.model_type = args.depth_model_type
     if args.depth_model_size is not None:
@@ -59,6 +61,30 @@ def override_configs(env_cfg, train_cfg, args):
                 env_cfg.terrain.parkour.force_family = args.parkour_force_family
             if args.parkour_force_row is not None:
                 env_cfg.terrain.parkour.force_row = args.parkour_force_row
+            if getattr(args, "parkour_gauntlet", False):
+                pk = env_cfg.terrain.parkour
+                obs_per_family = getattr(args, "gauntlet_obstacles_per_family", 4)
+                difficulty = min(max(getattr(args, "gauntlet_difficulty", 3), 0), 3)
+                if pk.force_family is not None:
+                    active_families = [pk.force_family]
+                else:
+                    active_families = list(pk.families)
+                total_obstacles = obs_per_family * len(active_families)
+                new_length = total_obstacles * 3.0 + 6.0
+                env_cfg.terrain.terrain_length = new_length
+                env_cfg.terrain.num_rows = 1
+                env_cfg.terrain.num_cols = 1
+                pk.variants_per_family = 1
+                pk.max_obstacles = total_obstacles
+                pk.max_waypoints = total_obstacles + 1
+                pk.max_sections = total_obstacles
+                pk.force_row = 0
+                pk.force_family = None  # consumed into gauntlet_active_families
+                pk.gauntlet_mode = True
+                pk.gauntlet_active_families = active_families
+                pk.gauntlet_obstacles_per_family_count = obs_per_family
+                pk.gauntlet_difficulty = difficulty
+                env_cfg.env.episode_length_s = new_length * 2.0
             if getattr(env_cfg.terrain.parkour, "force_row", None) is None:
                 env_cfg.terrain.parkour.force_row = 0
             return
@@ -173,8 +199,9 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
             with torch.inference_mode():
                 actions = policy(obs_buf, obs_history)
         elif runner_class_name == "ParkourStudentRunner":
+            depth_in = apply_student_depth_ablation(student_depth, args.depth_ablation)
             with torch.inference_mode():
-                actions = policy(obs_buf, student_depth)
+                actions = policy(obs_buf, depth_in)
         elif runner_class_name == "EERunner":
             with torch.inference_mode():
                 actions = policy(estimator_features.detach())
@@ -297,7 +324,9 @@ def play(args):
     train_cfg.runner.resume = args.resume
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
-    
+    if train_cfg.runner_class_name == "ParkourStudentRunner" and getattr(args, "depth_ablation", "none") != "none":
+        print(f"Parkour student depth ablation: {args.depth_ablation}")
+
     # export policy as a jit module (used to run it from C++ or python)
     if args.resume:
         path = os.path.join(
