@@ -72,6 +72,7 @@ class Go2FlatCommonCfg(LeggedRobotCfg):
 
 
 class Go2DepthSensorCfg(LeggedRobotCfg.sensor):
+    """Go2 depth-camera defaults matching the URDF front_camera_joint."""
     add_depth = False
 
     class depth_camera_config(LeggedRobotCfg.sensor.depth_camera_config):
@@ -81,8 +82,9 @@ class Go2DepthSensorCfg(LeggedRobotCfg.sensor):
         far_plane = 5.0
         resolution = (80, 60)
         horizontal_fov_deg = 75
-        pos = (0.3, 0.0, 0.1)
-        euler = (0.0, 0.0, 0.0)
+        # Go2 URDF front_camera_joint: xyz="0.32715 -0.00003 0.04297" rpy="0 0 0"
+        pos = (0.327, 0.0, 0.043)
+        euler = (0.0, 0.0, 0.0)  # forward-facing
         decimation = 1
         calculate_depth = True
         segmentation_camera = False

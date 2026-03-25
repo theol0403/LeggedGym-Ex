@@ -1,4 +1,5 @@
 from legged_gym import *
+from legged_gym.envs.base.common_cfgs import Go2DepthSensorCfg
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 
 class Go2TSDepthCfg( LeggedRobotCfg ):
@@ -158,22 +159,8 @@ class Go2TSDepthCfg( LeggedRobotCfg ):
         randomize_joint_damping = True
         joint_damping_range = [0.25, 0.3]
 
-    class sensor( LeggedRobotCfg.sensor ):
+    class sensor(Go2DepthSensorCfg):
         add_depth = True
-        class depth_camera_config( LeggedRobotCfg.sensor.depth_camera_config ):
-            near_clip = 0.1
-            far_clip = 5.0
-            near_plane = 0.1
-            far_plane = 5.0
-            resolution = (80, 60)
-            horizontal_fov_deg = 75
-            pos = (0.3, 0.0, 0.1)
-            euler = (0.0, 1.57, 0.0)
-            decimation = 1
-            calculate_depth = True
-            segmentation_camera = False
-            return_pointcloud = False
-            pointcloud_in_world_frame = False
 
 class Go2TSDepthCfgPPO( LeggedRobotCfgPPO ):
     seed = 1

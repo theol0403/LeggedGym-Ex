@@ -70,8 +70,9 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
             crop_left = 4
             crop_right = 4
             horizontal_fov_deg = 87
-            pos = (0.27, 0.0, 0.03)
-            euler = (0.0, 1.57, 0.0)  # forward-facing
+            # Go2 URDF front_camera_joint: xyz="0.32715 0 0.04297" rpy="0 0 0"
+            pos = (0.327, 0.0, 0.043)
+            euler = (0.0, 0.0, 0.0)  # forward-facing
             decimation = 5
             calculate_depth = True
             segmentation_camera = False
@@ -144,8 +145,9 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
         class rgb_camera_config(LeggedRobotCfg.sensor.rgb_camera_config):
             resolution = (106, 60)
             horizontal_fov_deg = 87
-            pos = (0.27, 0.0, 0.03)
-            euler = (0.0, 1.57, 0.0)
+            # Go2 URDF front_camera_joint: xyz="0.32715 0 0.04297" rpy="0 0 0"
+            pos = (0.327, 0.0, 0.043)
+            euler = (0.0, 0.0, 0.0)  # forward-facing
             link_idx_local = 0
             near_plane = 0.1
             far_plane = 10.0
