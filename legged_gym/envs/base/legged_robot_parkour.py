@@ -101,7 +101,7 @@ class LeggedRobotParkour(LeggedRobot):
         self._update_command_targets(env_ids)
         self.simulator.update_scandot_heights()
 
-    def compute_observations(self):
+    def _compute_proprioception_and_scandots(self):
         foot_contacts = (
             self.simulator.link_contact_forces[:, self.simulator.feet_contact_indices, 2] > 1.0
         ).float()
@@ -111,18 +111,23 @@ class LeggedRobotParkour(LeggedRobot):
             scandots_cfg.clip_min,
             scandots_cfg.clip_max,
         )
-
-        obs_parts = (
-            self.commands * self.commands_scale,
-            self.simulator.projected_gravity,
-            self.simulator.base_ang_vel * self.obs_scales.ang_vel,
-            (self.simulator.dof_pos - self.simulator.default_dof_pos) * self.obs_scales.dof_pos,
-            self.simulator.dof_vel * self.obs_scales.dof_vel,
-            self.actions,
-            foot_contacts,
-            scandot_obs,
+        prop_obs = torch.cat(
+            (
+                self.commands * self.commands_scale,
+                self.simulator.projected_gravity,
+                self.simulator.base_ang_vel * self.obs_scales.ang_vel,
+                (self.simulator.dof_pos - self.simulator.default_dof_pos) * self.obs_scales.dof_pos,
+                self.simulator.dof_vel * self.obs_scales.dof_vel,
+                self.actions,
+                foot_contacts,
+            ),
+            dim=-1,
         )
-        actor_obs = torch.cat(obs_parts, dim=-1)
+        return prop_obs, scandot_obs
+
+    def compute_observations(self):
+        prop_obs, scandot_obs = self._compute_proprioception_and_scandots()
+        actor_obs = torch.cat((prop_obs, scandot_obs), dim=-1)
         self._validate_runtime_observation_dims(actor_obs, self.obs_spec.actor_dim, "actor")
 
         if self.num_privileged_obs is not None:
@@ -220,6 +225,30 @@ class LeggedRobotParkour(LeggedRobot):
         base_lin_vel = torch.zeros((len(env_ids), 3), device=self.device, dtype=torch.float)
         base_ang_vel = torch.zeros((len(env_ids), 3), device=self.device, dtype=torch.float)
         self.simulator.reset_root_states(env_ids, base_pos, base_quat, base_lin_vel, base_ang_vel)
+
+    def _reset_dofs(self, env_ids):
+        dof_pos = torch.zeros(
+            (len(env_ids), self.num_actions),
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        dof_vel = torch.zeros(
+            (len(env_ids), self.num_actions),
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        dof_pos[:, [0, 3, 6, 9]] = self.simulator.default_dof_pos[:, [0, 3, 6, 9]] + torch_rand_float(
+            -0.2, 0.2, (len(env_ids), 4), self.device
+        )
+        dof_pos[:, [1, 4, 7, 10]] = self.simulator.default_dof_pos[:, [1, 4, 7, 10]] + torch_rand_float(
+            -0.4, 0.4, (len(env_ids), 4), self.device
+        )
+        dof_pos[:, [2, 5, 8, 11]] = self.simulator.default_dof_pos[:, [2, 5, 8, 11]] + torch_rand_float(
+            -0.4, 0.4, (len(env_ids), 4), self.device
+        )
+        self.simulator.reset_dofs(env_ids, dof_pos, dof_vel)
 
     def _get_noise_scale_vec(self):
         noise_vec = torch.zeros_like(self.obs_buf[0])

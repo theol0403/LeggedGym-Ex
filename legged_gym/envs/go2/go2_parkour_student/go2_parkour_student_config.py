@@ -13,7 +13,6 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
         num_observations = None
         num_privileged_obs = None
         num_teacher_actor_obs = None
-        num_latent_dims = 32
         num_actions = 12
         episode_length_s = 20.0
         env_spacing = 1.0
