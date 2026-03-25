@@ -8,12 +8,11 @@ from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 
 class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
     class env(Go2ParkourTeacherCfg.env):
-        num_envs = 2048
+        num_envs = 48
         frame_stack = 0
         num_observations = None
         num_privileged_obs = None
         num_teacher_actor_obs = None
-        num_history_obs = 0
         num_latent_dims = 32
         num_actions = 12
         episode_length_s = 20.0
@@ -53,6 +52,7 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
     class sensor(LeggedRobotCfg.sensor):
         add_depth = True
         add_rgb = False
+        depth_noise_level = 0.1
 
         class depth_estimation(LeggedRobotCfg.sensor.depth_estimation):
             enabled = False
@@ -99,10 +99,10 @@ class Go2ParkourStudentCfgPPO(BaseConfig):
     class algorithm:
         learning_rate = 1.0e-3
         action_loss_coef = 1.0
-        latent_loss_coef = 0.25
         yaw_loss_coef = 1.0
         yaw_threshold = 0.6
         max_grad_norm = 1.0
+        bptt_window = 24
 
     class runner:
         policy_class_name = "ActorCriticParkourStudent"

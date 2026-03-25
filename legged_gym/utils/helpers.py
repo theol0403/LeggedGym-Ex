@@ -48,10 +48,16 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+def _has_checkpoints(path):
+    return any(re.match(r"^model_\d+\.pt$", f) for f in os.listdir(path))
+
 def _get_load_run_dir(root, load_run):
-    runs = sorted(run for run in os.listdir(root) if run != "exported")
+    runs = sorted(
+        run for run in os.listdir(root)
+        if os.path.isdir(os.path.join(root, run)) and _has_checkpoints(os.path.join(root, run))
+    )
     if not runs:
-        raise ValueError("No runs in this directory: " + root)
+        raise ValueError("No runs with checkpoints in: " + root)
     if load_run == -1:
         return os.path.join(root, runs[-1])
     run_dir = os.path.join(root, load_run)

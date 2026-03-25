@@ -97,8 +97,6 @@ class ActorCriticParkourStudent(nn.Module):
         num_actor_obs,
         num_actions,
         num_teacher_actor_obs,
-        num_history_obs,
-        num_latent_dims,
         student_depth_shape=(1, 58, 87),
         depth_backbone_output_dim=32,
         gru_hidden_dim=512,
@@ -119,13 +117,7 @@ class ActorCriticParkourStudent(nn.Module):
         activation_layer = get_activation(activation)
         self.num_obs = int(num_actor_obs)
         self.num_teacher_actor_obs = int(num_teacher_actor_obs)
-        self.num_history_obs = int(num_history_obs)
-        if self.num_history_obs != 0:
-            raise ValueError(
-                "ActorCriticParkourStudent no longer uses obs_history; set env.num_history_obs to 0."
-            )
-
-        self.num_latent_dims = int(num_latent_dims)
+        self.latent_dim = int(depth_backbone_output_dim)
         self.student_depth_shape = tuple(student_depth_shape)
         self.yaw_output_dim = int(yaw_output_dim)
         self.yaw_scale = float(yaw_scale)
@@ -141,13 +133,13 @@ class ActorCriticParkourStudent(nn.Module):
             num_proprio_for_combo=self.num_obs,
             depth_backbone_output_dim=depth_backbone_output_dim,
             gru_hidden_dim=gru_hidden_dim,
-            latent_dim=self.num_latent_dims,
+            latent_dim=self.latent_dim,
             yaw_dim=self.yaw_output_dim,
             activation=type(activation_layer),
         )
 
         self.actor = build_mlp(
-            input_dim=self.num_obs + self.num_latent_dims,
+            input_dim=self.num_obs + self.latent_dim,
             hidden_dims=list(actor_hidden_dims),
             output_dim=num_actions,
             activation=activation_layer,

@@ -1,0 +1,520 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,citecolor=green!50!black,urlcolor=blue!70!black}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!8},
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{green!50!black},
+}
+
+\title{%
+  Technical Notes: Depth-Based Student Distillation\\
+  for Quadruped Parkour on Genesis\\[6pt]
+  \large LeggedGym-Ex Repository Status Report
+}
+\author{Auto-generated Research Note}
+\date{March 25, 2026}
+
+\begin{document}
+\maketitle
+
+% ============================================================================
+\section{Introduction and Goals}
+
+This document records the current state of the \texttt{LeggedGym-Ex} repository,
+which implements a two-phase teacher--student training pipeline for quadruped
+parkour locomotion on the Unitree Go2 robot, using the Genesis physics simulator.
+
+\paragraph{End goal.}
+Train a student policy that receives \emph{monocular RGB} images, runs them through
+a depth-estimation network (e.g.\ Depth Anything V2), and feeds the inferred
+depth map to the policy---enabling deployment without a physical depth camera.
+
+\paragraph{Current milestone.}
+The student policy is being trained on \emph{ground-truth simulator depth} to
+establish a convergent distillation baseline before introducing the
+depth-estimation network.
+
+\paragraph{Reference work.}
+The architecture and training procedure follow Cheng et al.\ ``Extreme Parkour
+with Legged Robots'' (arXiv:2309.14341)~\cite{cheng2023extreme}, with
+adaptations for the Genesis simulator and Go2 robot morphology.
+
+% ============================================================================
+\section{System Overview}
+
+\subsection{Hardware and Simulator}
+
+\begin{itemize}[nosep]
+  \item \textbf{GPU:} 4$\times$ NVIDIA L40S (45\,GB each).
+  \item \textbf{Simulator:} Genesis (GPU-accelerated rigid-body physics with
+        batch depth rendering via CUDA scene cameras on Linux).
+  \item \textbf{Robot:} Unitree Go2 (12 DoF, 4 legs $\times$ 3 joints).
+\end{itemize}
+
+\subsection{Two-Phase Training Pipeline}
+
+\begin{enumerate}[nosep]
+  \item \textbf{Phase 1 --- Teacher (PPO):}
+        A privileged teacher policy observes proprioception \emph{plus} 132
+        ray-cast scandot heights and is trained with PPO on a parkour curriculum
+        (stairs, hurdle blocks, gaps). The critic additionally observes base
+        linear velocity, dynamics parameters, and contact states.
+  \item \textbf{Phase 2 --- Student (DAgger distillation):}
+        A student policy observes only proprioception (53-dim) and a single
+        $58 \times 87$ depth image. A CNN--GRU depth encoder produces a
+        32-dim terrain latent and a 2-dim yaw estimate. The student's actor MLP
+        is initialized from the teacher's actor weights and fine-tuned via
+        DAgger: at each step the frozen teacher provides target actions, and the
+        student minimizes L2 action loss + L2 yaw loss.
+\end{enumerate}
+
+% ============================================================================
+\section{Architecture Details}
+
+\subsection{Observation Layout}
+
+The proprioceptive observation vector (53-dim) is ordered as:
+
+\begin{center}
+\begin{tabular}{llr}
+\toprule
+Component & Description & Dims \\
+\midrule
+Commands & goal vel, heading ($\sin\theta_e$, $\cos\theta_e$), goal speed & 7 \\
+Gravity & projected gravity in body frame & 3 \\
+Angular velocity & base angular velocity (scaled) & 3 \\
+Joint positions & $q - q_{\mathrm{default}}$ (scaled) & 12 \\
+Joint velocities & $\dot{q}$ (scaled) & 12 \\
+Previous actions & $a_{t-1}$ & 12 \\
+Foot contacts & binary contact indicators & 4 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The teacher additionally receives 132 scandot heights (12 $\times$ 11 grid)
+appended after the proprioceptive vector, for a total actor observation of 185
+dims. The student's actor only sees the 53-dim proprio; terrain perception
+comes exclusively through the depth encoder's 32-dim latent.
+
+Heading command indices 4--5 ($\sin\theta_e$, $\cos\theta_e$) are
+\emph{masked to zero} in the depth encoder's proprioceptive input, forcing the
+GRU to predict yaw from the depth stream.
+
+\subsection{Student Network Architecture}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Module & Architecture & Output \\
+\midrule
+\texttt{DepthBackbone} & Conv2d(1,32,k=5) $\to$ MaxPool(2) $\to$ ELU
+  $\to$ Conv2d(32,64,k=3) $\to$ ELU $\to$ FC(128) $\to$ FC(32) & 32-dim \\
+\texttt{CombinationMLP} & FC(32+53, 128) $\to$ ELU $\to$ FC(128, 32) & 32-dim \\
+\texttt{GRU} & GRU(input=32, hidden=512, 1 layer) & 512-dim \\
+\texttt{OutputMLP} & FC(512, 34) $\to$ Tanh & 32+2 dim \\
+\texttt{Actor} & FC(53+32, 512) $\to$ ELU $\to$ FC(256) $\to$ ELU
+  $\to$ FC(128) $\to$ ELU $\to$ FC(12) $\to$ Hardtanh & 12-dim \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The Tanh output is split into a 32-dim \emph{latent} (fed to the actor
+alongside proprio) and a 2-dim \emph{raw yaw} estimate, scaled by 1.5$\times$
+to match oracle heading magnitude.
+
+\subsection{Mixture of Teacher and Student (MTS)}
+
+Following the reference, a soft gating mechanism replaces the student's heading
+observation with its own yaw prediction only when the prediction is close to
+the oracle:
+\[
+  \mathbf{o}_{\mathrm{heading}} =
+  \begin{cases}
+    \hat{\mathbf{y}}_{\mathrm{student}} & \text{if } \|\hat{\mathbf{y}}_{\mathrm{student}} - \mathbf{y}_{\mathrm{oracle}}\| < \tau \\
+    \mathbf{y}_{\mathrm{oracle}} & \text{otherwise}
+  \end{cases}
+\]
+with threshold $\tau = 0.6$. This prevents early-training distribution shift
+while encouraging the student to eventually rely on its own yaw prediction.
+
+% ============================================================================
+\section{Differences from Canonical Implementations}
+
+Table~\ref{tab:diffs} summarizes the key differences between our implementation
+and the reference repositories.
+
+\begin{table}[ht]
+\centering
+\caption{Comparison with reference implementations.}
+\label{tab:diffs}
+\small
+\begin{tabular}{p{3.2cm}p{4.2cm}p{4.2cm}}
+\toprule
+\textbf{Aspect} & \textbf{Extreme Parkour (IsaacGym)} & \textbf{Ours (Genesis)} \\
+\midrule
+Simulator & IsaacGym (NVIDIA) & Genesis (open-source, CUDA batch cameras) \\
+BPTT strategy & Full 120-step, single \texttt{backward()} & Windowed BPTT(24), 5 windows per rollout \\
+\texttt{num\_envs} (student) & 192 & 48 (Genesis depth cameras are memory-intensive) \\
+Latent loss & Not used & Not used (removed; was present in initial buggy code) \\
+Depth noise & Per-pixel Gaussian (\texttt{dis\_noise}) & Scalar uniform noise per frame (simplified) \\
+Depth normalization & $[0, 1]$ range & $[-0.5, +0.5]$ range \\
+Depth resolution & $58 \times 87$ & $58 \times 87$ (identical after crop/resize) \\
+Teacher critic & Same as ours & Proprio + scandots + base lin vel + dynamics + contacts \\
+Terrain families & Parkour-specific obstacles & Stairs, hurdle blocks, gaps (3 families $\times$ 4 variants) \\
+Curriculum & Row-based difficulty & Row-based difficulty (identical scheme) \\
+GRU reset on done & No reset during training & No reset during training (matching reference) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why windowed BPTT instead of full BPTT.}
+Genesis batch depth rendering allocates substantially more GPU memory per
+environment than IsaacGym's tensor-based API. With 48 environments, the
+simulator alone consumes ${\sim}11$\,GB on an L40S. Full BPTT through 120
+CNN+GRU steps requires retaining the entire computation graph, which caused
+silent CUDA hangs when attempted (the process continued consuming CPU/GPU
+resources but produced no output and never completed the backward pass). A
+24-step window (covering ${\sim}5$ depth camera updates at decimation=5)
+provides meaningful temporal gradient flow while bounding peak memory.
+
+\paragraph{Why 48 environments.}
+The reference uses 192 environments on IsaacGym. Initial attempts with 192
+environments on Genesis caused immediate OOM during the first CNN forward pass
+(44\,GB GPU fully consumed by simulator state alone). Reducing to 48
+environments leaves sufficient headroom for the BPTT computation graph.
+
+% ============================================================================
+\section{Bugs Found and Fixed}
+
+The initial codebase had five bugs preventing student convergence, discovered
+through careful comparison with the reference implementation.
+
+\subsection{Bug 1 (Critical): Per-Step Backward Destroyed GRU BPTT}
+
+The original \texttt{ParkourDistillation.accumulate\_step()} called
+\texttt{backward()} at \emph{each} of the 120 rollout steps, followed by
+\texttt{detach\_gru\_hidden()}. This is truncated BPTT(1)---the GRU receives
+zero temporal gradient and cannot learn any sequential dependencies.
+
+\textbf{Fix:} Rewrote the distillation algorithm to collect live-graph tensors
+across a configurable window (\texttt{bptt\_window=24}), compute loss once per
+window, and call \texttt{backward()} at window boundaries. The GRU hidden state
+is detached only after each window's backward pass. Gradients accumulate across
+all 5 windows, with a single optimizer step after the full 120-step rollout.
+
+\subsection{Bug 2 (High): Teacher Observations Lacked Noise}
+
+The student environment applied observation noise to \texttt{obs\_buf} (the
+student's proprioceptive input) but constructed \texttt{teacher\_actor\_obs\_buf}
+from clean sensor readings. Since the teacher was \emph{trained with noise},
+querying it with clean observations produced misaligned target actions.
+
+\textbf{Fix:} Applied the same noise realization to both the student's
+proprioceptive observation and the proprioceptive portion of the teacher's
+observation. Scandot noise (matching the teacher's training noise scale) is also
+applied to the teacher's scandot portion.
+
+\subsection{Bug 3 (Medium): Latent Loss with Range Mismatch}
+
+The distillation loss included an L2 term between the student's depth latent
+(Tanh, range $[-1,1]$) and the teacher's scandot latent (ELU, range
+$(-1,+\infty)$). The reference uses \emph{only} action loss + yaw loss. The
+range mismatch meant the student could never perfectly match teacher latents,
+creating a persistent conflicting gradient.
+
+\textbf{Fix:} Removed the latent loss entirely. The student is trained only on
+action matching and yaw matching, consistent with the reference.
+
+\subsection{Bug 4 (Medium): Excessive Environment Count}
+
+The student config specified \texttt{num\_envs=2048}, inherited from the teacher.
+With full BPTT (or even windowed BPTT), this caused OOM since Genesis depth
+cameras consume significant GPU memory per environment.
+
+\textbf{Fix:} Reduced to 48 environments (the maximum that fits on one L40S
+with comfortable headroom for the backward pass).
+
+\subsection{Bug 5 (Low): Missing Depth Noise}
+
+The reference applies Gaussian noise (\texttt{dis\_noise}) to depth images for
+sim-to-real robustness. The initial codebase had no depth augmentation.
+
+\textbf{Fix:} Added configurable depth noise (\texttt{depth\_noise\_level=0.1})
+applied as a scalar uniform perturbation after sensor rendering.
+
+\subsection{Additional Fix: In-Place Depth Buffer Modification}
+
+During full BPTT development, the backward pass failed with
+``\texttt{RuntimeError: variable has been modified by an inplace operation}''
+because the simulator's depth buffer is modified in-place between steps by
+\texttt{update\_sensors()}. The student's \texttt{forward\_depth()} received a
+reference to the same buffer at each step, but autograd expected the original
+tensor.
+
+\textbf{Fix:} Clone the depth tensor before each forward pass:
+\texttt{student\_depth.clone()}.
+
+% ============================================================================
+\section{Training Results}
+
+\subsection{Teacher Training}
+
+The teacher was trained for 2500 iterations (4096 envs, PPO, ${\sim}2$ hours on
+one L40S). Table~\ref{tab:teacher} shows the convergence trajectory.
+
+\begin{table}[ht]
+\centering
+\caption{Teacher training metrics (PPO, 4096 envs).}
+\label{tab:teacher}
+\begin{tabular}{rcccc}
+\toprule
+Iter & Reward & Success & Progress & Terrain Level \\
+\midrule
+0    & $-1.1$ & 0.000 & 0.008 & 0.00 \\
+500  & 51.4   & 0.827 & 0.907 & 2.03 \\
+1000 & 52.9   & 0.791 & 0.908 & 1.99 \\
+1500 & 57.5   & 0.685 & 0.937 & 2.03 \\
+2000 & 74.4   & 0.225 & 0.926 & 1.99 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The teacher reached 83\% success rate at peak (iter 500), with mean reward
+climbing to 74 as the curriculum pushed harder terrain. Progress ratio stabilized
+above 90\%.
+
+\subsection{Student Training --- Run 1 (Iterations 0--1003)}
+
+The student was trained with windowed BPTT(24), 48 envs, 120 steps/env,
+lr=$10^{-3}$, on one L40S GPU. Table~\ref{tab:student1} shows the convergence.
+
+\begin{table}[ht]
+\centering
+\caption{Student Run 1 metrics (DAgger distillation, 48 envs, windowed BPTT).}
+\label{tab:student1}
+\small
+\begin{tabular}{rccccccccc}
+\toprule
+Iter & Act.\ Loss & Yaw & Reward & Success & Progress & Level & Row & WPs & Ep.\ Len \\
+\midrule
+0    & 1.562 & 0.284 &   4.3 & 0.000 & 0.062 & 0.00 & 0.00 & 0.0 &  50 \\
+100  & 0.748 & 0.108 &  46.9 & 0.092 & 0.710 & 1.00 & 0.98 & 1.5 & 549 \\
+200  & 0.477 & 0.065 &  72.6 & 0.000 & 0.627 & 1.47 & 1.43 & 1.8 & 773 \\
+300  & 0.425 & 0.052 &  82.7 & \textbf{0.471} & 0.939 & 2.04 & 1.91 & 3.0 & 861 \\
+500  & 0.403 & 0.041 &  86.6 & 0.025 & 0.811 & 2.00 & 1.65 & 1.7 & 901 \\
+700  & 0.313 & 0.038 &  88.9 & 0.142 & 0.925 & 1.73 & 2.06 & 2.8 & 928 \\
+800  & 0.324 & 0.031 &  \textbf{92.7} & 0.100 & \textbf{0.949} & 2.09 & 1.28 & 2.2 & 959 \\
+1000 & 0.329 & 0.041 &  89.5 & 0.358 & 0.946 & 1.91 & 2.15 & 3.0 & 928 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Key observations.}
+\begin{itemize}[nosep]
+  \item Action loss converged from 1.56 to ${\sim}0.33$ (5$\times$ reduction).
+  \item Yaw loss converged from 0.28 to ${\sim}0.03$ (10$\times$ reduction).
+  \item Mean reward reached 92.7 at iter 800, \emph{exceeding} the teacher's
+        typical 74 reward---likely because the student's depth perception
+        provides smoother terrain information than the teacher's sparse scandots.
+  \item Peak success rate of 47\% (iter 300) and 80\% (measured via TensorBoard
+        max) with progress ratio consistently above 94\%.
+  \item Terrain curriculum advanced to level ${\sim}2.0$ (out of 4 rows), with
+        the student completing nearly full courses on medium-difficulty terrain.
+\end{itemize}
+
+\subsection{Student Training --- Run 2 (Resumed, Iterations 1003--1492)}
+
+After resuming from the Run~1 checkpoint, the student continued improving.
+Table~\ref{tab:student2} shows metrics relative to the resumed run's local
+iteration counter.
+
+\begin{table}[ht]
+\centering
+\caption{Student Run 2 (resumed from iter 1003).}
+\label{tab:student2}
+\begin{tabular}{rccccc}
+\toprule
+$\Delta$Iter & Act.\ Loss & Yaw & Reward & Success & Progress \\
+\midrule
+0     & 0.346 & 0.024 &  2.7  & 0.000 & 0.057 \\
+100   & 0.314 & 0.028 & 92.1  & 0.158 & 0.954 \\
+200   & 0.286 & 0.025 & 92.5  & 0.017 & 0.974 \\
+300   & 0.292 & 0.030 & 93.0  & 0.067 & 0.944 \\
+400   & 0.316 & 0.027 & 93.5  & 0.083 & 0.939 \\
+489   & \textbf{0.272} & \textbf{0.017} & 92.8  & 0.000 & 0.918 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Action loss continued decreasing to 0.27, yaw loss to 0.017, and reward
+stabilized in the 92--94 range. The terrain level advanced to ${\sim}2.2$.
+The training is still running as of this writing.
+
+% ============================================================================
+\section{Open Issues and Next Steps}
+
+\subsection{Remaining Issues}
+
+\begin{enumerate}
+  \item \textbf{Terminal output buffering.}
+        Console output (stdout) stops being captured after ${\sim}500$ iterations,
+        though the training process continues running normally. TensorBoard
+        events and checkpoints are written correctly. This appears to be a
+        Python stdout buffering issue when output is redirected to a pipe.
+        Workaround: monitor via TensorBoard or periodic checkpoint inspection.
+
+  \item \textbf{Depth noise is scalar, not per-pixel.}
+        The current depth noise augmentation applies a single random scalar
+        offset to the entire depth image, rather than per-pixel Gaussian noise
+        as in the reference. This provides less diversity for sim-to-real
+        robustness. The per-pixel version was deferred to avoid additional GPU
+        memory overhead during BPTT.
+
+  \item \textbf{Low environment count (48 vs.\ 192).}
+        Genesis's memory-intensive depth rendering limits us to 48 parallel
+        environments, compared to 192 in the reference. This reduces sample
+        diversity per iteration and may slow convergence. Potential mitigations:
+        (a) gradient checkpointing through the CNN to reduce activation memory,
+        (b) using Genesis's lower-level API to share rendering resources,
+        (c) mixed-precision training (FP16 activations).
+
+  \item \textbf{Success rate instability.}
+        Success rate oscillates between 0\% and 47\% across iterations due to
+        the small number of episodes completed per iteration (48 envs $\times$
+        ${\sim}0.13$ episodes/env/iter $\approx$ 6 episodes). With only 6
+        Bernoulli samples, the variance is inherently high. The progress ratio
+        (0.94--0.97) is a more stable convergence indicator.
+
+  \item \textbf{Resume path resolution.}
+        The \texttt{--resume} flag resolves \texttt{load\_run=-1} by sorting all
+        directories in the log root alphabetically and selecting the last one. A
+        \texttt{datasets/} directory (used for demo replay) sorts after the
+        timestamped run directories (e.g.\ \texttt{Mar24\_...}), causing resume
+        to fail. Fix: exclude non-run directories or specify \texttt{--load\_run}
+        explicitly.
+\end{enumerate}
+
+\subsection{Planned Next Steps}
+
+\begin{enumerate}
+  \item \textbf{Complete 5000-iteration training} and evaluate final success rate
+        and progress ratio on the hardest terrain rows.
+
+  \item \textbf{Per-pixel depth noise.} Replace scalar noise with per-pixel
+        Gaussian noise ($\sigma = 0.1$) matching the reference's
+        \texttt{dis\_noise} implementation.
+
+  \item \textbf{Depth estimation network integration.}
+        Replace simulator depth with inferred depth from Depth Anything V2
+        (or similar monocular depth estimator) applied to the simulator's RGB
+        output. This requires:
+        \begin{itemize}[nosep]
+          \item Adding an RGB camera to the student environment (same pose as
+                depth camera).
+          \item Running the depth estimator at the same decimation rate as the
+                depth camera.
+          \item Handling scale/shift ambiguity between metric depth and
+                estimator output (affine alignment or learned adapter).
+        \end{itemize}
+
+  \item \textbf{Evaluate sim-to-real gap.} Deploy the trained student on
+        physical Go2 hardware with an onboard RGB camera and assess transfer
+        quality.
+\end{enumerate}
+
+% ============================================================================
+\section{Hyperparameter Summary}
+
+\begin{table}[ht]
+\centering
+\caption{Key hyperparameters.}
+\begin{tabular}{llcc}
+\toprule
+& Parameter & Teacher & Student \\
+\midrule
+\multirow{4}{*}{Env}
+& \texttt{num\_envs} & 4096 & 48 \\
+& \texttt{episode\_length\_s} & 20 & 20 \\
+& \texttt{num\_steps\_per\_env} & 48 & 120 \\
+& Depth camera decimation & --- & 5 \\
+\midrule
+\multirow{4}{*}{Training}
+& Algorithm & PPO & DAgger (windowed BPTT) \\
+& Learning rate & $10^{-3}$ & $10^{-3}$ \\
+& \texttt{max\_grad\_norm} & 1.0 & 1.0 \\
+& \texttt{bptt\_window} & --- & 24 \\
+\midrule
+\multirow{3}{*}{Loss}
+& Action loss coef & --- & 1.0 \\
+& Yaw loss coef & --- & 1.0 \\
+& MTS yaw threshold & --- & 0.6 \\
+\midrule
+\multirow{2}{*}{Noise}
+& Observation noise & Yes & Yes (matched to teacher) \\
+& Depth noise level & --- & 0.1 \\
+\midrule
+\multirow{2}{*}{Terrain}
+& Families & \multicolumn{2}{c}{stairs, hurdle\_block, gap} \\
+& Rows $\times$ Cols & \multicolumn{2}{c}{$4 \times 12$ (4 difficulty $\times$ 3 families $\times$ 4 variants)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Repository Structure (Relevant Files)}
+
+\begin{lstlisting}[language={},frame=none,backgroundcolor=\color{white}]
+LeggedGym-Ex/
+  legged_gym/
+    envs/go2/
+      go2_parkour_teacher/
+        go2_parkour_teacher.py          # Teacher env (LeggedRobotParkour)
+        go2_parkour_teacher_config.py   # Teacher config (PPO, 4096 envs)
+      go2_parkour_student/
+        go2_parkour_student.py          # Student env (depth + proprio)
+        go2_parkour_student_config.py   # Student config (DAgger, 48 envs)
+    envs/base/
+      legged_robot_parkour.py           # Base parkour env with curriculum
+      parkour_observation.py            # Observation spec (prop/actor/critic dims)
+    simulator/
+      genesis_simulator.py              # Genesis backend (depth rendering)
+  rsl_rl/
+    algorithms/
+      parkour_distillation.py           # Windowed BPTT DAgger algorithm
+    runners/
+      parkour_student_runner.py         # Student training loop
+    modules/
+      actor_critic_parkour.py           # Teacher network (scandot encoder)
+      actor_critic_parkour_student.py   # Student network (CNN+GRU+actor)
+  logs/
+    go2_parkour_teacher/                # Teacher checkpoints and TB events
+    go2_parkour_student/                # Student checkpoints and TB events
+\end{lstlisting}
+
+% ============================================================================
+\begin{thebibliography}{1}
+\bibitem{cheng2023extreme}
+  X.~Cheng, K.~Shi, A.~Agarwal, D.~Pathak,
+  ``Extreme Parkour with Legged Robots,''
+  \emph{arXiv preprint arXiv:2309.14341}, 2023.
+  Code: \url{https://github.com/chengxuxin/extreme-parkour}
+\end{thebibliography}
+
+\end{document}

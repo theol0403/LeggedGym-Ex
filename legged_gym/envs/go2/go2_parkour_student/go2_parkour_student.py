@@ -9,10 +9,10 @@ class Go2ParkourStudent(LeggedRobotParkour):
     def _parse_cfg(self, cfg):
         super()._parse_cfg(cfg)
         self.num_teacher_actor_obs = self.cfg.env.num_teacher_actor_obs
-        self.num_history_obs = int(self.cfg.env.num_history_obs)
         self.num_latent_dims = self.cfg.env.num_latent_dims
         self.student_depth_shape = tuple(self.cfg.env.student_depth_shape)
         self._depth_render_interval = max(1, int(self.cfg.sensor.depth_camera_config.decimation))
+        self._depth_noise_level = float(getattr(self.cfg.sensor, "depth_noise_level", 0.0))
 
     def _init_buffers(self):
         self.obs_spec = ParkourObservationSpec.from_cfg(self.cfg)
@@ -28,7 +28,6 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._depth_rendered_this_step = False
 
     def post_physics_step(self):
-        """Same as LeggedRobot but depth camera renders at a reduced rate."""
         self.episode_length_buf += 1
         self.common_step_counter += 1
 
@@ -42,6 +41,7 @@ class Go2ParkourStudent(LeggedRobotParkour):
 
         if ((self.common_step_counter - 1) % self._depth_render_interval) == 0:
             self.simulator.update_sensors()
+            self._apply_depth_noise()
             self._depth_rendered_this_step = True
         else:
             self._depth_rendered_this_step = False
@@ -52,6 +52,12 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.simulator.draw_debug_vis()
         if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
+
+    def _apply_depth_noise(self):
+        if self._depth_noise_level > 0:
+            self.student_depth += self._depth_noise_level * 2 * (
+                torch.rand(1, device=self.device) - 0.5
+            )
 
     def compute_observations(self):
         foot_contacts = (
@@ -75,13 +81,23 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.actions,
             foot_contacts,
         )
-        actor_obs = torch.cat(prop_parts, dim=-1)
+        prop_obs = torch.cat(prop_parts, dim=-1)
 
         if self.add_noise:
-            actor_obs += (2 * torch.rand_like(actor_obs) - 1) * self.noise_scale_vec
+            prop_noise = (2 * torch.rand_like(prop_obs) - 1) * self.noise_scale_vec
+            scandot_noise_scale = self.cfg.noise.noise_scales.scandots * self.cfg.noise.noise_level
+            scandot_noise = (2 * torch.rand_like(scandot_obs) - 1) * scandot_noise_scale
+        else:
+            prop_noise = None
+            scandot_noise = None
 
-        self.obs_buf = actor_obs
-        self.teacher_actor_obs_buf = torch.cat(prop_parts + (scandot_obs,), dim=-1)
+        self.obs_buf = prop_obs + prop_noise if prop_noise is not None else prop_obs
+
+        teacher_obs = torch.cat((prop_obs, scandot_obs), dim=-1)
+        if prop_noise is not None:
+            teacher_obs[:, : prop_obs.shape[1]] += prop_noise
+            teacher_obs[:, prop_obs.shape[1] :] += scandot_noise
+        self.teacher_actor_obs_buf = teacher_obs
         self.privileged_obs_buf = self.teacher_actor_obs_buf
 
     def step(self, actions):
