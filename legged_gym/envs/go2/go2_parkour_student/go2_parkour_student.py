@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 from legged_gym.envs.base.legged_robot_parkour import LeggedRobotParkour
 
@@ -10,15 +11,24 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self.student_depth_shape = tuple(self.cfg.env.student_depth_shape)
         self._depth_render_interval = max(1, int(self.cfg.sensor.depth_camera_config.decimation))
         self._depth_noise_level = float(getattr(self.cfg.sensor, "depth_noise_level", 0.0))
+        self._use_inferred_depth = bool(
+            getattr(self.cfg.sensor.depth_estimation, "enabled", False)
+        )
 
     def _init_buffers(self):
         super()._init_buffers()
-        self.student_depth = self.simulator.get_depth_images()
-        if tuple(self.student_depth.shape[1:]) != self.student_depth_shape:
-            raise RuntimeError(
-                f"Simulator depth shape {tuple(self.student_depth.shape[1:])} does not match "
-                f"configured student depth shape {self.student_depth_shape}."
+        if self._use_inferred_depth:
+            self.student_depth = torch.zeros(
+                self.num_envs, *self.student_depth_shape,
+                device=self.device, dtype=torch.float,
             )
+        else:
+            self.student_depth = self.simulator.get_depth_images()
+            if tuple(self.student_depth.shape[1:]) != self.student_depth_shape:
+                raise RuntimeError(
+                    f"Simulator depth shape {tuple(self.student_depth.shape[1:])} does not match "
+                    f"configured student depth shape {self.student_depth_shape}."
+                )
         self._depth_rendered_this_step = False
 
     def post_physics_step(self):
@@ -35,6 +45,7 @@ class Go2ParkourStudent(LeggedRobotParkour):
 
         if ((self.common_step_counter - 1) % self._depth_render_interval) == 0:
             self.simulator.update_sensors()
+            self._refresh_student_depth()
             self._apply_depth_noise()
             self._depth_rendered_this_step = True
         else:
@@ -46,6 +57,23 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.simulator.draw_debug_vis()
         if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
+
+    def _refresh_student_depth(self):
+        """Populate student_depth from the configured source after update_sensors."""
+        if not self._use_inferred_depth:
+            return
+        inferred = self.simulator.get_inferred_depth_images()
+        if inferred is not None:
+            self.student_depth[:] = self._process_inferred_depth(inferred)
+
+    def _process_inferred_depth(self, inferred_depth):
+        """Resize and normalize inferred depth to student_depth_shape [-0.5, 0.5]."""
+        _, h, w = self.student_depth_shape
+        depth = inferred_depth.unsqueeze(1)
+        depth = F.interpolate(depth, size=(h, w), mode="bilinear", align_corners=False)
+        dmin = depth.amin(dim=(-2, -1), keepdim=True)
+        dmax = depth.amax(dim=(-2, -1), keepdim=True)
+        return (depth - dmin) / (dmax - dmin + 1e-6) - 0.5
 
     def _apply_depth_noise(self):
         if self._depth_noise_level > 0:

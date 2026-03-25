@@ -170,7 +170,7 @@ class GenesisSimulator(Simulator):
             if getattr(self._cfg.sensor, "add_rgb", False):
                 sensor_frames["rgb"] = self._rgb_images
         if getattr(self._cfg.sensor.depth_estimation, "enabled", False):
-            inferred_depth_frames = self._update_inferred_depth_images(self._rendered_env_indices)
+            inferred_depth_frames = self._update_inferred_depth_images(self._camera_render_env_indices)
             if inferred_depth_frames is not None:
                 sensor_frames["inferred_depth"] = inferred_depth_frames
         return sensor_frames or None
@@ -281,7 +281,11 @@ class GenesisSimulator(Simulator):
                 max(self._cfg.env.num_envs - 1, 0),
             )
         self._rendered_env_indices = list(self._cfg.viewer.rendered_envs_idx)
-        if self._cfg.sensor.add_depth:
+        _needs_all_env_cameras = (
+            self._cfg.sensor.add_depth
+            or getattr(self._cfg.sensor.depth_estimation, "enabled", False)
+        )
+        if _needs_all_env_cameras:
             self._camera_render_env_indices = list(range(self._cfg.env.num_envs))
         elif self._uses_batch_camera_rendering():
             self._camera_render_env_indices = list(self._rendered_env_indices)

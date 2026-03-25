@@ -121,14 +121,55 @@ class Go2ParkourStudentCfgPPO(BaseConfig):
         teacher_ckpt = -1
 
 
+# --- Depth-estimation student: uses RGB -> DA-V2 -> inferred depth ---
+
+class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
+    class env(Go2ParkourStudentCfg.env):
+        pass
+
+    class sensor(LeggedRobotCfg.sensor):
+        add_depth = False
+        add_rgb = True
+        depth_noise_level = 0.1
+
+        class depth_estimation(LeggedRobotCfg.sensor.depth_estimation):
+            enabled = True
+            model_type = "depth_anything_v2"
+            model_size = "small"
+            update_interval = 1
+
+        class depth_camera_config(Go2ParkourStudentCfg.sensor.depth_camera_config):
+            pass
+
+        class rgb_camera_config(LeggedRobotCfg.sensor.rgb_camera_config):
+            resolution = (106, 60)
+            horizontal_fov_deg = 87
+            pos = (0.27, 0.0, 0.03)
+            euler = (0.0, 1.57, 0.0)
+            link_idx_local = 0
+            near_plane = 0.1
+            far_plane = 10.0
+
+
+class Go2ParkourDepthEstStudentCfgPPO(Go2ParkourStudentCfgPPO):
+    class runner(Go2ParkourStudentCfgPPO.runner):
+        run_name = "depth_est_student_genesis"
+        experiment_name = "go2_parkour_depth_est_student"
+
+
 # --- Compute dimensions from config ---
-_OBS_SPEC = ParkourObservationSpec.from_cfg(Go2ParkourStudentCfg)
-Go2ParkourStudentCfg.env.num_observations = _OBS_SPEC.prop_dim
-Go2ParkourStudentCfg.env.num_privileged_obs = _OBS_SPEC.teacher_actor_dim
-Go2ParkourStudentCfg.env.num_teacher_actor_obs = _OBS_SPEC.teacher_actor_dim
-_student_depth_res = Go2ParkourStudentCfg.sensor.depth_camera_config.processed_resolution
-Go2ParkourStudentCfg.env.student_depth_shape = [
-    Go2ParkourStudentCfg.sensor.depth_camera_config.num_history,
-    _student_depth_res[1],
-    _student_depth_res[0],
-]
+
+def _finalize_student_cfg(cfg_cls):
+    spec = ParkourObservationSpec.from_cfg(cfg_cls)
+    cfg_cls.env.num_observations = spec.prop_dim
+    cfg_cls.env.num_privileged_obs = spec.teacher_actor_dim
+    cfg_cls.env.num_teacher_actor_obs = spec.teacher_actor_dim
+    depth_res = cfg_cls.sensor.depth_camera_config.processed_resolution
+    cfg_cls.env.student_depth_shape = [
+        cfg_cls.sensor.depth_camera_config.num_history,
+        depth_res[1],
+        depth_res[0],
+    ]
+
+_finalize_student_cfg(Go2ParkourStudentCfg)
+_finalize_student_cfg(Go2ParkourDepthEstStudentCfg)
