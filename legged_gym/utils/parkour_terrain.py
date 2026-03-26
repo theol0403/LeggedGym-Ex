@@ -98,7 +98,7 @@ class ParkourLaneBuilder:
         waypoint_count = 0
         section_count = 0
         row_idx = min(difficulty_row, 3)
-        obstacle_count_by_row = [1, 2, 3, 3]
+        obstacle_count_by_row = [2, 3, 3, 3]
         obstacle_count = min(self.max_obstacles, obstacle_count_by_row[row_idx])
         self._validate_lane_capacity(obstacle_count)
         slot_centers = self._slot_centers_for_variant(variant_id)
@@ -241,7 +241,7 @@ class ParkourLaneBuilder:
     _HURDLE_LENGTHS = [0.20, 0.22, 0.25, 0.28]
     _HURDLE_Y_HALVES = [0.55, 0.65, 0.75, 0.85]
     _HURDLE_POST_OFFSETS = [0.95, 0.80, 0.68, 0.55]
-    _GAP_WIDTHS = [0.16, 0.24, 0.36, 0.48]
+    _GAP_WIDTHS = [0.24, 0.32, 0.42, 0.50]
     _GAP_Y_HALVES = [0.85, 0.95, 1.05, 1.15]
     _GAP_POST_OFFSETS = [1.00, 0.85, 0.74, 0.62]
 
