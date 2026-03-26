@@ -8,7 +8,7 @@ from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 
 class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
     class env(Go2ParkourTeacherCfg.env):
-        num_envs = 192
+        num_envs = 48
         frame_stack = 0
         num_observations = None
         num_privileged_obs = None
@@ -58,7 +58,7 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
 
         class depth_camera_config(LeggedRobotCfg.sensor.depth_camera_config):
             num_sensors = 1
-            num_history = 1
+            num_history = 2  # buffer 2 frames; student uses previous frame
             near_clip = 0.0
             far_clip = 2.0
             near_plane = 0.1
@@ -72,7 +72,7 @@ class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
             horizontal_fov_deg = 87
             # Go2 URDF front_camera_joint: xyz="0.32715 0 0.04297" rpy="0 0 0"
             pos = (0.327, 0.0, 0.043)
-            euler = (0.0, 0.0, 0.0)  # forward-facing
+            euler = (0.0, 0.087, 0.0)  # 5 deg pitch down for gap visibility
             decimation = 5
             calculate_depth = True
             segmentation_camera = False
@@ -135,7 +135,7 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
 
         class depth_estimation(LeggedRobotCfg.sensor.depth_estimation):
             enabled = True
-            model_type = "depth_anything_v2"
+            model_type = "depth_anything_v2_metric_outdoor"
             model_size = "small"
             update_interval = 2
 
@@ -147,7 +147,7 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
             horizontal_fov_deg = 87
             # Go2 URDF front_camera_joint: xyz="0.32715 0 0.04297" rpy="0 0 0"
             pos = (0.327, 0.0, 0.043)
-            euler = (0.0, 0.0, 0.0)  # forward-facing
+            euler = (0.0, 0.087, 0.0)  # 5 deg pitch down for gap visibility
             link_idx_local = 0
             near_plane = 0.1
             far_plane = 10.0
@@ -167,11 +167,9 @@ def _finalize_student_cfg(cfg_cls):
     cfg_cls.env.num_privileged_obs = spec.teacher_actor_dim
     cfg_cls.env.num_teacher_actor_obs = spec.teacher_actor_dim
     depth_res = cfg_cls.sensor.depth_camera_config.processed_resolution
-    cfg_cls.env.student_depth_shape = [
-        cfg_cls.sensor.depth_camera_config.num_history,
-        depth_res[1],
-        depth_res[0],
-    ]
+    # Network always receives a single frame (1, H, W) regardless of buffer size.
+    # The env selects which frame from the buffer to expose.
+    cfg_cls.env.student_depth_shape = [1, depth_res[1], depth_res[0]]
 
 _finalize_student_cfg(Go2ParkourStudentCfg)
 _finalize_student_cfg(Go2ParkourDepthEstStudentCfg)

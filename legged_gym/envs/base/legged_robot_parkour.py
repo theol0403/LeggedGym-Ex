@@ -82,10 +82,20 @@ class LeggedRobotParkour(LeggedRobot):
         self.extras["episode"]["progress_ratio"] = torch.mean(progress_before_reset)
         self.extras["episode"]["waypoints_reached"] = torch.mean(waypoints_before_reset)
         self.extras["episode"]["success"] = torch.mean(success_before_reset)
-        self.extras["episode"]["terrain_family"] = torch.mean(family_before_reset)
         self.extras["episode"]["terrain_row"] = torch.mean(row_before_reset)
         self.extras["episode"]["out_of_lane"] = torch.mean(out_of_lane_before_reset)
         self.extras["episode"]["global_out_of_bounds"] = torch.mean(global_out_of_bounds_before_reset)
+
+        # Per-family success and progress (family IDs: 0=stairs, 1=hurdle_block, 2=gap)
+        family_int = family_before_reset.long()
+        for fam_name, fam_id in PARKOUR_FAMILY_IDS.items():
+            mask = family_int == fam_id
+            if mask.any():
+                self.extras["episode"][f"success_{fam_name}"] = torch.mean(success_before_reset[mask])
+                self.extras["episode"][f"progress_{fam_name}"] = torch.mean(progress_before_reset[mask])
+            else:
+                self.extras["episode"][f"success_{fam_name}"] = torch.tensor(float("nan"))
+                self.extras["episode"][f"progress_{fam_name}"] = torch.tensor(float("nan"))
 
         self.active_waypoint_idx[env_ids] = 0
         self.waypoint_dwell_steps[env_ids] = 0

@@ -14,21 +14,41 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._use_inferred_depth = bool(
             getattr(self.cfg.sensor.depth_estimation, "enabled", False)
         )
+        self._depth_buffer_len = int(self.cfg.sensor.depth_camera_config.num_history)
 
     def _init_buffers(self):
         super()._init_buffers()
+        _, h, w = self.student_depth_shape  # always (1, H, W) for the network
         if self._use_inferred_depth:
-            self.student_depth = torch.zeros(
-                self.num_envs, *self.student_depth_shape,
+            # Manual 2-frame buffer for inferred depth
+            self._depth_buffer = torch.zeros(
+                self.num_envs, self._depth_buffer_len, h, w,
                 device=self.device, dtype=torch.float,
             )
+            # EMA-stabilized normalization for inferred depth (monocular depth
+            # estimators output arbitrary scale; EMA percentiles give a smooth,
+            # consistent mapping to [-0.5, 0.5] across frames).
+            self._depth_ema_lo = torch.zeros(1, device=self.device)
+            self._depth_ema_hi = torch.ones(1, device=self.device)
+            self._depth_ema_initialized = False
         else:
-            self.student_depth = self.simulator.get_depth_images()
-            if tuple(self.student_depth.shape[1:]) != self.student_depth_shape:
+            self._depth_buffer = self.simulator.get_depth_images()
+            if self._depth_buffer.shape[1] != self._depth_buffer_len:
                 raise RuntimeError(
-                    f"Simulator depth shape {tuple(self.student_depth.shape[1:])} does not match "
-                    f"configured student depth shape {self.student_depth_shape}."
+                    f"Simulator depth buffer length {self._depth_buffer.shape[1]} "
+                    f"does not match configured num_history={self._depth_buffer_len}."
                 )
+            expected_hw = (h, w)
+            if tuple(self._depth_buffer.shape[2:]) != expected_hw:
+                raise RuntimeError(
+                    f"Simulator depth resolution {tuple(self._depth_buffer.shape[2:])} "
+                    f"does not match configured student depth resolution {expected_hw}."
+                )
+        # student_depth exposes the previous frame (index 1) when buffer_len>=2,
+        # matching extreme-parkour which passes depth_buffer[:, -2].
+        # Simulator buffer layout: index 0 = newest, index 1 = previous.
+        self._prev_frame_idx = min(1, self._depth_buffer_len - 1)
+        self.student_depth = self._depth_buffer[:, self._prev_frame_idx : self._prev_frame_idx + 1]
         self._depth_rendered_this_step = False
 
     def post_physics_step(self):
@@ -59,25 +79,62 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.simulator.draw_debug_sensor_images()
 
     def _refresh_student_depth(self):
-        """Populate student_depth from the configured source after update_sensors."""
+        """Populate depth buffer from the configured source after update_sensors."""
         if not self._use_inferred_depth:
+            # Direct depth: simulator already updated self._depth_buffer in-place
             return
         inferred = self.simulator.get_inferred_depth_images()
         if inferred is not None:
-            self.student_depth[:] = self._process_inferred_depth(inferred)
+            processed = self._process_inferred_depth(inferred)
+            # Shift buffer: copy current (index 0) to previous (index 1), insert new at 0
+            if self._depth_buffer_len > 1:
+                self._depth_buffer[:, 1:] = self._depth_buffer[:, :-1].clone()
+            self._depth_buffer[:, 0:1] = processed
 
     def _process_inferred_depth(self, inferred_depth):
-        """Resize and normalize inferred depth to student_depth_shape [-0.5, 0.5]."""
+        """Crop, resize, and normalize inferred depth to (N, 1, H, W) in [-0.5, 0.5].
+
+        Monocular depth estimators output arbitrary absolute scale (even "metric"
+        models are miscalibrated on synthetic renders).  We use EMA-smoothed p2/p98
+        percentiles across batches to give a stable, consistent normalization that
+        preserves spatial structure without per-frame jitter.
+        """
+        depth_cfg = self.cfg.sensor.depth_camera_config
         _, h, w = self.student_depth_shape
-        depth = inferred_depth.unsqueeze(1)
-        depth = F.interpolate(depth, size=(h, w), mode="bilinear", align_corners=False)
-        dmin = depth.amin(dim=(-2, -1), keepdim=True)
-        dmax = depth.amax(dim=(-2, -1), keepdim=True)
-        return (depth - dmin) / (dmax - dmin + 1e-6) - 0.5
+
+        # Crop to match GT depth FOV
+        height, width = inferred_depth.shape[-2:]
+        top = int(getattr(depth_cfg, "crop_top", 0))
+        bottom = int(getattr(depth_cfg, "crop_bottom", 0))
+        left = int(getattr(depth_cfg, "crop_left", 0))
+        right = int(getattr(depth_cfg, "crop_right", 0))
+        end_h = height - bottom if bottom > 0 else height
+        end_w = width - right if right > 0 else width
+        depth = inferred_depth[:, top:end_h, left:end_w]
+
+        # Update running normalization bounds
+        batch_lo = torch.quantile(depth, 0.02)
+        batch_hi = torch.quantile(depth, 0.98)
+        if not self._depth_ema_initialized:
+            self._depth_ema_lo.fill_(batch_lo.item())
+            self._depth_ema_hi.fill_(batch_hi.item())
+            self._depth_ema_initialized = True
+        else:
+            self._depth_ema_lo.lerp_(batch_lo, 0.02)
+            self._depth_ema_hi.lerp_(batch_hi, 0.02)
+
+        # Normalize to [-0.5, 0.5] using stable running statistics
+        span = (self._depth_ema_hi - self._depth_ema_lo).clamp(min=1e-3)
+        depth = ((depth - self._depth_ema_lo) / span).clamp(0, 1) - 0.5
+
+        depth = depth.unsqueeze(1)
+        if depth.shape[-2:] != (h, w):
+            depth = F.interpolate(depth, size=(h, w), mode="bilinear", align_corners=False)
+        return depth
 
     def _apply_depth_noise(self):
         if self._depth_noise_level > 0:
-            self.student_depth += self._depth_noise_level * 2 * (
+            self._depth_buffer += self._depth_noise_level * 2 * (
                 torch.rand(1, device=self.device) - 0.5
             )
 
@@ -141,7 +198,7 @@ class Go2ParkourStudent(LeggedRobotParkour):
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)
         if len(env_ids) > 0:
-            self.student_depth[env_ids] = 0.0
+            self._depth_buffer[env_ids] = 0.0
 
     def _validate_configured_observation_dims(self):
         if self.num_obs != self.obs_spec.prop_dim:

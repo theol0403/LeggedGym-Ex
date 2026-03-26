@@ -181,16 +181,24 @@ class ParkourStudentRunner(OnPolicyRunner):
 
         ep_string = ""
         if locs["ep_infos"]:
-            for key in locs["ep_infos"][0]:
+            all_keys = set()
+            for ep_info in locs["ep_infos"]:
+                all_keys.update(ep_info.keys())
+            for key in sorted(all_keys):
                 infotensor = torch.tensor([], device=self.device)
                 for ep_info in locs["ep_infos"]:
+                    if key not in ep_info:
+                        continue
                     value = ep_info[key]
                     if not isinstance(value, torch.Tensor):
                         value = torch.tensor([value], device=self.device)
                     if len(value.shape) == 0:
                         value = value.unsqueeze(0)
                     infotensor = torch.cat((infotensor, value.to(self.device)))
-                mean_value = torch.mean(infotensor)
+                finite = infotensor[torch.isfinite(infotensor)]
+                if len(finite) == 0:
+                    continue
+                mean_value = torch.mean(finite)
                 self.writer.add_scalar("Episode/" + key, mean_value, locs["it"])
                 ep_string += f"""{f'Mean episode {key}:':>{pad}} {mean_value:.4f}\n"""
 
