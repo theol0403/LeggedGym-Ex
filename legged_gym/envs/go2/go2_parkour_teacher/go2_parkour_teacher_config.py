@@ -98,6 +98,7 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         goal_heading_tracking_sigma = 0.5
         dynamic_motion_penalty_scale = 0.35
         progress_speed_clip = [-0.5, 1.5]
+        flat_back_target_pg_x = 0.09  # ~5 deg nose-down target pitch
 
         class scales(Go2RoughCommonCfg.rewards.scales):
             termination = -50.0
@@ -121,7 +122,7 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
             lin_vel_z = -0.5
             ang_vel_xy = -0.05
             orientation = -0.5
-            flat_back = -2.0
+            flat_back = -3.0
             foot_clearance = 0.0
             hip_pos = 0.0
             feet_contact_stand_still = 0.0

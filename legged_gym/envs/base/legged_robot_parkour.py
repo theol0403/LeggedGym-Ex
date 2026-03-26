@@ -401,9 +401,12 @@ class LeggedRobotParkour(LeggedRobot):
         return super()._reward_orientation() * self.motion_penalty_scale
 
     def _reward_flat_back(self):
-        # Penalize pitch (projected_gravity x-component) to keep the back level.
-        # Scaled by motion_penalty_scale so it relaxes during jumps/stairs.
-        return torch.square(self.simulator.projected_gravity[:, 0]) * self.motion_penalty_scale
+        # projected_gravity[:, 0]: positive = nose-down, negative = nose-up (butt sag).
+        # Target a slight nose-down pitch; penalize nose-up 3x harder.
+        pg_x = self.simulator.projected_gravity[:, 0]
+        error = pg_x - self.cfg.rewards.flat_back_target_pg_x
+        weight = torch.where(error < 0.0, 3.0, 1.0)
+        return weight * torch.square(error) * self.motion_penalty_scale
 
     def _reward_tracking_goal_vel(self):
         goal_distance = torch.norm(self.commands[:, :2], dim=1, keepdim=True)
