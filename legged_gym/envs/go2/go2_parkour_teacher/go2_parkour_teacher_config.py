@@ -121,6 +121,7 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
             lin_vel_z = -0.5
             ang_vel_xy = -0.05
             orientation = -0.5
+            flat_back = -2.0
             foot_clearance = 0.0
             hip_pos = 0.0
             feet_contact_stand_still = 0.0

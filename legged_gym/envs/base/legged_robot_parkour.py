@@ -400,6 +400,11 @@ class LeggedRobotParkour(LeggedRobot):
     def _reward_orientation(self):
         return super()._reward_orientation() * self.motion_penalty_scale
 
+    def _reward_flat_back(self):
+        # Penalize pitch (projected_gravity x-component) to keep the back level.
+        # Scaled by motion_penalty_scale so it relaxes during jumps/stairs.
+        return torch.square(self.simulator.projected_gravity[:, 0]) * self.motion_penalty_scale
+
     def _reward_tracking_goal_vel(self):
         goal_distance = torch.norm(self.commands[:, :2], dim=1, keepdim=True)
         desired_goal_velocity = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float)

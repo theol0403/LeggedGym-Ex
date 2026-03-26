@@ -8,7 +8,7 @@ from legged_gym.envs.base.parkour_observation import ParkourObservationSpec
 
 class Go2ParkourStudentCfg(Go2ParkourTeacherCfg):
     class env(Go2ParkourTeacherCfg.env):
-        num_envs = 48
+        num_envs = 192
         frame_stack = 0
         num_observations = None
         num_privileged_obs = None
@@ -97,7 +97,7 @@ class Go2ParkourStudentCfgPPO(BaseConfig):
         actor_hidden_dims = [512, 256, 128]
 
     class algorithm:
-        learning_rate = 1.0e-3
+        learning_rate = 2.0e-3
         action_loss_coef = 1.0
         yaw_loss_coef = 1.0
         yaw_threshold = 0.6
@@ -137,7 +137,7 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
             enabled = True
             model_type = "depth_anything_v2"
             model_size = "small"
-            update_interval = 1
+            update_interval = 2
 
         class depth_camera_config(Go2ParkourStudentCfg.sensor.depth_camera_config):
             pass

@@ -47,9 +47,12 @@ a depth-estimation network (e.g.\ Depth Anything V2), and feeds the inferred
 depth map to the policy---enabling deployment without a physical depth camera.
 
 \paragraph{Current milestone.}
-The student policy is being trained on \emph{ground-truth simulator depth} to
-establish a convergent distillation baseline before introducing the
-depth-estimation network.
+A \emph{ground-truth depth} student (simulator depth camera) has been trained to
+convergence; a \emph{depth-estimation} student (RGB + Depth Anything V2 Small,
+inferred depth normalized to the student tensor) is trained with the same
+distillation pipeline. Offline ablations (see \S\ref{sec:ablation}) indicate
+that the depth-estimation checkpoint tested relies on the depth stream, not
+proprioception alone.
 
 \paragraph{Reference work.}
 The architecture and training procedure follow Cheng et al.\ ``Extreme Parkour
@@ -367,6 +370,100 @@ Action loss continued decreasing to 0.27, yaw loss to 0.017, and reward
 stabilized in the 92--94 range. The terrain level advanced to ${\sim}2.2$.
 The training is still running as of this writing.
 
+\subsection{Depth-Estimation Student (RGB $\rightarrow$ DA-v2 $\rightarrow$ policy)}
+
+The task \texttt{go2\_parkour\_depth\_est\_student} disables the simulator depth
+camera (\texttt{add\_depth=false}), renders RGB at the same pose as the old depth
+camera (BatchRenderer), and runs Depth Anything V2 Small on the batch. Inferred
+depth is resized to $58 \times 87$ and per-frame min--max normalized to
+$[-0.5,0.5]$ before the CNN--GRU encoder. The student network and losses are
+unchanged from the ground-truth depth student.
+
+\paragraph{Training vs.\ teacher vs.\ GT-depth student.}
+Table~\ref{tab:threepolicies} compares \emph{representative} training snapshots.
+Rewards are environment returns under the same parkour reward function, but
+iterations are not aligned across curriculum phases (success is also noisy at
+48 envs). The teacher uses privileged scandots; both students use
+proprioception + depth (simulated or inferred).
+
+\begin{table}[ht]
+\centering
+\caption{Representative training metrics: teacher (PPO) vs.\ ground-truth depth
+student vs.\ depth-estimation student (DAgger).}
+\label{tab:threepolicies}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Policy} & \textbf{Algorithm} & \textbf{Terrain obs.} & \textbf{Iter} &
+\textbf{Reward} & \textbf{Success} & \textbf{Progress} \\
+\midrule
+Teacher & PPO & Scandots (priv.) & 2000 & 74.4 & 0.23 & 0.93 \\
+GT depth student & DAgger & Sim.\ depth camera & 800 & 92.7 & 0.10 & 0.95 \\
+GT depth student & DAgger & Sim.\ depth camera & 1492 & 92.8 & 0.00 & 0.92 \\
+DA-v2 student & DAgger & Inferred depth & $\sim$310$^{\dagger}$ & 72.2 & 0.00 & 0.74 \\
+DA-v2 student & DAgger & Inferred depth & $\sim$540$^{\ddagger}$ & 52.2 & 0.00 & 0.72 \\
+\bottomrule
+\end{tabular}
+\\[4pt]
+\footnotesize
+$^{\dagger}$Resumed run; console snapshot (iteration ${\sim}310$): mean reward
+72.2, action loss ${\sim}0.24$, yaw loss ${\sim}0.01$.\quad
+$^{\ddagger}$Earlier run on GPU~1 (iteration ${\sim}538$): mean reward 52.2,
+action loss ${\sim}0.46$, mean episode length ${\sim}589$; success rate is
+batch-noisy at 48 envs.
+\end{table}
+
+\paragraph{Interpretation.}
+The teacher reaches high success when the curriculum is favorable (e.g.\ 83\% at
+iter~500 in Table~\ref{tab:teacher}); later iterations trade success for harder
+terrain. The GT-depth student matches or exceeds teacher \emph{progress} at
+strong checkpoints (action loss ${\sim}0.27$--0.33) with the usual success-rate
+variance. The DA-v2 student is slower per iteration (RGB + estimator overhead)
+and, at comparable mid-training snapshots, shows lower mean reward and sparser
+success than the best GT-depth student---consistent with noisier exteroceptive
+input. Continued training and evaluation on a fixed checkpoint are needed for a
+fair final comparison.
+
+\subsection{Ablation: Does the depth-estimation student use depth?}
+\label{sec:ablation}
+
+We evaluated the frozen policy with \texttt{legged\_gym/scripts/ablate\_parkour\_student\_depth.py}
+(headless rollouts, ${\sim}96$ completed episodes per condition, same seed and
+terrain). The \texttt{apply\_student\_depth\_ablation} utility replaces
+\texttt{student\_depth} before \texttt{act\_inference}: \emph{none} (real
+depth), \emph{zero} (zeros), \emph{noise} (i.i.d.\ uniform in $[-0.5,0.5]$),
+\emph{shuffle} (permute depth across parallel envs).
+
+\paragraph{Checkpoint.}
+\texttt{logs/go2\_parkour\_depth\_est\_student/Mar25\_15-12-01\_depth\_est\_student\_genesis/model\_500.pt}
+(latest checkpoint in that run directory at the time of the study).
+
+\begin{table}[ht]
+\centering
+\caption{Depth ablation (eval rollouts, ${\sim}96$--98 episodes per row).}
+\label{tab:ablation}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Ablation} & \textbf{Success rate} & \textbf{Mean progress} & \textbf{Mean WPs} \\
+\midrule
+none (real inferred depth) & 0.031 & 0.928 & 1.00 \\
+zero & 0.010 & \textbf{0.592} & \textbf{0.63} \\
+noise & 0.061 & 0.880 & 0.98 \\
+shuffle & 0.010 & 0.889 & 0.94 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Takeaway.}
+\emph{Zero} depth sharply reduces mean progress along the course and waypoints
+reached versus \emph{none}, indicating the policy is not behaving as
+proprioception-only locomotion at this checkpoint. \emph{Shuffle} keeps high
+progress but collapses success to ${\sim}1\%$, consistent with wrong
+depth-to-scene correspondence while still moving under commands and recurrent
+state. \emph{Noise} remains closer to \emph{none} on progress (random frames still
+carry spatial structure); with only ${\sim}100$ episodes, success rates are
+high-variance.
+
 % ============================================================================
 \section{Open Issues and Next Steps}
 
@@ -421,18 +518,12 @@ The training is still running as of this writing.
         Gaussian noise ($\sigma = 0.1$) matching the reference's
         \texttt{dis\_noise} implementation.
 
-  \item \textbf{Depth estimation network integration.}
-        Replace simulator depth with inferred depth from Depth Anything V2
-        (or similar monocular depth estimator) applied to the simulator's RGB
-        output. This requires:
-        \begin{itemize}[nosep]
-          \item Adding an RGB camera to the student environment (same pose as
-                depth camera).
-          \item Running the depth estimator at the same decimation rate as the
-                depth camera.
-          \item Handling scale/shift ambiguity between metric depth and
-                estimator output (affine alignment or learned adapter).
-        \end{itemize}
+  \item \textbf{Depth estimation network integration (implemented).}
+        The \texttt{go2\_parkour\_depth\_est\_student} task uses RGB
+        (BatchRenderer) + Depth Anything V2 Small with per-frame min--max
+        normalization to $[-0.5,0.5]$. Remaining work: longer training to match
+        GT-depth student checkpoints, optional metric-depth calibration, and
+        per-pixel noise for robustness.
 
   \item \textbf{Evaluate sim-to-real gap.} Deploy the trained student on
         physical Go2 hardware with an onboard RGB camera and assess transfer
@@ -505,7 +596,12 @@ LeggedGym-Ex/
       actor_critic_parkour_student.py   # Student network (CNN+GRU+actor)
   logs/
     go2_parkour_teacher/                # Teacher checkpoints and TB events
-    go2_parkour_student/                # Student checkpoints and TB events
+    go2_parkour_student/                # GT-depth student checkpoints and TB
+    go2_parkour_depth_est_student/        # DA-v2 depth-estimation student logs
+  legged_gym/scripts/
+    ablate_parkour_student_depth.py     # Headless depth ablation (none/zero/noise/shuffle)
+  legged_gym/utils/
+    student_depth_ablation.py           # apply_student_depth_ablation(...)
 \end{lstlisting}
 
 % ============================================================================

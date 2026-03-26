@@ -78,7 +78,11 @@ def _get_latest_checkpoint(load_run, prefix):
 
 def get_load_path(root, load_run=-1, checkpoint=-1):
     load_run = _get_load_run_dir(root, load_run)
-    model = _get_latest_checkpoint(load_run, "model") if checkpoint == -1 else f"model_{checkpoint}.pt"
+    if checkpoint == -1:
+        best = os.path.join(load_run, "best_model.pt")
+        model = "best_model.pt" if os.path.isfile(best) else _get_latest_checkpoint(load_run, "model")
+    else:
+        model = f"model_{checkpoint}.pt"
     load_path = os.path.join(load_run, model)
     if not os.path.isfile(load_path):
         raise ValueError("Checkpoint does not exist: " + load_path)
