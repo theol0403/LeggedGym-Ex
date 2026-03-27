@@ -138,6 +138,11 @@ class ParkourStudentRunner(OnPolicyRunner):
                 rewards = rewards.to(self.device, non_blocking=True)
                 dones = dones.to(self.device, non_blocking=True)
 
+                # Reset GRU hidden state for environments that just reset
+                done_env_ids = dones.nonzero(as_tuple=False).flatten()
+                if len(done_env_ids) > 0:
+                    self.alg.actor_critic.reset_gru(done_env_ids)
+
                 if self.log_dir is not None:
                     if "episode" in infos:
                         ep_infos.append(infos["episode"])

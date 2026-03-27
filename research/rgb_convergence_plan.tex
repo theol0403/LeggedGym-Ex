@@ -1,0 +1,658 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+
+\definecolor{passing}{HTML}{2E7D32}
+\definecolor{failing}{HTML}{C62828}
+\definecolor{partial}{HTML}{EF6C00}
+
+\title{Achieving RGB Depth-Estimation Student Convergence\\on Gap Terrain: Experiment Plan}
+\author{Parkour Student Distillation Project}
+\date{March 2026}
+
+\begin{document}
+\maketitle
+
+%----------------------------------------------------------------------
+\section{Problem Statement}
+%----------------------------------------------------------------------
+
+A Go2 quadruped is trained to traverse parkour terrain (stairs, hurdles,
+gaps) via DAgger-based teacher--student distillation.  The \emph{teacher}
+uses ground-truth (GT) scandot heightmaps and achieves 100\% success on all
+terrain families.  Two student variants receive only front-facing depth
+images through a shared CNN$\,+\,$GRU encoder:
+
+\begin{enumerate}[nosep]
+  \item \textbf{GT depth student} --- uses simulator-rendered depth.
+        Currently at \textbf{100\% success on all families} (step 2939/5000).
+  \item \textbf{RGB depth-estimation student} --- uses Depth Anything V2
+        (DA-V2) inferred from RGB.  Currently at \textbf{0\% gap success}
+        (step 1088), despite 100\% stairs and 79\% hurdles.
+\end{enumerate}
+
+The gap between the two students must be closed.  This document enumerates
+every hypothesis, proposes targeted experiments, and defines a rigorous
+methodology for parallel execution across 4 GPUs.
+
+%----------------------------------------------------------------------
+\section{Background and Current Architecture}
+%----------------------------------------------------------------------
+
+\subsection{DAgger Distillation Pipeline}
+
+\begin{itemize}[nosep]
+  \item \textbf{Teacher}: PPO-trained, proprioception (53) $+$ scandots (132)
+        $\to$ MLP [512,\,256,\,128] $\to$ 12 joint actions.
+  \item \textbf{Student depth encoder}: depth image $(1, 58, 87)$ $\to$
+        CNN $\to$ 32-dim $+$ masked proprio (53) $\to$ MLP [85,\,128,\,32]
+        $\to$ GRU (512 hidden) $\to$ MLP $\to$ latent (32) $+$ yaw (2).
+  \item \textbf{Student actor}: proprio (53, with predicted yaw injected via
+        MTS) $+$ latent (32) $\to$ MLP [512,\,256,\,128] $\to$ 12 actions.
+  \item \textbf{Loss}: $\mathcal{L} = \|a_{\text{teacher}} - a_{\text{student}}\|_2
+        + \|y_{\text{oracle}} - y_{\text{pred}}\|_2$, windowed BPTT
+        (window $= 24$ steps) through GRU, Adam LR $= 2 \times 10^{-3}$.
+\end{itemize}
+
+\subsection{Depth Normalization Pipelines}
+
+\textbf{GT depth} (simulator $\to$ student):
+\[
+  d_{\text{norm}} = \frac{\text{clamp}(d_{\text{raw}},\; 0,\; 2)}{2} - 0.5
+  \quad\Rightarrow\quad d_{\text{norm}} \in [-0.5,\; 0.5]
+\]
+Fixed, absolute mapping.  Mean $\approx 0.41$ (most pixels at far clip).
+
+\textbf{Inferred depth} (DA-V2 metric outdoor $\to$ EMA normalization):
+\[
+  d_{\text{norm}} = \frac{d_{\text{raw}} - \text{EMA}_{p2}}
+                         {\text{EMA}_{p98} - \text{EMA}_{p2}} - 0.5
+  \quad\Rightarrow\quad d_{\text{norm}} \in [-0.5,\; 0.5]
+\]
+Adaptive, EMA $\alpha = 0.02$ over batch percentiles.  Mean $\approx 0.0$.
+
+\subsection{Measured Depth Estimation Quality}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{Raw Range} & \textbf{Spatial $r$} & \textbf{Direction} & \textbf{Affine MAE} \\
+\midrule
+GT depth (simulator)            & 0.45--2.0\,m & 1.00 & --- & 0.000 \\
+DA-V2 Relative Small            & 0.4--5.4 (disp.)    & $-0.59$ & Inverted & 0.110 \\
+DA-V2 Metric Indoor Small       & 1.0--4.5\,m  & $+0.72$ & Correct & 0.093 \\
+DA-V2 Metric Outdoor Small      & 4.6--21.0\,m & $+0.79$ & Correct & 0.091 \\
+\bottomrule
+\end{tabular}
+\caption{Depth estimation model comparison on Genesis synthetic renders (106$\times$60).
+$r$ = Pearson correlation with GT depth per-pixel. Affine MAE after optimal least-squares alignment.}
+\label{tab:depth_models}
+\end{table}
+
+Key finding: ``Metric'' models are \emph{not} metric-accurate on synthetic
+renders --- the outdoor model predicts 5--10$\times$ too far.  However, it
+has the best \emph{spatial correlation} ($r = 0.79$), meaning it preserves
+relative depth structure.
+
+%----------------------------------------------------------------------
+\section{Hypotheses}
+%----------------------------------------------------------------------
+
+We identify seven hypotheses for why the RGB student fails on gaps, ordered
+by estimated likelihood and ease of testing:
+
+\begin{enumerate}[label=\textbf{H\arabic*}]
+  \item \textbf{Normalization distribution mismatch.}
+        EMA normalization maps to mean $\approx 0$ with uniform spread, while
+        GT maps to mean $\approx 0.41$ with heavy right skew (most pixels at
+        far clip).  The CNN+GRU may need the skewed distribution to reliably
+        detect gaps as ``outlier low'' pixels.
+
+  \item \textbf{Depth estimation spatial resolution insufficient for gaps.}
+        DA-V2 at 106$\times$60 input may not resolve the narrow gap geometry
+        ($\sim$5--10 pixel wide stripe at 0.5\,m distance).  Larger models
+        (base/large) or higher resolution may help.
+
+  \item \textbf{Depth estimation update frequency too low.}
+        Current \texttt{update\_interval=2} means the depth model runs every
+        2nd sensor step (every 10 physics steps = 200\,ms).  Gap crossing
+        requires precise timing; stale depth may cause missed decisions.
+
+  \item \textbf{BPTT window too short for noisy depth.}
+        With noisier depth, the GRU needs more temporal context to filter
+        signal from noise.  Window = 24 may be insufficient; extreme-parkour
+        uses similar but with cleaner GT depth.
+
+  \item \textbf{Learning rate / optimizer dynamics.}
+        The depth encoder introduces more parameters with noisier gradients.
+        A lower LR or warmup schedule may stabilize training.
+
+  \item \textbf{Depth noise level too high.}
+        \texttt{depth\_noise\_level = 0.1} adds uniform noise $\pm 0.1$ to
+        normalized depth.  Combined with estimation noise, total noise may
+        overwhelm the gap signal (gaps are $\sim$0.1--0.2 normalized units
+        different from background).
+
+  \item \textbf{Depth model wrong entirely.}
+        Perhaps a different backbone (Metric3D, UniDepth, Video Depth
+        Anything) would give better spatial structure on synthetic renders.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Experimental Design}
+%----------------------------------------------------------------------
+
+\subsection{Phase 0: Oracle Experiments (Critical Controls)}
+
+These experiments isolate the contribution of each component.  They must
+run \emph{first} because they determine which subsequent experiments are
+worth running.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{4cm}p{5.5cm}p{2.5cm}}
+\toprule
+\textbf{ID} & \textbf{Modification} & \textbf{What it tests} & \textbf{Baseline} \\
+\midrule
+\texttt{O1-gt-ema} &
+  GT depth $+$ EMA normalization (bypass simulator linear norm, apply EMA to raw GT meters) &
+  Is the EMA normalization itself the problem, independent of the depth model? If GT+EMA also fails on gaps, normalization is the bottleneck. &
+  GT student \\
+\midrule
+\texttt{O2-gt-affine} &
+  GT depth $+$ random affine perturbation: $d' = (1 + \epsilon_s)\,d + \epsilon_b$, $\epsilon_s \sim \mathcal{U}(-0.3, 0.3)$, $\epsilon_b \sim \mathcal{U}(-0.2, 0.2)$ per frame &
+  How robust is the CNN to distribution shift? If GT+affine still works, the CNN can tolerate distribution differences. &
+  GT student \\
+\midrule
+\texttt{O3-rgb-gtfallback} &
+  RGB student with \texttt{update\_interval=1} (depth estimation every sensor step) &
+  Is the 2$\times$ update interval causing stale depth on gaps? &
+  Current RGB \\
+\bottomrule
+\end{tabular}
+\caption{Phase 0 oracle experiments.}
+\label{tab:phase0}
+\end{table}
+
+\subsection{Phase 1: Normalization Sweep}
+
+Conditioned on Phase 0 results.  If \texttt{O1-gt-ema} fails, normalization
+is the bottleneck and these are high priority.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{5cm}p{5cm}}
+\toprule
+\textbf{ID} & \textbf{Configuration} & \textbf{Rationale} \\
+\midrule
+\texttt{N1-affine-fit} &
+  Pre-computed global affine: $d_{\text{norm}} = 0.088 \cdot d_{\text{raw}} + 0.429 - 0.5$,
+  then clamp to $[-0.5, 0.5]$ (from least-squares fit) &
+  Fixed mapping avoids EMA adaptation lag.  Uses the measured optimal affine
+  alignment to GT. \\
+\midrule
+\texttt{N2-ema-fast} &
+  EMA with $\alpha = 0.1$ (5$\times$ faster adaptation) &
+  Current $\alpha = 0.02$ may be too slow to track scene changes during
+  curriculum progression. \\
+\midrule
+\texttt{N3-ema-slow} &
+  EMA with $\alpha = 0.005$ (4$\times$ slower) &
+  Slower EMA = more stable normalization; tests if EMA drift is the issue. \\
+\midrule
+\texttt{N4-quantile-wide} &
+  EMA on $p_1 / p_{99}$ instead of $p_2 / p_{98}$ &
+  Wider percentile bounds preserve more of the distribution tails, which
+  may contain the gap signal. \\
+\midrule
+\texttt{N5-running-meanstd} &
+  Normalize as $(d - \mu_{\text{EMA}}) / \sigma_{\text{EMA}}$, then
+  $\tanh / 2$ to map to $[-0.5, 0.5]$ &
+  Mean/std normalization (like BatchNorm) instead of percentile; may better
+  preserve gap outlier structure. \\
+\bottomrule
+\end{tabular}
+\caption{Phase 1 normalization experiments.}
+\label{tab:phase1}
+\end{table}
+
+\subsection{Phase 2: Depth Model Sweep}
+
+If Phase 0 shows the depth model is the bottleneck (i.e., \texttt{O1-gt-ema}
+succeeds), these experiments test alternative depth estimation backends.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{5cm}p{5cm}}
+\toprule
+\textbf{ID} & \textbf{Model} & \textbf{Rationale} \\
+\midrule
+\texttt{D1-indoor} &
+  DA-V2 Metric Indoor Small ($r = 0.72$, range 1.0--4.5\,m) &
+  Closer absolute range to GT than outdoor; may work better with fixed
+  affine normalization. \\
+\midrule
+\texttt{D2-relative-inv} &
+  DA-V2 Relative Small with inversion ($d' = d_{\max} - d$) + EMA norm &
+  Relative model has inverted output; after inversion, $r \approx +0.59$.
+  Tests if ordinal depth with correct direction suffices. \\
+\midrule
+\texttt{D3-outdoor-base} &
+  DA-V2 Metric Outdoor \textbf{Base} ($r$ likely $> 0.79$) &
+  Larger encoder may give better spatial resolution for gap detection.
+  Slower but more accurate. \\
+\midrule
+\texttt{D4-video-metric} &
+  Video Depth Anything Metric Small (temporal consistency built-in) &
+  Uses temporal priors across frames; may give smoother depth for the GRU.
+  Note: streaming per-env state, higher latency. \\
+\bottomrule
+\end{tabular}
+\caption{Phase 2 depth model experiments.}
+\label{tab:phase2}
+\end{table}
+
+\subsection{Phase 3: Training Hyperparameter Sweep}
+
+If the depth signal is adequate (Phases 0--2 confirm), these experiments
+tune the learning dynamics.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{5cm}p{5cm}}
+\toprule
+\textbf{ID} & \textbf{Configuration} & \textbf{Rationale} \\
+\midrule
+\texttt{T1-bptt32} &
+  BPTT window = 32 (from 24) &
+  Longer temporal gradient flow through GRU; helps if the depth encoder
+  needs more context to learn gap detection from noisy input. \\
+\midrule
+\texttt{T2-bptt48} &
+  BPTT window = 48 &
+  Even longer window; tests diminishing returns vs.\ memory cost. \\
+\midrule
+\texttt{T3-lr-low} &
+  Learning rate $= 5 \times 10^{-4}$ (4$\times$ lower) &
+  Slower, more stable optimization; may prevent the oscillation pattern
+  where gap success spikes then collapses. \\
+\midrule
+\texttt{T4-lr-warmup} &
+  LR warmup: linear 0 $\to$ $2 \times 10^{-3}$ over first 200 iterations &
+  Prevents early instability while EMA normalization is still calibrating.\\
+\midrule
+\texttt{T5-noise-zero} &
+  \texttt{depth\_noise\_level = 0.0} &
+  Removes additive depth noise entirely.  Tests if 0.1 noise overwhelms
+  the already-noisy inferred depth signal. \\
+\midrule
+\texttt{T6-noise-low} &
+  \texttt{depth\_noise\_level = 0.02} &
+  Reduced noise: 5$\times$ lower than current 0.1. \\
+\midrule
+\texttt{T7-steps240} &
+  \texttt{num\_steps\_per\_env = 240} (from 120) &
+  Longer rollouts give more data per gradient step; may help with
+  sparse gap encounters (gaps are $1/3$ of terrain). \\
+\midrule
+\texttt{T8-update-1} &
+  \texttt{update\_interval = 1} (depth est every sensor step) &
+  Same as \texttt{O3} but in combination with best normalization
+  from Phase 1. \\
+\bottomrule
+\end{tabular}
+\caption{Phase 3 training hyperparameter experiments.}
+\label{tab:phase3}
+\end{table}
+
+\subsection{Phase 4: Architecture Modifications}
+
+If training dynamics are not the issue, these experiments modify the
+student architecture.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{5cm}p{5cm}}
+\toprule
+\textbf{ID} & \textbf{Modification} & \textbf{Rationale} \\
+\midrule
+\texttt{A1-proprio-hist} &
+  Add 10-frame proprioceptive history encoder (1D conv as in
+  extreme-parkour) as additional input to actor &
+  Provides a non-vision temporal signal.  Gap crossing requires precise
+  timing; joint feedback history may compensate for noisy depth. \\
+\midrule
+\texttt{A2-gru1024} &
+  GRU hidden dim = 1024 (from 512) &
+  Larger temporal memory.  The GRU must encode both depth features and
+  temporal state; 512 may be insufficient with noisy input. \\
+\midrule
+\texttt{A3-2frame-input} &
+  Pass both current \emph{and} previous depth frame as 2-channel input to
+  CNN: shape $(2, 58, 87)$ &
+  Explicit temporal stacking at CNN level, bypassing GRU for motion cues.
+  Requires modifying \texttt{DepthBackbone58x87} input channels. \\
+\bottomrule
+\end{tabular}
+\caption{Phase 4 architecture experiments.}
+\label{tab:phase4}
+\end{table}
+
+\subsection{Phase 5: Combined Best Configuration}
+
+After Phases 0--4 identify which individual changes help, run a final
+experiment combining the top 2--3 improvements.
+
+%----------------------------------------------------------------------
+\section{Possible Bugfixes to Investigate}
+%----------------------------------------------------------------------
+
+Before running sweeps, we should audit the following potential bugs:
+
+\begin{enumerate}[label=\textbf{B\arabic*}]
+  \item \textbf{EMA not reset on curriculum change.}
+        When the terrain curriculum advances (harder terrains), the depth
+        distribution shifts.  The EMA may lag behind, giving incorrect
+        normalization for the new terrain.  \emph{Fix}: Reset EMA state when
+        terrain level changes, or increase $\alpha$ during level transitions.
+
+  \item \textbf{Crop mismatch between GT and inferred paths.}
+        GT depth is cropped by the \emph{simulator} before normalization.
+        Inferred depth is cropped in \texttt{\_process\_inferred\_depth}.
+        Verify the crop parameters match exactly and the resulting FOVs are
+        identical.  Currently both use
+        \texttt{crop\_top=0, bottom=2, left=4, right=4} from
+        \texttt{depth\_camera\_config}, which should be correct.
+
+  \item \textbf{Inferred depth buffer timing.}
+        The GT path writes to the depth buffer via the simulator's
+        \texttt{\_update\_depth\_images} (shift right, insert at 0).
+        The inferred path does its own shift in
+        \texttt{\_refresh\_student\_depth}.  Verify the timing is identical:
+        both should shift \emph{after} the new frame is available, and the
+        student should see the \emph{previous} frame (index 1).
+
+  \item \textbf{EMA initialization from first batch.}
+        The first batch may be atypical (all envs start from the same initial
+        position, seeing similar depth).  This seeds the EMA with a biased
+        estimate.  \emph{Fix}: Initialize from the mean of the first $K$
+        batches instead of just the first.
+
+  \item \textbf{GRU hidden not reset on env reset for inferred path.}
+        Verify that \texttt{reset\_gru(env\_ids)} is called for reset envs
+        in the inferred depth path.  If GRU hidden carries stale temporal
+        state across episode boundaries, it could confuse gap detection.
+        (This should be handled by the runner, but worth auditing.)
+
+  \item \textbf{Depth estimation model receives wrong color format.}
+        Genesis may return RGB or BGR; DA-V2 expects RGB.  Verify the color
+        channel ordering in \texttt{\_rgb\_batch\_to\_numpy}.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Methodology}
+%----------------------------------------------------------------------
+
+\subsection{Evaluation Metric}
+
+The primary metric is \textbf{\texttt{Episode/success\_gap}} averaged over
+the last 200 training iterations.  Secondary metrics:
+
+\begin{itemize}[nosep]
+  \item \texttt{Episode/success\_stairs} --- must not regress below 90\%.
+  \item \texttt{Episode/success\_hurdle\_block} --- must not regress below 60\%.
+  \item \texttt{Loss/action} --- lower is better; indicates distillation quality.
+  \item \texttt{Episode/progress\_gap} --- gap progress ratio, useful when
+        success is 0\% (partial credit).
+\end{itemize}
+
+\subsection{Success Criteria}
+
+An experiment is considered \textbf{successful} if it achieves:
+\begin{itemize}[nosep]
+  \item $\texttt{success\_gap} \geq 50\%$ sustained for $\geq 200$ iterations, OR
+  \item $\texttt{success\_gap} \geq 30\%$ with a clear upward trend at step 2000.
+\end{itemize}
+
+The ultimate target is $\texttt{success\_gap} \geq 80\%$, matching the GT
+student's trajectory.
+
+\subsection{Training Protocol}
+
+\begin{itemize}[nosep]
+  \item Each experiment runs for \textbf{2000 iterations} (sufficient to see
+        gap learning based on GT student trajectory).
+  \item \texttt{num\_envs = 48}, \texttt{num\_steps\_per\_env = 120}
+        (unless varied by the experiment).
+  \item Terrain curriculum enabled (default), all families mixed.
+  \item Seed = 1 (default).  If a promising result is found, confirm with
+        seed = 42.
+  \item Training launched via:\\
+        \texttt{CUDA\_VISIBLE\_DEVICES=\$GPU .venv/bin/python
+        legged\_gym/scripts/train.py --task go2\_parkour\_depth\_est\_student
+        --headless --max\_iterations 2000}
+  \item Config overrides applied programmatically before launch (modify
+        config class attributes in the training script).
+\end{itemize}
+
+\subsection{GPU Allocation}
+
+Four GPUs are available.  Experiments are scheduled in phases with dependencies:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ccccc}
+\toprule
+\textbf{Phase} & \textbf{GPU 0} & \textbf{GPU 1} & \textbf{GPU 2} & \textbf{GPU 3} \\
+\midrule
+0 & \texttt{O1-gt-ema} & \texttt{O2-gt-affine} & \texttt{O3-rgb-gtfallback} & (continue current run) \\
+\midrule
+\multicolumn{5}{c}{\emph{Wait for Phase 0 results to determine priority of Phase 1 vs 2}} \\
+\midrule
+1 & \texttt{N1-affine-fit} & \texttt{N2-ema-fast} & \texttt{N5-running-meanstd} & \texttt{T5-noise-zero} \\
+1b & \texttt{N3-ema-slow} & \texttt{N4-quantile-wide} & \texttt{T1-bptt32} & \texttt{T3-lr-low} \\
+\midrule
+2 & \texttt{D1-indoor} & \texttt{D2-relative-inv} & \texttt{D3-outdoor-base} & \texttt{D4-video-metric} \\
+\midrule
+3 & \texttt{T2-bptt48} & \texttt{T4-lr-warmup} & \texttt{T6-noise-low} & \texttt{T8-update-1} \\
+\midrule
+4 & \texttt{A1-proprio-hist} & \texttt{A2-gru1024} & \texttt{A3-2frame-input} & (best combo) \\
+\bottomrule
+\end{tabular}
+\caption{GPU scheduling plan.  Each cell runs for $\sim$2000 iterations.
+Phase 0 takes priority; subsequent phases are re-ordered based on results.}
+\label{tab:gpu_schedule}
+\end{table}
+
+\subsection{Implementation Notes for Config Overrides}
+
+Each experiment requires modifying the config before training.  The cleanest
+approach is a wrapper script that:
+
+\begin{enumerate}[nosep]
+  \item Imports the config classes.
+  \item Applies experiment-specific overrides (e.g., changing EMA alpha,
+        model type, BPTT window).
+  \item Calls the standard training entry point.
+\end{enumerate}
+
+For overrides that require code changes (e.g., affine normalization,
+mean/std normalization, proprio history encoder), a git worktree per
+experiment keeps changes isolated.
+
+\subsection{Monitoring and Early Stopping}
+
+A monitoring script reads TensorBoard events every 5 minutes and reports:
+\begin{itemize}[nosep]
+  \item Current step, \texttt{success\_gap}, \texttt{progress\_gap},
+        \texttt{action\_loss} for each running experiment.
+  \item Early stop if \texttt{success\_stairs} drops below 50\% for 100
+        consecutive iterations (training has diverged).
+  \item Highlight any experiment where \texttt{success\_gap} $> 20\%$
+        (promising signal).
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Execution Priority}
+%----------------------------------------------------------------------
+
+Based on the evidence so far, the recommended execution order is:
+
+\begin{enumerate}
+  \item \textbf{Phase 0 (oracle)} --- \emph{Must run first.}
+        \texttt{O1-gt-ema} is the single most informative experiment.
+        If GT depth + EMA normalization works, the problem is purely depth
+        model quality.  If it fails, the problem is normalization.
+
+  \item \textbf{Bugfix audit (B1--B6)} --- Quick code review, no GPU needed.
+        Do in parallel with Phase 0.
+
+  \item \textbf{Phase 1 or 2} --- Conditioned on Phase 0:
+    \begin{itemize}[nosep]
+      \item If \texttt{O1-gt-ema} \textbf{fails}: normalization is the
+            bottleneck $\to$ prioritize Phase 1.
+      \item If \texttt{O1-gt-ema} \textbf{succeeds}: depth model is the
+            bottleneck $\to$ prioritize Phase 2.
+    \end{itemize}
+
+  \item \textbf{Phase 3} --- Training hyperparameters.  Run the most
+        promising 4 in parallel after identifying the best normalization/model.
+
+  \item \textbf{Phase 4} --- Architecture changes.  Only if Phases 1--3
+        are insufficient.
+
+  \item \textbf{Phase 5} --- Combine the top 2--3 improvements from all
+        phases into a single run.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Risk Assessment}
+%----------------------------------------------------------------------
+
+\begin{itemize}
+  \item \textbf{High risk}: The fundamental limit may be DA-V2's spatial
+        resolution on 106$\times$60 synthetic images.  Gap features are
+        $\sim$5--10 pixels wide at decision distance.  If no depth model
+        resolves gaps, we may need to increase camera resolution (but this
+        slows training).
+
+  \item \textbf{Medium risk}: The oscillation pattern (gap success spikes
+        then collapses) suggests a training stability issue, not a
+        fundamental information deficit.  This is encouraging --- the
+        student \emph{briefly} learns gaps, then forgets.  LR scheduling or
+        longer BPTT may suffice.
+
+  \item \textbf{Low risk}: The curriculum may systematically under-sample
+        gap terrain, giving the optimizer too few gap gradients.  Could
+        address with curriculum weighting, but this is unlikely given the
+        teacher converges fine.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Expected Timeline}
+%----------------------------------------------------------------------
+
+\begin{itemize}[nosep]
+  \item \textbf{Phase 0}: 2000 iterations $\approx$ 2--3 hours per run,
+        3 runs in parallel.
+  \item \textbf{Phase 1--2}: 4 runs in parallel, 2--3 hours each; two
+        sub-rounds = 4--6 hours.
+  \item \textbf{Phase 3}: 4 runs in parallel, 2--3 hours.
+  \item \textbf{Phase 4}: 3 runs, 2--3 hours.
+  \item \textbf{Phase 5}: 1 final run, 5000 iterations $\approx$ 5--6 hours.
+  \item \textbf{Total}: $\sim$12--18 hours of wall time with 4 GPUs.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Appendix: Experiment Implementation Details}
+%----------------------------------------------------------------------
+
+\subsection{\texttt{O1-gt-ema}: GT Depth with EMA Normalization}
+
+Override the GT student config to use EMA normalization instead of
+simulator linear normalization.  This requires:
+\begin{enumerate}[nosep]
+  \item Set \texttt{add\_depth = True}, \texttt{add\_rgb = False}.
+  \item Enable the EMA normalization path in
+        \texttt{\_process\_inferred\_depth} for GT depth.
+  \item Concretely: force \texttt{\_use\_inferred\_depth = True} but
+        provide simulator GT depth (raw meters) as the ``inferred'' source.
+        This reuses the existing EMA pipeline on GT data.
+  \item Alternative implementation: add a
+        \texttt{force\_ema\_normalization} flag that applies EMA to the
+        simulator's raw depth output \emph{before} its linear normalization.
+\end{enumerate}
+
+\subsection{\texttt{O2-gt-affine}: GT Depth with Random Affine Perturbation}
+
+After the simulator's linear normalization, apply a per-batch random
+affine:
+\begin{align*}
+  d' &= (1 + \epsilon_s) \cdot d + \epsilon_b \\
+  \epsilon_s &\sim \mathcal{U}(-0.3, 0.3), \quad
+  \epsilon_b \sim \mathcal{U}(-0.2, 0.2)
+\end{align*}
+Clamp result to $[-0.5, 0.5]$.  This tests CNN robustness to distribution shift.
+
+\subsection{\texttt{N1-affine-fit}: Pre-computed Affine Normalization}
+
+Replace EMA normalization with a fixed affine derived from least-squares
+calibration:
+\[
+  d_{\text{GT}} \approx 0.088 \cdot d_{\text{inferred}} + 0.858
+\]
+Then apply standard GT normalization:
+$d_{\text{norm}} = \text{clamp}(d_{\text{aligned}}, 0, 2) / 2 - 0.5$.
+
+\subsection{\texttt{N5-running-meanstd}: Mean/Std Normalization}
+
+Replace percentile-based EMA with running mean and standard deviation:
+\[
+  d_{\text{norm}} = \tanh\!\left(\frac{d - \mu_{\text{EMA}}}
+  {2\,\sigma_{\text{EMA}}}\right) \cdot 0.5
+\]
+This preserves outlier structure (gaps produce values far from the mean)
+while bounding the output to $[-0.5, 0.5]$.
+
+\subsection{\texttt{D2-relative-inv}: Inverted Relative Model}
+
+Use the relative DA-V2 model and invert the output:
+$d' = \max(d_{\text{batch}}) - d_{\text{raw}}$, then apply EMA
+normalization.  This corrects the inverted direction ($r = -0.59 \to
++0.59$).
+
+\subsection{\texttt{A1-proprio-hist}: Proprioceptive History Encoder}
+
+Add a 1D convolutional encoder over the last 10 proprioceptive frames
+(following extreme-parkour \cite{cheng2023extreme}):
+\begin{itemize}[nosep]
+  \item Buffer: $(B, 10, 53)$ proprioceptive observations.
+  \item 1D Conv: $53 \to 32$ channels, kernel 4, stride 2 $\to$ flatten
+        $\to$ MLP $\to$ 32-dim embedding.
+  \item Concatenate with depth latent before the actor MLP.
+\end{itemize}
+
+\subsection{\texttt{A3-2frame-input}: Two-Channel Depth Input}
+
+Modify \texttt{DepthBackbone58x87} to accept 2-channel input:
+\texttt{nn.Conv2d(2, 32, ...)} instead of \texttt{nn.Conv2d(1, 32, ...)}.
+Pass both \texttt{\_depth\_buffer[:, 0]} (current) and
+\texttt{\_depth\_buffer[:, 1]} (previous) as a stacked tensor.
+This gives the CNN explicit access to temporal differences without
+relying on the GRU.
+
+\end{document}

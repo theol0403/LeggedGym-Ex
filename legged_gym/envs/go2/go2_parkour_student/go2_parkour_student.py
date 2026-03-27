@@ -16,6 +16,15 @@ class Go2ParkourStudent(LeggedRobotParkour):
         )
         self._depth_buffer_len = int(self.cfg.sensor.depth_camera_config.num_history)
 
+        # Experiment flags (set via cfg.experiment_flags dict by train_experiment.py)
+        flags = getattr(self.cfg, "experiment_flags", {}) or {}
+        self._experiment_force_ema_norm = flags.get("force_ema_norm", False)
+        self._experiment_random_affine_depth = flags.get("random_affine_depth", False)
+        self._experiment_norm_mode = flags.get("norm_mode", None)
+        self._experiment_ema_alpha = flags.get("ema_alpha", None)
+        self._experiment_ema_quantiles = flags.get("ema_quantiles", None)
+        self._experiment_invert_relative_depth = flags.get("invert_relative_depth", False)
+
     def _init_buffers(self):
         super()._init_buffers()
         _, h, w = self.student_depth_shape  # always (1, H, W) for the network
@@ -25,12 +34,11 @@ class Go2ParkourStudent(LeggedRobotParkour):
                 self.num_envs, self._depth_buffer_len, h, w,
                 device=self.device, dtype=torch.float,
             )
-            # EMA-stabilized normalization for inferred depth (monocular depth
-            # estimators output arbitrary scale; EMA percentiles give a smooth,
-            # consistent mapping to [-0.5, 0.5] across frames).
-            self._depth_ema_lo = torch.zeros(1, device=self.device)
-            self._depth_ema_hi = torch.ones(1, device=self.device)
-            self._depth_ema_initialized = False
+            self._init_ema_buffers()
+        elif self._experiment_force_ema_norm:
+            # O1-gt-ema: use GT depth from simulator, but re-normalize via EMA
+            self._depth_buffer = self.simulator.get_depth_images()
+            self._init_ema_buffers()
         else:
             self._depth_buffer = self.simulator.get_depth_images()
             if self._depth_buffer.shape[1] != self._depth_buffer_len:
@@ -78,13 +86,51 @@ class Go2ParkourStudent(LeggedRobotParkour):
         if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
 
+    def _init_ema_buffers(self):
+        """Initialize EMA normalization state for inferred or force-EMA depth."""
+        self._depth_ema_lo = torch.zeros(1, device=self.device)
+        self._depth_ema_hi = torch.ones(1, device=self.device)
+        self._depth_ema_initialized = False
+        # For meanstd normalization mode
+        self._depth_ema_mean = torch.zeros(1, device=self.device)
+        self._depth_ema_std = torch.ones(1, device=self.device)
+
     def _refresh_student_depth(self):
         """Populate depth buffer from the configured source after update_sensors."""
+        if self._experiment_force_ema_norm:
+            # O1-gt-ema: simulator updated buffer in-place with linear norm.
+            # Convert back to meters and re-normalize via EMA.
+            near = self.cfg.sensor.depth_camera_config.near_clip
+            far = self.cfg.sensor.depth_camera_config.far_clip
+            linear_depth = self._depth_buffer.clone()
+            # Undo linear norm: linear = (meters - near) / (far - near) - 0.5
+            meters = (linear_depth + 0.5) * (far - near) + near
+            # Re-normalize the newest frame through the EMA pipeline
+            newest = meters[:, 0]  # (N, H, W)
+            processed = self._process_inferred_depth(newest)  # (N, 1, H, W)
+            self._depth_buffer[:, 0:1] = processed
+            if self._depth_buffer_len > 1:
+                # Also re-normalize the previous frame
+                prev = meters[:, 1]
+                processed_prev = self._process_inferred_depth(prev)
+                self._depth_buffer[:, 1:2] = processed_prev
+            return
+
+        if self._experiment_random_affine_depth:
+            # O2-gt-affine: simulator updated buffer in-place with linear norm.
+            # Apply random per-batch affine perturbation.
+            eps_s = 0.3 * (2 * torch.rand(1, device=self.device) - 1)  # scale noise
+            eps_b = 0.2 * (2 * torch.rand(1, device=self.device) - 1)  # bias noise
+            self._depth_buffer[:] = ((1 + eps_s) * self._depth_buffer + eps_b).clamp(-0.5, 0.5)
+            return
+
         if not self._use_inferred_depth:
             # Direct depth: simulator already updated self._depth_buffer in-place
             return
         inferred = self.simulator.get_inferred_depth_images()
         if inferred is not None:
+            if self._experiment_invert_relative_depth:
+                inferred = inferred.max() - inferred
             processed = self._process_inferred_depth(inferred)
             # Shift buffer: copy current (index 0) to previous (index 1), insert new at 0
             if self._depth_buffer_len > 1:
@@ -98,11 +144,14 @@ class Go2ParkourStudent(LeggedRobotParkour):
         models are miscalibrated on synthetic renders).  We use EMA-smoothed p2/p98
         percentiles across batches to give a stable, consistent normalization that
         preserves spatial structure without per-frame jitter.
+
+        Supports experiment flag overrides for normalization mode, EMA alpha, and
+        quantile bounds.
         """
         depth_cfg = self.cfg.sensor.depth_camera_config
         _, h, w = self.student_depth_shape
 
-        # Crop to match GT depth FOV
+        # Crop to match GT depth FOV (skip if already correct size, e.g. O1-gt-ema)
         height, width = inferred_depth.shape[-2:]
         top = int(getattr(depth_cfg, "crop_top", 0))
         bottom = int(getattr(depth_cfg, "crop_bottom", 0))
@@ -110,22 +159,45 @@ class Go2ParkourStudent(LeggedRobotParkour):
         right = int(getattr(depth_cfg, "crop_right", 0))
         end_h = height - bottom if bottom > 0 else height
         end_w = width - right if right > 0 else width
-        depth = inferred_depth[:, top:end_h, left:end_w]
-
-        # Update running normalization bounds
-        batch_lo = torch.quantile(depth, 0.02)
-        batch_hi = torch.quantile(depth, 0.98)
-        if not self._depth_ema_initialized:
-            self._depth_ema_lo.fill_(batch_lo.item())
-            self._depth_ema_hi.fill_(batch_hi.item())
-            self._depth_ema_initialized = True
+        if (end_h - top) != height or (end_w - left) != width:
+            depth = inferred_depth[:, top:end_h, left:end_w]
         else:
-            self._depth_ema_lo.lerp_(batch_lo, 0.02)
-            self._depth_ema_hi.lerp_(batch_hi, 0.02)
+            depth = inferred_depth
 
-        # Normalize to [-0.5, 0.5] using stable running statistics
-        span = (self._depth_ema_hi - self._depth_ema_lo).clamp(min=1e-3)
-        depth = ((depth - self._depth_ema_lo) / span).clamp(0, 1) - 0.5
+        # Select normalization mode
+        norm_mode = self._experiment_norm_mode or "ema"
+        alpha = self._experiment_ema_alpha or 0.02
+
+        if norm_mode == "affine_fit":
+            # N1-affine-fit: pre-computed affine alignment from metric outdoor
+            depth = 0.088 * depth + 0.858
+            depth = depth.clamp(0, 2.0) / 2.0 - 0.5
+        elif norm_mode == "meanstd":
+            # N5-meanstd: running mean/std normalization
+            batch_mean = depth.mean()
+            batch_std = depth.std().clamp(min=1e-3)
+            if not self._depth_ema_initialized:
+                self._depth_ema_mean.fill_(batch_mean.item())
+                self._depth_ema_std.fill_(batch_std.item())
+                self._depth_ema_initialized = True
+            else:
+                self._depth_ema_mean.lerp_(batch_mean, alpha)
+                self._depth_ema_std.lerp_(batch_std, alpha)
+            depth = torch.tanh((depth - self._depth_ema_mean) / (2 * self._depth_ema_std)) * 0.5
+        else:
+            # Default EMA percentile normalization
+            q_lo, q_hi = self._experiment_ema_quantiles or (0.02, 0.98)
+            batch_lo = torch.quantile(depth, q_lo)
+            batch_hi = torch.quantile(depth, q_hi)
+            if not self._depth_ema_initialized:
+                self._depth_ema_lo.fill_(batch_lo.item())
+                self._depth_ema_hi.fill_(batch_hi.item())
+                self._depth_ema_initialized = True
+            else:
+                self._depth_ema_lo.lerp_(batch_lo, alpha)
+                self._depth_ema_hi.lerp_(batch_hi, alpha)
+            span = (self._depth_ema_hi - self._depth_ema_lo).clamp(min=1e-3)
+            depth = ((depth - self._depth_ema_lo) / span).clamp(0, 1) - 0.5
 
         depth = depth.unsqueeze(1)
         if depth.shape[-2:] != (h, w):
