@@ -56,6 +56,27 @@ def _build_args(cli, depth_ablation: str):
     )
 
 
+def _parse_experiment_flags(flag_str):
+    """Parse 'key=val,key2=val2' into a dict with auto-typed values."""
+    if not flag_str:
+        return {}
+    flags = {}
+    for item in flag_str.split(","):
+        k, v = item.split("=", 1)
+        # Auto-type: bool, int, float, string
+        if v.lower() in ("true", "false"):
+            flags[k.strip()] = v.lower() == "true"
+        else:
+            try:
+                flags[k.strip()] = int(v)
+            except ValueError:
+                try:
+                    flags[k.strip()] = float(v)
+                except ValueError:
+                    flags[k.strip()] = v.strip()
+    return flags
+
+
 def _evaluate(cli_args, depth_ablation: str):
     if SIMULATOR != "genesis":
         raise RuntimeError("This script only supports SIMULATOR=genesis.")
@@ -64,14 +85,47 @@ def _evaluate(cli_args, depth_ablation: str):
     ensure_runtime_initialized(args)
 
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
-    if train_cfg.runner_class_name != "ParkourStudentRunner":
-        raise RuntimeError(f"Task {args.task!r} must use ParkourStudentRunner, got {train_cfg.runner_class_name!r}.")
+    allowed_runners = ("ParkourStudentRunner", "ParkourScandotStudentRunner")
+    if train_cfg.runner_class_name not in allowed_runners:
+        raise RuntimeError(f"Task {args.task!r} must use one of {allowed_runners}, got {train_cfg.runner_class_name!r}.")
 
     env_cfg.env.num_envs = min(args.num_envs, env_cfg.env.num_envs)
     env_cfg.terrain.curriculum = False
     if getattr(env_cfg.terrain, "parkour", None) is not None and getattr(env_cfg.terrain.parkour, "enable", False):
         env_cfg.terrain.parkour.force_row = args.parkour_force_row
         env_cfg.terrain.parkour.force_family = args.parkour_force_family
+
+    # Apply experiment flags so depth processing matches training
+    experiment_flags = _parse_experiment_flags(getattr(cli_args, "experiment_flags", None))
+    if experiment_flags:
+        env_cfg.experiment_flags = experiment_flags
+        for k, v in experiment_flags.items():
+            print(f"[eval] experiment_flag.{k} = {v}")
+
+    # Apply env overrides (e.g., sensor.depth_estimation.model_size=base)
+    if hasattr(cli_args, "env_override") and cli_args.env_override:
+        import json as _json
+        for item in cli_args.env_override:
+            k, v = item.split("=", 1)
+            # Auto-type: JSON first (handles lists/dicts), then bool, int, float, string
+            if v.startswith("[") or v.startswith("{"):
+                typed_v = _json.loads(v)
+            elif v.lower() in ("true", "false"):
+                typed_v = v.lower() == "true"
+            else:
+                try:
+                    typed_v = int(v)
+                except ValueError:
+                    try:
+                        typed_v = float(v)
+                    except ValueError:
+                        typed_v = v
+            parts = k.split(".")
+            obj = env_cfg
+            for part in parts[:-1]:
+                obj = getattr(obj, part)
+            setattr(obj, parts[-1], typed_v)
+            print(f"[eval] env_cfg.{k} = {typed_v}")
 
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
     try:
@@ -175,6 +229,10 @@ def _parse_args():
     )
     p.add_argument("--parkour_force_family", type=str, default=None, choices=["stairs", "hurdle_block", "gap"])
     p.add_argument("--parkour_force_row", type=int, default=0)
+    p.add_argument("--experiment_flags", type=str, default=None,
+                   help="Comma-separated key=val pairs, e.g. 'depth_temporal_smooth=0.5,depth_gradient=true'")
+    p.add_argument("--env_override", type=str, nargs="*", default=None,
+                   help="Override env config, e.g. 'sensor.depth_estimation.model_size=base'")
     return p.parse_args()
 
 

@@ -171,5 +171,75 @@ def _finalize_student_cfg(cfg_cls):
     # The env selects which frame from the buffer to expose.
     cfg_cls.env.student_depth_shape = [1, depth_res[1], depth_res[0]]
 
+# --- Scandot-prediction student: depth encoder directly predicts scandots ---
+
+class Go2ParkourScandotStudentCfg(Go2ParkourStudentCfg):
+    """Uses the same env as the GT-depth student, but with scandot prediction architecture."""
+    class env(Go2ParkourStudentCfg.env):
+        pass
+
+    class sensor(Go2ParkourStudentCfg.sensor):
+        pass
+
+
+class Go2ParkourDepthEstScandotStudentCfg(Go2ParkourDepthEstStudentCfg):
+    """Scandot prediction student with DA2 estimated depth (not GT depth)."""
+    class env(Go2ParkourDepthEstStudentCfg.env):
+        pass
+
+    class sensor(Go2ParkourDepthEstStudentCfg.sensor):
+        pass
+
+
+class Go2ParkourScandotStudentCfgPPO(BaseConfig):
+    seed = 1
+    runner_class_name = "ParkourScandotStudentRunner"
+
+    class policy:
+        clip_actions = LeggedRobotCfg.normalization.clip_actions
+        activation = "elu"
+        student_depth_shape = [1, 58, 87]
+        depth_backbone_output_dim = 32
+        gru_hidden_dim = 512
+        num_scandots = 132
+        yaw_output_dim = 2
+        yaw_scale = 1.5
+        heading_command_indices = (4, 5)
+
+    class algorithm:
+        learning_rate = 2.0e-3
+        action_loss_coef = 1.0
+        yaw_loss_coef = 1.0
+        scandot_loss_coef = 1.0
+        yaw_threshold = 0.6
+        max_grad_norm = 1.0
+        bptt_window = 24
+
+    class runner:
+        policy_class_name = "ActorCriticParkourScandotStudent"
+        algorithm_class_name = "ParkourDistillation"
+        run_name = "scandot_student_genesis"
+        experiment_name = "go2_parkour_scandot_student"
+        sync_wandb = False
+        num_steps_per_env = 120
+        save_interval = 500
+        max_iterations = 5000
+        resume = False
+        load_run = -1
+        checkpoint = -1
+        resume_path = None
+        teacher_task = "go2_parkour_teacher"
+        teacher_load_run = -1
+        teacher_ckpt = -1
+
+
+class Go2ParkourDepthEstScandotStudentCfgPPO(Go2ParkourScandotStudentCfgPPO):
+    class runner(Go2ParkourScandotStudentCfgPPO.runner):
+        run_name = "depth_est_scandot_student_genesis"
+        experiment_name = "go2_parkour_depth_est_scandot_student"
+
+
 _finalize_student_cfg(Go2ParkourStudentCfg)
 _finalize_student_cfg(Go2ParkourDepthEstStudentCfg)
+_finalize_student_cfg(Go2ParkourScandotStudentCfg)
+_finalize_student_cfg(Go2ParkourDepthEstScandotStudentCfg)

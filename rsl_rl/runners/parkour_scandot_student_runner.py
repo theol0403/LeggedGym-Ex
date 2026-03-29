@@ -1,3 +1,11 @@
+"""Runner for direct scandot prediction student.
+
+Nearly identical to ParkourStudentRunner, but:
+  - Uses ActorCriticParkourScandotStudent (predicts 132 scandots from depth)
+  - Passes predicted scandots + GT scandots to the algorithm for scandot loss
+  - The frozen teacher is used both for teacher actions AND as the student's actor
+"""
+
 import os
 import statistics
 import time
@@ -8,82 +16,38 @@ import torch
 from legged_gym import LEGGED_GYM_ROOT_DIR
 from legged_gym.utils.helpers import class_to_dict, get_load_path
 from rsl_rl.algorithms import ParkourDistillation
-from rsl_rl.modules import ActorCriticParkour, ActorCriticParkourStudent
-from rsl_rl.runners.on_policy_runner import OnPolicyRunner
+from rsl_rl.modules import ActorCriticParkour, ActorCriticParkourScandotStudent
+from rsl_rl.runners.parkour_student_runner import ParkourStudentRunner
 
 
-class ParkourStudentRunner(OnPolicyRunner):
-    def _configure_torch_fast_path(self):
-        if not str(self.device).startswith("cuda"):
-            return
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.backends.cudnn.benchmark = True
+class ParkourScandotStudentRunner(ParkourStudentRunner):
+    """Runner for the direct scandot prediction student architecture."""
 
     def _init_agent_and_algo(self):
         self._configure_torch_fast_path()
         self.teacher = self._load_frozen_teacher()
-        actor_critic = ActorCriticParkourStudent(
+
+        actor_critic = ActorCriticParkourScandotStudent(
             self.env.num_obs,
             self.env.num_actions,
             self.env.num_teacher_actor_obs,
             **self.policy_cfg,
         ).to(self.device)
+
+        # Give the student a reference to the frozen teacher for act()/act_inference()
+        actor_critic.set_teacher(self.teacher)
+
+        # load_teacher_actor_weights is a no-op for this class, but call for interface compat
         actor_critic.load_teacher_actor_weights(self.teacher.state_dict())
+
         alg_cfg = dict(self.alg_cfg)
         self._yaw_threshold = float(alg_cfg.pop("yaw_threshold", 0.6))
         self.alg = ParkourDistillation(actor_critic, device=self.device, **alg_cfg)
         self._best_gap_success = float("-inf")
 
-    def _init_storage(self):
-        return None
-
-    def _load_frozen_teacher(self):
-        from legged_gym.utils.task_registry import task_registry
-
-        teacher_task = self.cfg.get("teacher_task", "go2_parkour_teacher")
-        teacher_env_cfg, teacher_train_cfg = task_registry.get_cfgs(teacher_task)
-        teacher_log_root = os.path.join(
-            LEGGED_GYM_ROOT_DIR,
-            "logs",
-            teacher_train_cfg.runner.experiment_name,
-        )
-        teacher_ckpt = get_load_path(
-            teacher_log_root,
-            load_run=self.cfg.get("teacher_load_run", -1),
-            checkpoint=self.cfg.get("teacher_ckpt", -1),
-        )
-        print(f"Loading frozen teacher from: {teacher_ckpt}")
-
-        if teacher_env_cfg.env.num_observations != self.env.num_teacher_actor_obs:
-            raise RuntimeError(
-                "Teacher actor observation dimension mismatch: "
-                f"teacher task has {teacher_env_cfg.env.num_observations}, "
-                f"student task expects {self.env.num_teacher_actor_obs}."
-            )
-        if teacher_env_cfg.env.num_actions != self.env.num_actions:
-            raise RuntimeError(
-                "Teacher action dimension mismatch: "
-                f"teacher task has {teacher_env_cfg.env.num_actions}, "
-                f"student task expects {self.env.num_actions}."
-            )
-
-        teacher = ActorCriticParkour(
-            num_actor_obs=teacher_env_cfg.env.num_observations,
-            num_critic_obs=teacher_env_cfg.env.num_privileged_obs,
-            num_actions=teacher_env_cfg.env.num_actions,
-            **class_to_dict(teacher_train_cfg.policy),
-        ).to(self.device)
-        state = torch.load(teacher_ckpt, map_location=self.device)
-        teacher.load_state_dict(state["model_state_dict"], strict=True)
-        teacher.eval()
-        for parameter in teacher.parameters():
-            parameter.requires_grad_(False)
-        return teacher
-
-    def _teacher_actions(self, teacher_actor_obs):
-        with torch.no_grad():
-            return self.teacher.act_inference(teacher_actor_obs)
+        # Prop dim for extracting GT scandots from teacher_actor_obs
+        self._prop_dim = actor_critic.prop_dim
+        self._num_scandots = actor_critic.num_scandots
 
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         self._pre_learn(init_at_random_ep_len)
@@ -107,20 +71,33 @@ class ParkourStudentRunner(OnPolicyRunner):
             for _ in range(self.num_steps_per_env):
                 teacher_actions = self._teacher_actions(teacher_actor_obs)
 
-                latent, _yaw_raw, yaw_scaled = self.alg.actor_critic.forward_depth(
+                # Extract GT scandots from teacher_actor_obs
+                gt_scandots = teacher_actor_obs[:, self._prop_dim : self._prop_dim + self._num_scandots]
+
+                # Student: depth -> predicted scandots + yaw
+                predicted_scandots, _yaw_raw, yaw_scaled = self.alg.actor_critic.forward_depth(
                     student_depth.clone(), obs
                 )
+
+                # Apply MTS yaw to obs
                 oracle_heading = obs[:, 4:6]
                 obs_actor = self.alg.actor_critic.apply_mts_yaw_to_obs(
                     obs, yaw_scaled, oracle_heading, self._yaw_threshold
                 )
-                student_actions = self.alg.actor_critic.actor_from_latent(obs_actor, latent)
+
+                # Student actions: construct teacher obs and run through frozen teacher
+                student_teacher_obs = self.alg.actor_critic.construct_teacher_obs(
+                    obs_actor, predicted_scandots
+                )
+                student_actions = self.alg.actor_critic._teacher_actor_mean(student_teacher_obs)
 
                 self.alg.store_step(
                     student_actions=student_actions,
                     teacher_actions=teacher_actions,
                     predicted_yaw=yaw_scaled,
                     oracle_yaw=oracle_heading,
+                    predicted_scandots=predicted_scandots,
+                    gt_scandots=gt_scandots,
                 )
 
                 (
@@ -170,6 +147,7 @@ class ParkourStudentRunner(OnPolicyRunner):
                         "mean_total_loss": metrics["loss"],
                         "mean_action_loss": metrics["action_loss"],
                         "mean_yaw_loss": metrics["yaw_loss"],
+                        "mean_scandot_loss": metrics.get("scandot_loss", 0.0),
                     }
                 )
                 self._maybe_save_best_success_model(it, ep_infos)
@@ -213,6 +191,7 @@ class ParkourStudentRunner(OnPolicyRunner):
         self.writer.add_scalar("Loss/total", locs["mean_total_loss"], locs["it"])
         self.writer.add_scalar("Loss/action", locs["mean_action_loss"], locs["it"])
         self.writer.add_scalar("Loss/yaw", locs["mean_yaw_loss"], locs["it"])
+        self.writer.add_scalar("Loss/scandot", locs["mean_scandot_loss"], locs["it"])
         actual_lr = self.alg.optimizer.param_groups[0]["lr"]
         self.writer.add_scalar("Loss/learning_rate", actual_lr, locs["it"])
         self.writer.add_scalar("Perf/total_fps", fps, locs["it"])
@@ -231,6 +210,7 @@ class ParkourStudentRunner(OnPolicyRunner):
             f"{'Total loss:':>{pad}} {locs['mean_total_loss']:.4f}\n"
             f"{'Action loss:':>{pad}} {locs['mean_action_loss']:.4f}\n"
             f"{'Yaw loss:':>{pad}} {locs['mean_yaw_loss']:.4f}\n"
+            f"{'Scandot loss:':>{pad}} {locs['mean_scandot_loss']:.4f}\n"
         )
         if len(locs["rewbuffer"]) > 0:
             log_string += (
@@ -248,45 +228,11 @@ class ParkourStudentRunner(OnPolicyRunner):
         )
         print(log_string)
 
-    def _maybe_save_best_gap_model(self, iteration, ep_infos):
-        if self.log_dir is None or not ep_infos:
-            return
-        gap_values = []
-        for ep_info in ep_infos:
-            if "success_gap" not in ep_info:
-                continue
-            value = ep_info["success_gap"]
-            if isinstance(value, torch.Tensor):
-                if not torch.isfinite(value):
-                    continue
-                gap_values.append(value.item())
-            else:
-                gap_values.append(float(value))
-        if not gap_values:
-            return
-        mean_gap = sum(gap_values) / len(gap_values)
-        if mean_gap <= self._best_gap_success:
-            return
-        self._best_gap_success = mean_gap
-        self.save(
-            os.path.join(self.log_dir, "best_gap_model.pt"),
-            infos={"best_gap_success": mean_gap, "best_gap_iteration": iteration},
-        )
-
-    def save(self, path, infos=None):
-        torch.save(
-            {
-                "model_state_dict": self.alg.actor_critic.state_dict(),
-                "optimizer_state_dict": self.alg.optimizer.state_dict(),
-                "iter": self.current_learning_iteration,
-                "infos": infos,
-            },
-            path,
-        )
-
     def load(self, path, load_optimizer=True):
         loaded_dict = torch.load(path, map_location=self.device)
         self.alg.actor_critic.load_state_dict(loaded_dict["model_state_dict"])
+        # Re-set teacher reference (cleared by load_state_dict)
+        self.alg.actor_critic.set_teacher(self.teacher)
         if load_optimizer:
             try:
                 self.alg.optimizer.load_state_dict(loaded_dict["optimizer_state_dict"])
@@ -299,4 +245,6 @@ class ParkourStudentRunner(OnPolicyRunner):
         self.alg.actor_critic.eval()
         if device is not None:
             self.alg.actor_critic.to(device)
+            # Teacher must also be on the right device for inference
+            self.teacher.to(device)
         return self.alg.actor_critic.act_inference

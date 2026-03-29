@@ -14,11 +14,11 @@ from .mlp_utils import build_mlp
 class DepthBackbone58x87(nn.Module):
     """CNN depth encoder matching Extreme Parkour (58 x 87) -> 32-dim features."""
 
-    def __init__(self, output_dim=32, activation=nn.ELU):
+    def __init__(self, output_dim=32, activation=nn.ELU, in_channels=1):
         super().__init__()
         act = activation()
         self.net = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=5),
+            nn.Conv2d(in_channels, 32, kernel_size=5),
             nn.MaxPool2d(kernel_size=2, stride=2),
             act,
             nn.Conv2d(32, 64, kernel_size=3),
@@ -30,7 +30,7 @@ class DepthBackbone58x87(nn.Module):
         )
 
     def forward(self, depth_bchw: torch.Tensor) -> torch.Tensor:
-        """depth_bchw: (B, 1, H, W) with H=58, W=87."""
+        """depth_bchw: (B, C, H, W) with H=58, W=87."""
         return self.net(depth_bchw)
 
 
@@ -45,13 +45,17 @@ class RecurrentDepthEncoder(nn.Module):
         latent_dim: int = 32,
         yaw_dim: int = 2,
         activation=nn.ELU,
+        depth_in_channels: int = 1,
     ):
         super().__init__()
         act = activation()
         self.latent_dim = latent_dim
         self.yaw_dim = yaw_dim
         self.gru_hidden_dim = gru_hidden_dim
-        self.depth_backbone = DepthBackbone58x87(output_dim=depth_backbone_output_dim, activation=activation)
+        self.depth_backbone = DepthBackbone58x87(
+            output_dim=depth_backbone_output_dim, activation=activation,
+            in_channels=depth_in_channels,
+        )
         self.combination_mlp = nn.Sequential(
             nn.Linear(depth_backbone_output_dim + num_proprio_for_combo, 128),
             act,
@@ -125,7 +129,7 @@ class ActorCriticParkourStudent(nn.Module):
         self.yaw_scale = float(yaw_scale)
         self.heading_command_indices = tuple(heading_command_indices)
 
-        _, h, w = self.student_depth_shape
+        c, h, w = self.student_depth_shape
         if h != 58 or w != 87:
             raise ValueError(
                 f"DepthBackbone58x87 expects shape (C,58,87); got student_depth_shape={self.student_depth_shape}."
@@ -138,6 +142,7 @@ class ActorCriticParkourStudent(nn.Module):
             latent_dim=self.latent_dim,
             yaw_dim=self.yaw_output_dim,
             activation=type(activation_layer),
+            depth_in_channels=c,
         )
 
         self.actor = build_mlp(

@@ -34,6 +34,9 @@ class LeggedRobotCfg(BaseConfig):
         static_friction = 1.0 # coefficient of static friction of the terrain
         dynamic_friction = 1.0 # coefficient of dynamic friction of the terrain
         restitution = 0. # coefficient of restitution of the terrain
+        # Visual texture for terrain (helps monocular depth estimation)
+        add_texture = False  # apply a tiling texture to terrain surface
+        texture_uv_scale = 10.0  # how many times the texture tiles across the terrain
         # rough terrain only:
         # obtain terrain height information around feet (default: 9 points around feet), measure_
         # x  x   x

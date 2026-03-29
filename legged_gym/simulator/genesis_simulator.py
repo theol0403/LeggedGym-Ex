@@ -1039,19 +1039,44 @@ class GenesisSimulator(Simulator):
     def _create_heightfield(self):
         """ Adds a heightfield terrain to the simulation, sets parameters based on the cfg.
         """
+        terrain_kwargs = dict(
+            pos=(-self._cfg.terrain.border_size, - \
+                 self._cfg.terrain.border_size, 0.0),
+            horizontal_scale=self._cfg.terrain.horizontal_scale,
+            vertical_scale=self._cfg.terrain.vertical_scale,
+            height_field=self._terrain.height_field_raw,
+            visualization=self._requires_visual_geometry(),
+        )
+        entity_kwargs = {}
+        if getattr(self._cfg.terrain, "add_texture", False):
+            terrain_kwargs["uv_scale"] = getattr(self._cfg.terrain, "texture_uv_scale", 10.0)
+            entity_kwargs["surface"] = self._create_terrain_surface()
         self._gs_terrain = self._scene.add_entity(
-            gs.morphs.Terrain(
-                pos=(-self._cfg.terrain.border_size, - \
-                     self._cfg.terrain.border_size, 0.0),
-                horizontal_scale=self._cfg.terrain.horizontal_scale,
-                vertical_scale=self._cfg.terrain.vertical_scale,
-                height_field=self._terrain.height_field_raw,
-                visualization=self._requires_visual_geometry(),
-            ),
+            gs.morphs.Terrain(**terrain_kwargs),
+            **entity_kwargs,
         )
         self._height_samples = torch.tensor(self._terrain.heightsamples).view(
             self._terrain.tot_rows, self._terrain.tot_cols).to(self._device)
     
+    def _create_terrain_surface(self):
+        """Create a textured surface for terrain to give DA2 visual depth cues."""
+        # Generate a procedural checkerboard/grid texture as numpy array
+        tex_size = 512
+        img = np.zeros((tex_size, tex_size, 3), dtype=np.uint8)
+        # Base color: light grey concrete
+        img[:] = [180, 175, 170]
+        # Add grid lines for depth cues
+        grid_spacing = 32
+        for i in range(0, tex_size, grid_spacing):
+            img[i:i+2, :] = [120, 115, 110]
+            img[:, i:i+2] = [120, 115, 110]
+        # Add some noise for texture
+        noise = np.random.RandomState(42).randint(-15, 16, img.shape, dtype=np.int16)
+        img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        return gs.surfaces.Rough(
+            diffuse_texture=gs.textures.ImageTexture(image_array=img),
+        )
+
     def _create_trimesh(self):
         """ Adds a trimesh terrain to the simulation, sets parameters based on the cfg.
         """

@@ -78,6 +78,10 @@ from legged_gym.envs.go2.go2_parkour_student.go2_parkour_student_config import (
     Go2ParkourStudentCfgPPO,
     Go2ParkourDepthEstStudentCfg,
     Go2ParkourDepthEstStudentCfgPPO,
+    Go2ParkourScandotStudentCfg,
+    Go2ParkourScandotStudentCfgPPO,
+    Go2ParkourDepthEstScandotStudentCfg,
+    Go2ParkourDepthEstScandotStudentCfgPPO,
 )
 
 # tron1_pf
@@ -115,6 +119,8 @@ task_registry.register( "go2_nav", GO2Nav, GO2NavCfg(), GO2NavCfgPPO())
 task_registry.register( "go2_parkour_teacher", Go2ParkourTeacher, Go2ParkourTeacherCfg(), Go2ParkourTeacherCfgPPO())
 task_registry.register( "go2_parkour_student", Go2ParkourStudent, Go2ParkourStudentCfg(), Go2ParkourStudentCfgPPO())
 task_registry.register( "go2_parkour_depth_est_student", Go2ParkourStudent, Go2ParkourDepthEstStudentCfg(), Go2ParkourDepthEstStudentCfgPPO())
+task_registry.register( "go2_parkour_scandot_student", Go2ParkourStudent, Go2ParkourScandotStudentCfg(), Go2ParkourScandotStudentCfgPPO())
+task_registry.register( "go2_parkour_depth_est_scandot_student", Go2ParkourStudent, Go2ParkourDepthEstScandotStudentCfg(), Go2ParkourDepthEstScandotStudentCfgPPO())
 task_registry.register( "tron1_pf", TRON1PF, TRON1PFCfg(), TRON1PFCfgPPO())
 task_registry.register( "tron1_pf_ee", TRON1PF_EE, TRON1PF_EECfg(), TRON1PF_EECfgPPO())
 task_registry.register( "tron1_sf", TRON1SF, TRON1SFCfg(), TRON1SFCfgPPO())

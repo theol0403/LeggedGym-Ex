@@ -36,3 +36,4 @@ from .actor_critic_ee import ActorCriticEE
 from .actor_critic_cts import ActorCriticCTS
 from .actor_critic_dreamwaq import ActorCriticDreamWaQ
 from .actor_critic_parkour_student import ActorCriticParkourStudent
+from .actor_critic_parkour_scandot_student import ActorCriticParkourScandotStudent

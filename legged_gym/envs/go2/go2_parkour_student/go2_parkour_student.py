@@ -24,6 +24,14 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._experiment_ema_alpha = flags.get("ema_alpha", None)
         self._experiment_ema_quantiles = flags.get("ema_quantiles", None)
         self._experiment_invert_relative_depth = flags.get("invert_relative_depth", False)
+        self._experiment_curriculum_freeze_until = int(flags.get("curriculum_freeze_until", 0))
+        self._experiment_ema_warmup_iters = int(flags.get("ema_warmup_iters", 0))
+        self._experiment_affine_scale = float(flags.get("affine_scale", 0.088))
+        self._experiment_affine_offset = float(flags.get("affine_offset", 0.858))
+        self._experiment_fixed_range_lo = float(flags.get("fixed_range_lo", 3.5))
+        self._experiment_fixed_range_hi = float(flags.get("fixed_range_hi", 12.0))
+        self._experiment_depth_gradient = bool(flags.get("depth_gradient", False))
+        self._experiment_depth_temporal_smooth = float(flags.get("depth_temporal_smooth", 0.0))
 
     def _init_buffers(self):
         super()._init_buffers()
@@ -56,7 +64,14 @@ class Go2ParkourStudent(LeggedRobotParkour):
         # matching extreme-parkour which passes depth_buffer[:, -2].
         # Simulator buffer layout: index 0 = newest, index 1 = previous.
         self._prev_frame_idx = min(1, self._depth_buffer_len - 1)
-        self.student_depth = self._depth_buffer[:, self._prev_frame_idx : self._prev_frame_idx + 1]
+        if self._experiment_depth_gradient:
+            # 2-channel output: depth + Sobel gradient magnitude
+            self._student_depth_buf = torch.zeros(
+                self.num_envs, 2, h, w, device=self.device, dtype=torch.float,
+            )
+            self.student_depth = self._student_depth_buf
+        else:
+            self.student_depth = self._depth_buffer[:, self._prev_frame_idx : self._prev_frame_idx + 1]
         self._depth_rendered_this_step = False
 
     def post_physics_step(self):
@@ -75,6 +90,8 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.simulator.update_sensors()
             self._refresh_student_depth()
             self._apply_depth_noise()
+            if self._experiment_depth_gradient:
+                self._update_gradient_channel()
             self._depth_rendered_this_step = True
         else:
             self._depth_rendered_this_step = False
@@ -85,6 +102,13 @@ class Go2ParkourStudent(LeggedRobotParkour):
             self.simulator.draw_debug_vis()
         if self.debug_sensor_images:
             self.simulator.draw_debug_sensor_images()
+
+    def _update_terrain_curriculum(self, env_ids):
+        if self._experiment_curriculum_freeze_until > 0:
+            # Flag value is in env steps (common_step_counter units)
+            if self.common_step_counter < self._experiment_curriculum_freeze_until:
+                return
+        super()._update_terrain_curriculum(env_ids)
 
     def _init_ema_buffers(self):
         """Initialize EMA normalization state for inferred or force-EMA depth."""
@@ -132,6 +156,10 @@ class Go2ParkourStudent(LeggedRobotParkour):
             if self._experiment_invert_relative_depth:
                 inferred = inferred.max() - inferred
             processed = self._process_inferred_depth(inferred)
+            # Temporal smoothing: EMA on the depth map to reduce frame-to-frame flicker
+            smooth_alpha = self._experiment_depth_temporal_smooth
+            if smooth_alpha > 0 and self._depth_buffer[:, 0:1].abs().sum() > 0:
+                processed = smooth_alpha * self._depth_buffer[:, 0:1] + (1 - smooth_alpha) * processed
             # Shift buffer: copy current (index 0) to previous (index 1), insert new at 0
             if self._depth_buffer_len > 1:
                 self._depth_buffer[:, 1:] = self._depth_buffer[:, :-1].clone()
@@ -167,8 +195,21 @@ class Go2ParkourStudent(LeggedRobotParkour):
         # Select normalization mode
         norm_mode = self._experiment_norm_mode or "ema"
         alpha = self._experiment_ema_alpha or 0.02
+        if self._experiment_ema_warmup_iters > 0:
+            # Decay alpha from 0.1 to base alpha over warmup period
+            progress = min(1.0, self.common_step_counter / self._experiment_ema_warmup_iters)
+            alpha = max(alpha, 0.1 * (1.0 - progress))
 
-        if norm_mode == "affine_fit":
+        if norm_mode == "calibrated_linear":
+            # Affine calibration to meters, then GT-style linear norm
+            depth = self._experiment_affine_scale * depth + self._experiment_affine_offset
+            depth = depth.clamp(0.0, 2.0) / 2.0 - 0.5
+        elif norm_mode == "fixed_range":
+            # Fixed linear mapping of DA2 raw range — deterministic + good signal
+            lo = self._experiment_fixed_range_lo
+            hi = self._experiment_fixed_range_hi
+            depth = ((depth - lo) / max(hi - lo, 1e-3)).clamp(0.0, 1.0) - 0.5
+        elif norm_mode == "affine_fit":
             # N1-affine-fit: pre-computed affine alignment from metric outdoor
             depth = 0.088 * depth + 0.858
             depth = depth.clamp(0, 2.0) / 2.0 - 0.5
@@ -203,6 +244,21 @@ class Go2ParkourStudent(LeggedRobotParkour):
         if depth.shape[-2:] != (h, w):
             depth = F.interpolate(depth, size=(h, w), mode="bilinear", align_corners=False)
         return depth
+
+    def _update_gradient_channel(self):
+        """Compute Sobel gradient and write 2-channel student_depth."""
+        depth_1ch = self._depth_buffer[:, self._prev_frame_idx : self._prev_frame_idx + 1]
+        # Sobel kernels
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+                               device=self.device, dtype=torch.float).view(1, 1, 3, 3)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
+                               device=self.device, dtype=torch.float).view(1, 1, 3, 3)
+        gx = F.conv2d(depth_1ch, sobel_x, padding=1)
+        gy = F.conv2d(depth_1ch, sobel_y, padding=1)
+        grad_mag = torch.sqrt(gx ** 2 + gy ** 2 + 1e-8)
+        grad_mag = grad_mag.clamp(0, 1.0) - 0.5
+        self._student_depth_buf[:, 0:1] = depth_1ch
+        self._student_depth_buf[:, 1:2] = grad_mag
 
     def _apply_depth_noise(self):
         if self._depth_noise_level > 0:
@@ -271,6 +327,8 @@ class Go2ParkourStudent(LeggedRobotParkour):
         super().reset_idx(env_ids)
         if len(env_ids) > 0:
             self._depth_buffer[env_ids] = 0.0
+            if self._experiment_depth_gradient:
+                self._student_depth_buf[env_ids] = 0.0
 
     def _validate_configured_observation_dims(self):
         if self.num_obs != self.obs_spec.prop_dim:

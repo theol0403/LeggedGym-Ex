@@ -1,0 +1,66 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Problem Statement}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Background and Current Architecture}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}DAgger Distillation Pipeline}{1}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Depth Normalization Pipelines}{1}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Measured Depth Estimation Quality}{2}{subsection.2.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Depth estimation model comparison on Genesis synthetic renders (106$\times $60). $r$ = Pearson correlation with GT depth per-pixel. Affine MAE after optimal least-squares alignment.}}{2}{table.1}\protected@file@percent }
+\newlabel{tab:depth_models}{{1}{2}{Depth estimation model comparison on Genesis synthetic renders (106$\times $60). $r$ = Pearson correlation with GT depth per-pixel. Affine MAE after optimal least-squares alignment}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Hypotheses}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experimental Design}{2}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Phase 0: Oracle Experiments (Critical Controls)}{2}{subsection.4.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Phase 0 oracle experiments.}}{3}{table.2}\protected@file@percent }
+\newlabel{tab:phase0}{{2}{3}{Phase 0 oracle experiments}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Phase 1: Normalization Sweep}{3}{subsection.4.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Phase 1 normalization experiments.}}{3}{table.3}\protected@file@percent }
+\newlabel{tab:phase1}{{3}{3}{Phase 1 normalization experiments}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Phase 2: Depth Model Sweep}{3}{subsection.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Phase 2 depth model experiments.}}{4}{table.4}\protected@file@percent }
+\newlabel{tab:phase2}{{4}{4}{Phase 2 depth model experiments}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Phase 3: Training Hyperparameter Sweep}{4}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Phase 4: Architecture Modifications}{4}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Phase 5: Combined Best Configuration}{4}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Possible Bugfixes to Investigate}{4}{section.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Phase 3 training hyperparameter experiments.}}{5}{table.5}\protected@file@percent }
+\newlabel{tab:phase3}{{5}{5}{Phase 3 training hyperparameter experiments}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Methodology}{5}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Evaluation Metric}{5}{subsection.6.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Phase 4 architecture experiments.}}{6}{table.6}\protected@file@percent }
+\newlabel{tab:phase4}{{6}{6}{Phase 4 architecture experiments}{table.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Success Criteria}{6}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Training Protocol}{6}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}GPU Allocation}{6}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Implementation Notes for Config Overrides}{6}{subsection.6.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces GPU scheduling plan. Each cell runs for $\sim $2000 iterations. Phase 0 takes priority; subsequent phases are re-ordered based on results.}}{7}{table.7}\protected@file@percent }
+\newlabel{tab:gpu_schedule}{{7}{7}{GPU scheduling plan. Each cell runs for $\sim $2000 iterations. Phase 0 takes priority; subsequent phases are re-ordered based on results}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.6}Monitoring and Early Stopping}{7}{subsection.6.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Execution Priority}{7}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Risk Assessment}{7}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Expected Timeline}{8}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10}Appendix: Experiment Implementation Details}{8}{section.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.1}\texttt  {O1-gt-ema}: GT Depth with EMA Normalization}{8}{subsection.10.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.2}\texttt  {O2-gt-affine}: GT Depth with Random Affine Perturbation}{8}{subsection.10.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.3}\texttt  {N1-affine-fit}: Pre-computed Affine Normalization}{8}{subsection.10.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.4}\texttt  {N5-running-meanstd}: Mean/Std Normalization}{8}{subsection.10.4}\protected@file@percent }
+\citation{cheng2023extreme}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.5}\texttt  {D2-relative-inv}: Inverted Relative Model}{9}{subsection.10.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.6}\texttt  {A1-proprio-hist}: Proprioceptive History Encoder}{9}{subsection.10.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.7}\texttt  {A3-2frame-input}: Two-Channel Depth Input}{9}{subsection.10.7}\protected@file@percent }
+\gdef \@abspage@last{9}
