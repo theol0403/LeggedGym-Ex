@@ -168,9 +168,10 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
         
     # Get initial observations according to task type
     runner_class_name = train_cfg.runner_class_name
+    _is_parkour_student = runner_class_name in ("ParkourStudentRunner", "ParkourScandotStudentRunner")
     if runner_class_name == "TSRunner":
         obs_buf, privileged_obs_buf, obs_history, critic_obs = env.get_observations()
-    elif runner_class_name == "ParkourStudentRunner":
+    elif _is_parkour_student:
         obs_buf, teacher_actor_obs, student_depth, _depth_updated = env.get_observations()
     elif runner_class_name == "EERunner":
         estimator_features, _, _ = env.get_observations()
@@ -198,7 +199,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
         if runner_class_name == "TSRunner":
             with torch.inference_mode():
                 actions = policy(obs_buf, obs_history)
-        elif runner_class_name == "ParkourStudentRunner":
+        elif _is_parkour_student:
             depth_in = apply_student_depth_ablation(student_depth, args.depth_ablation)
             with torch.inference_mode():
                 actions = policy(obs_buf, depth_in)
@@ -217,7 +218,7 @@ def interaction_loop(env, policy, args, train_cfg, command_controller):
 
         if runner_class_name == "TSRunner":
             obs_buf, privileged_obs_buf, obs_history, critic_obs, rews, dones, infos = env.step(actions.detach())
-        elif runner_class_name == "ParkourStudentRunner":
+        elif _is_parkour_student:
             obs_buf, teacher_actor_obs, student_depth, _depth_updated, rews, dones, infos = env.step(
                 actions.detach()
             )
@@ -286,7 +287,7 @@ def export_policy(alg_runner, path: str, args, env_cfg, train_cfg):
     policy_class_name = train_cfg.runner.policy_class_name
     if policy_class_name == "ActorCriticTS":
         exporter = PolicyExporterTS(alg_runner.alg.actor_critic)
-    elif policy_class_name == "ActorCriticParkourStudent":
+    elif policy_class_name in ("ActorCriticParkourStudent", "ActorCriticParkourScandotStudent"):
         exporter = PolicyExporterParkourStudent(alg_runner.alg.actor_critic)
     elif policy_class_name == "ActorCriticEE":
         exporter = PolicyExporterEE(alg_runner.alg.actor_critic)
@@ -324,7 +325,7 @@ def play(args):
     train_cfg.runner.resume = args.resume
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
-    if train_cfg.runner_class_name == "ParkourStudentRunner" and getattr(args, "depth_ablation", "none") != "none":
+    if train_cfg.runner_class_name in ("ParkourStudentRunner", "ParkourScandotStudentRunner") and getattr(args, "depth_ablation", "none") != "none":
         print(f"Parkour student depth ablation: {args.depth_ablation}")
 
     # export policy as a jit module (used to run it from C++ or python)

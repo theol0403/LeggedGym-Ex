@@ -128,15 +128,19 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
     class env(Go2ParkourStudentCfg.env):
         pass
 
+    class terrain(Go2ParkourStudentCfg.terrain):
+        add_texture = True
+        texture_uv_scale = 10.0
+
     class sensor(LeggedRobotCfg.sensor):
         add_depth = False
         add_rgb = True
-        depth_noise_level = 0.1
+        depth_noise_level = 0.0
 
         class depth_estimation(LeggedRobotCfg.sensor.depth_estimation):
             enabled = True
             model_type = "depth_anything_v2_metric_outdoor"
-            model_size = "small"
+            model_size = "base"
             update_interval = 2
 
         class depth_camera_config(Go2ParkourStudentCfg.sensor.depth_camera_config):
@@ -154,6 +158,12 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
 
 
 class Go2ParkourDepthEstStudentCfgPPO(Go2ParkourStudentCfgPPO):
+    class algorithm(Go2ParkourStudentCfgPPO.algorithm):
+        actor_lr_scale = 0.1
+        lr_schedule = "cosine"
+        lr_schedule_max_iters = 5000
+        lr_schedule_min_lr = 1e-4
+
     class runner(Go2ParkourStudentCfgPPO.runner):
         run_name = "depth_est_student_genesis"
         experiment_name = "go2_parkour_depth_est_student"
