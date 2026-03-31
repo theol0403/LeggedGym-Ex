@@ -114,9 +114,12 @@ class Terrain:
         if self.gauntlet_mode:
             self._build_gauntlet()
             return
+        difficulty_offset = int(getattr(self.parkour_cfg, "difficulty_offset", 0))
         for j, (family, variant_id) in enumerate(self.parkour_column_specs):
             for i in range(self.cfg.num_rows):
-                terrain, metadata = self._parkour_lane_builder.build_lane(family, i, variant_id=variant_id)
+                terrain, metadata = self._parkour_lane_builder.build_lane(
+                    family, i + difficulty_offset, variant_id=variant_id,
+                )
                 self.add_terrain_to_map(terrain, i, j, metadata=metadata)
 
     def _build_gauntlet(self):

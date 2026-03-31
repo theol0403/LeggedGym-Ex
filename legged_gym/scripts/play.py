@@ -57,10 +57,23 @@ def override_configs(env_cfg, train_cfg, args):
     if env_cfg.terrain.mesh_type in ["heightfield", "trimesh"]:
         if getattr(getattr(env_cfg.terrain, "parkour", None), "enable", False):
             env_cfg.terrain.curriculum = False
+            # Shrink terrain grid for play: the full training grid (4 rows x
+            # 12 cols) produces a ~490K-face mesh whose SDF takes 4+ minutes.
+            # Using 1 row x 3 cols keeps it under 50K faces (<10s).
+            pk = env_cfg.terrain.parkour
+            pk.variants_per_family = 1
+            env_cfg.terrain.num_cols = len(pk.families) * pk.variants_per_family
+            env_cfg.terrain.num_rows = 1
             if args.parkour_force_family is not None:
-                env_cfg.terrain.parkour.force_family = args.parkour_force_family
-            if args.parkour_force_row is not None:
-                env_cfg.terrain.parkour.force_row = args.parkour_force_row
+                pk.force_family = args.parkour_force_family
+            # With num_rows=1, the only valid row index is 0.  Use
+            # difficulty_offset so the builder still generates obstacles at
+            # the requested difficulty level.
+            pk.force_row = 0
+            pk.difficulty_offset = args.parkour_force_row if args.parkour_force_row is not None else 0
+            # Prevent update_cfg_from_args (called later in make_env) from
+            # overwriting force_row back to the CLI value.
+            args.parkour_force_row = None
             if getattr(args, "parkour_gauntlet", False):
                 pk = env_cfg.terrain.parkour
                 obs_per_family = getattr(args, "gauntlet_obstacles_per_family", 4)
