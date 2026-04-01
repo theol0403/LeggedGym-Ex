@@ -8,7 +8,7 @@ import torch
 from legged_gym import LEGGED_GYM_ROOT_DIR
 from legged_gym.utils.helpers import class_to_dict, get_load_path
 from rsl_rl.algorithms import ParkourDistillation
-from rsl_rl.modules import ActorCriticParkour, ActorCriticParkourStudent
+from rsl_rl.modules import ActorCriticRMA, DefaultEstimator, ActorCriticParkourStudent
 from rsl_rl.runners.on_policy_runner import OnPolicyRunner
 
 
@@ -68,7 +68,7 @@ class ParkourStudentRunner(OnPolicyRunner):
                 f"student task expects {self.env.num_actions}."
             )
 
-        teacher = ActorCriticParkour(
+        teacher = ActorCriticRMA(
             num_actor_obs=teacher_env_cfg.env.num_observations,
             num_critic_obs=teacher_env_cfg.env.num_privileged_obs,
             num_actions=teacher_env_cfg.env.num_actions,
@@ -83,7 +83,7 @@ class ParkourStudentRunner(OnPolicyRunner):
 
     def _teacher_actions(self, teacher_actor_obs):
         with torch.no_grad():
-            return self.teacher.act_inference(teacher_actor_obs)
+            return self.teacher.act_inference(teacher_actor_obs, hist_encoding=True)
 
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         self._pre_learn(init_at_random_ep_len)
@@ -110,7 +110,7 @@ class ParkourStudentRunner(OnPolicyRunner):
                 latent, _yaw_raw, yaw_scaled = self.alg.actor_critic.forward_depth(
                     student_depth.clone(), obs
                 )
-                oracle_heading = obs[:, 4:6]
+                oracle_heading = obs[:, 6:8]
                 obs_actor = self.alg.actor_critic.apply_mts_yaw_to_obs(
                     obs, yaw_scaled, oracle_heading, self._yaw_threshold
                 )

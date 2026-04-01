@@ -317,10 +317,20 @@ class DepthAnythingV2Backend(DepthEstimatorBackend):
 
         self._synchronize()
         started = time.perf_counter()
+        max_batch = 128
+        n = pixel_values.shape[0]
         with torch.inference_mode():
-            outputs = self._model(pixel_values=pixel_values)
+            if n <= max_batch:
+                outputs = self._model(pixel_values=pixel_values)
+                raw_depth = outputs.predicted_depth
+            else:
+                chunks = []
+                for i in range(0, n, max_batch):
+                    out = self._model(pixel_values=pixel_values[i : i + max_batch])
+                    chunks.append(out.predicted_depth)
+                raw_depth = torch.cat(chunks, dim=0)
         depth = F.interpolate(
-            outputs.predicted_depth.unsqueeze(1).float(),
+            raw_depth.unsqueeze(1).float(),
             size=target_size,
             mode="bicubic",
             align_corners=False,

@@ -617,6 +617,21 @@ class GenesisSimulator(Simulator):
         self._robot.set_dofs_kp(self._p_gains, self._dof_indices)
         self._robot.set_dofs_kv(self._d_gains, self._dof_indices)
 
+        # DC motor saturation parameters (optional, matches IsaacLab ParkourDCMotor)
+        self._has_motor_saturation = (
+            getattr(self._cfg.control, 'effort_limit', None) is not None
+            and getattr(self._cfg.control, 'saturation_effort', None) is not None
+            and getattr(self._cfg.control, 'velocity_limit', None) is not None
+        )
+        if self._has_motor_saturation:
+            self._effort_limit = self._build_per_dof_tensor(self._cfg.control.effort_limit)
+            self._saturation_effort = self._build_per_dof_tensor(self._cfg.control.saturation_effort)
+            self._velocity_limit = self._build_per_dof_tensor(self._cfg.control.velocity_limit)
+            self._zero_effort = torch.zeros_like(self._effort_limit)
+            print(f"DC motor saturation enabled: effort_limit={self._effort_limit.tolist()}, "
+                  f"saturation_effort={self._saturation_effort.tolist()}, "
+                  f"velocity_limit={self._velocity_limit.tolist()}")
+
         self._init_height_points()
 
     def _terrain_uses_parkour_metadata(self):
@@ -868,7 +883,29 @@ class GenesisSimulator(Simulator):
                                     self._default_dof_pos - self._dof_pos)
             - self._kd_scale * self._d_gains * self._dof_vel
         )
+        # Apply DC motor velocity-dependent torque saturation (matches IsaacLab ParkourDCMotor)
+        if self._has_motor_saturation:
+            vel_ratio = self._dof_vel / self._velocity_limit
+            max_effort = self._saturation_effort * (1.0 - vel_ratio)
+            max_effort = torch.clamp(max_effort, min=self._zero_effort, max=self._effort_limit)
+            min_effort = self._saturation_effort * (-1.0 - vel_ratio)
+            min_effort = torch.clamp(min_effort, min=-self._effort_limit, max=self._zero_effort)
+            torques = torch.clamp(torques, min=min_effort, max=max_effort)
         return torques
+
+    def _build_per_dof_tensor(self, param_dict):
+        """Build a (num_dofs,) tensor from a dict mapping joint-name substrings to values."""
+        values = []
+        for dof_name in self._cfg.asset.dof_names:
+            matched = False
+            for key, val in param_dict.items():
+                if key in dof_name:
+                    values.append(val)
+                    matched = True
+                    break
+            if not matched:
+                raise ValueError(f"No motor param match for DOF '{dof_name}' in {param_dict}")
+        return torch.tensor(values, device=self._device, dtype=torch.float)
 
     def _init_domain_params(self):
         """ Initializes domain randomization parameters, which are used to randomize the environment."""

@@ -10,6 +10,11 @@ from legged_gym.utils.parkour_terrain import PARKOUR_FAMILY_IDS
 class LeggedRobotParkour(LeggedRobot):
     SECTION_STAIRS = 2
 
+    # Genesis joint order: FR-FL-RR-RL
+    # IsaacLab (CAI23sbP) joint order: FL-FR-RL-RR
+    # This permutation converts between them (it is its own inverse).
+    JOINT_REMAP = [3, 4, 5, 0, 1, 2, 9, 10, 11, 6, 7, 8]
+
     def _parse_cfg(self, cfg):
         if SIMULATOR != "genesis":
             raise RuntimeError("LeggedRobotParkour is only supported with SIMULATOR=genesis.")
@@ -19,26 +24,13 @@ class LeggedRobotParkour(LeggedRobot):
     def _init_buffers(self):
         self.obs_spec = ParkourObservationSpec.from_cfg(self.cfg)
         super()._init_buffers()
+        self._joint_remap = torch.tensor(self.JOINT_REMAP, device=self.device, dtype=torch.long)
         if self.simulator.lane_waypoints is None:
             raise RuntimeError("LeggedRobotParkour requires simulator-owned parkour lane metadata.")
         if self.simulator.scandot_heights is None:
             raise RuntimeError("LeggedRobotParkour requires scandot terrain observations to be enabled.")
         self._validate_configured_observation_dims()
 
-        self.commands_scale = torch.tensor(
-            [
-                self.obs_scales.goal_pos,
-                self.obs_scales.goal_pos,
-                self.obs_scales.goal_pos,
-                self.obs_scales.goal_pos,
-                self.obs_scales.heading,
-                self.obs_scales.heading,
-                self.obs_scales.goal_speed,
-            ],
-            device=self.device,
-            dtype=torch.float,
-            requires_grad=False,
-        )
         self.tile_half_extent = torch.tensor(
             [0.5 * self.cfg.terrain.terrain_length, 0.5 * self.cfg.terrain.terrain_width],
             device=self.device,
@@ -58,6 +50,35 @@ class LeggedRobotParkour(LeggedRobot):
         self.success_events = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.local_base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float)
         self.motion_penalty_scale = torch.ones(self.num_envs, device=self.device, dtype=torch.float)
+
+        # Commands buffer: [cur_dx, cur_dy, next_dx, next_dy, cur_heading_err, next_heading_err, goal_speed]
+        # (commands is already allocated in parent class)
+
+        # Contact history for OR-filter: store previous contact state
+        self._prev_contact_state = torch.zeros(
+            self.num_envs, self.obs_spec.num_foot_contacts, device=self.device, dtype=torch.float
+        )
+
+        # Observation history buffer for temporal encoding: (num_envs, num_hist_frames, num_prop)
+        self._obs_history = torch.zeros(
+            self.num_envs, self.obs_spec.num_hist_frames, self.obs_spec.num_prop,
+            device=self.device, dtype=torch.float,
+        )
+
+        # Terrain type flags (set on reset)
+        self._is_parkour_flat = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
+
+        # Stale yaw/scandots buffers (CAI23sbP updates every 5 env steps)
+        self._stale_delta_yaw = torch.zeros(self.num_envs, 1, device=self.device, dtype=torch.float)
+        self._stale_delta_next_yaw = torch.zeros(self.num_envs, 1, device=self.device, dtype=torch.float)
+        self._stale_scandots = torch.zeros(
+            self.num_envs, self.obs_spec.num_scandots, device=self.device, dtype=torch.float
+        )
+
+    def _pre_sim_step(self, actions):
+        # Model outputs actions in IsaacLab joint order (FL-FR-RL-RR).
+        # Remap to Genesis order (FR-FL-RR-RL) before the simulator sees them.
+        return super()._pre_sim_step(actions[:, self._joint_remap])
 
     def check_termination(self):
         super().check_termination()
@@ -106,53 +127,193 @@ class LeggedRobotParkour(LeggedRobot):
         self.course_success[env_ids] = False
         self.waypoint_reached_events[env_ids] = 0.0
         self.success_events[env_ids] = 0.0
+        self._prev_contact_state[env_ids] = 0.0
         self._update_local_base_positions(env_ids)
         self._update_current_section_state(env_ids)
         self._update_command_targets(env_ids)
         self.simulator.update_scandot_heights()
 
-    def _compute_proprioception_and_scandots(self):
-        foot_contacts = (
-            self.simulator.link_contact_forces[:, self.simulator.feet_contact_indices, 2] > 1.0
-        ).float()
+        # In CAI23sbP, "parkour_flat" is a specific terrain TYPE (not a row).
+        # Our terrain families (stairs, hurdle_block, gap) are all non-flat.
+        self._is_parkour_flat[env_ids] = 0.0
+
+        # Zero history — it will be properly filled on the first compute_observations call
+        # when episode_length_buf <= 1 (matching CAI23sbP behavior).
+        self._obs_history[env_ids] = 0.0
+
+        # Initialize stale buffers with fresh values after reset so they're valid
+        # even if compute_observations is first called on a non-multiple-of-5 step.
+        self._stale_delta_yaw[env_ids] = self.commands[env_ids, 4:5]
+        self._stale_delta_next_yaw[env_ids] = self.commands[env_ids, 5:6]
+        self._stale_scandots[env_ids] = self._compute_scandots()[env_ids]
+
+    def _compute_contact_fill(self):
+        """Compute 4-dim contact fill: norm(F_3d) > 2.0, OR with previous frame, centered +/-0.5."""
+        foot_forces = self.simulator.link_contact_forces[:, self.simulator.feet_contact_indices, :]
+        current_contact = (torch.norm(foot_forces, dim=2) > 2.0).float()
+        # OR with previous frame
+        contact_or = torch.clamp(current_contact + self._prev_contact_state, 0.0, 1.0)
+        # Update previous for next step
+        self._prev_contact_state = current_contact
+        # Center to +/-0.5
+        return contact_or - 0.5
+
+    def _compute_scandots(self):
+        """Compute scandot observations: base_height - offset - terrain_heights, clipped.
+
+        Genesis produces scandots in X-major order (ij indexing).
+        CAI23sbP expects Y-major order (xy indexing).
+        Reshape (12,11) -> transpose -> flatten to convert.
+        """
         scandots_cfg = self.cfg.terrain.scandots
-        scandot_obs = torch.clip(
+        num_x = len(scandots_cfg.points_x)
+        num_y = len(scandots_cfg.points_y)
+        heights_genesis = torch.clip(
             self.simulator.base_pos[:, 2:3] - scandots_cfg.base_height_offset - self.simulator.scandot_heights,
             scandots_cfg.clip_min,
             scandots_cfg.clip_max,
         )
-        prop_obs = torch.cat(
-            (
-                self.commands * self.commands_scale,
-                self.simulator.projected_gravity,
-                self.simulator.base_ang_vel * self.obs_scales.ang_vel,
-                (self.simulator.dof_pos - self.simulator.default_dof_pos) * self.obs_scales.dof_pos,
-                self.simulator.dof_vel * self.obs_scales.dof_vel,
-                self.actions,
-                foot_contacts,
-            ),
-            dim=-1,
-        )
-        return prop_obs, scandot_obs
+        # Remap: Genesis X-major (num_x, num_y) -> IsaacLab Y-major (num_y, num_x)
+        return heights_genesis.reshape(-1, num_x, num_y).permute(0, 2, 1).reshape(-1, num_x * num_y)
+
+    def _compute_prop_obs(self):
+        """Build 53-dim prop observation in CAI23sbP format."""
+        # [0:3] ang_vel * 0.25
+        ang_vel = self.simulator.base_ang_vel * 0.25
+
+        # [3:5] IMU: roll, pitch
+        euler = self.simulator.base_euler  # (N, 3) = (roll, pitch, yaw)
+        imu = torch.stack([
+            wrap_to_pi(euler[:, 0]),  # roll
+            wrap_to_pi(euler[:, 1]),  # pitch
+        ], dim=1)
+
+        # [5:6] zero placeholder
+        zero_1 = torch.zeros(self.num_envs, 1, device=self.device)
+
+        # [6:7] delta_yaw (current heading error) — uses stale value (updated every 5 steps)
+        delta_yaw = self._stale_delta_yaw
+
+        # [7:8] delta_next_yaw — uses stale value
+        delta_next_yaw = self._stale_delta_next_yaw
+
+        # [8:10] zeros placeholder
+        zeros_2 = torch.zeros(self.num_envs, 2, device=self.device)
+
+        # [10:11] vel_cmd_x (goal speed)
+        vel_cmd = self.commands[:, 6:7]
+
+        # [11:12] is_not_parkour_flat
+        is_not_flat = (1.0 - self._is_parkour_flat).unsqueeze(1)
+
+        # [12:13] is_parkour_flat
+        is_flat = self._is_parkour_flat.unsqueeze(1)
+
+        # [13:25] joint_pos - default (remapped to IsaacLab order)
+        dof_pos = (self.simulator.dof_pos - self.simulator.default_dof_pos)[:, self._joint_remap]
+
+        # [25:37] joint_vel * 0.05 (remapped to IsaacLab order)
+        dof_vel = (self.simulator.dof_vel * 0.05)[:, self._joint_remap]
+
+        # [37:49] prev_actions (stored in Genesis order, remap to IsaacLab)
+        prev_actions = self.actions[:, self._joint_remap]
+
+        # [49:53] contact_fill
+        contact_fill = self._compute_contact_fill()
+
+        return torch.cat([
+            ang_vel,        # [0:3]
+            imu,            # [3:5]
+            zero_1,         # [5:6]
+            delta_yaw,      # [6:7]
+            delta_next_yaw, # [7:8]
+            zeros_2,        # [8:10]
+            vel_cmd,        # [10:11]
+            is_not_flat,    # [11:12]
+            is_flat,        # [12:13]
+            dof_pos,        # [13:25]
+            dof_vel,        # [25:37]
+            prev_actions,   # [37:49]
+            contact_fill,   # [49:53]
+        ], dim=1)
+
+    def _compute_priv_explicit(self):
+        """9-dim privileged explicit: [base_lin_vel * 2.0, zeros(6)]."""
+        base_lin_vel = self.simulator.base_lin_vel * 2.0
+        zeros = torch.zeros(self.num_envs, 6, device=self.device)
+        return torch.cat([base_lin_vel, zeros], dim=1)
+
+    def _compute_priv_latent(self):
+        """29-dim privileged latent: [mass(1), com(3), friction(1), kp_ratio-1(12), kd_ratio-1(12)]."""
+        mass = self.simulator.dr_added_base_mass  # (N, 1)
+        com = self.simulator.dr_base_com_bias  # (N, 3)
+        friction = self.simulator.dr_friction_values  # (N, 1)
+        # Remap kp/kd from Genesis to IsaacLab joint order
+        kp_ratio = (self.simulator.dr_kp_scale - 1.0)[:, self._joint_remap]  # (N, 12)
+        kd_ratio = (self.simulator.dr_kd_scale - 1.0)[:, self._joint_remap]  # (N, 12)
+        return torch.cat([mass, com, friction, kp_ratio, kd_ratio], dim=1)
+
+    def _update_obs_history(self, prop_obs):
+        """Shift history buffer and push new prop obs (with yaw indices zeroed).
+
+        On the first 2 steps of each episode (episode_length_buf <= 1), all history
+        frames are filled with the current observation — matching CAI23sbP behavior.
+        """
+        # Create a copy with yaw deltas zeroed (indices 6:8)
+        prop_for_hist = prop_obs.clone()
+        prop_for_hist[:, 6:8] = 0.0
+
+        # CAI23sbP fills entire history on episode start (episode_length_buf <= 1)
+        first_step_mask = (self.episode_length_buf <= 1)
+        if first_step_mask.any():
+            # Fill all frames with current obs for newly-reset envs
+            self._obs_history[first_step_mask] = prop_for_hist[first_step_mask].unsqueeze(1).expand(
+                -1, self.obs_spec.num_hist_frames, -1
+            )
+
+        # For other envs: shift and append (newest at index 0)
+        other_mask = ~first_step_mask
+        if other_mask.any():
+            self._obs_history[other_mask, 1:] = self._obs_history[other_mask, :-1].clone()
+            self._obs_history[other_mask, 0] = prop_for_hist[other_mask]
+
+    def _get_history_flat(self):
+        """Return flattened history (num_envs, num_hist_frames * num_prop) oldest first."""
+        # _obs_history is newest-first; reverse to oldest-first for the encoder
+        return self._obs_history.flip(1).reshape(self.num_envs, -1)
 
     def compute_observations(self):
-        prop_obs, scandot_obs = self._compute_proprioception_and_scandots()
-        actor_obs = torch.cat((prop_obs, scandot_obs), dim=-1)
-        self._validate_runtime_observation_dims(actor_obs, self.obs_spec.actor_dim, "actor")
+        # CAI23sbP updates yaw and scandots only every 5 env steps
+        if self.common_step_counter % 5 == 0:
+            self._stale_delta_yaw[:] = self.commands[:, 4:5]
+            self._stale_delta_next_yaw[:] = self.commands[:, 5:6]
+            self._stale_scandots[:] = self._compute_scandots()
 
-        if self.num_privileged_obs is not None:
-            privileged_parts = (
-                actor_obs,
-                self.simulator.base_lin_vel * self.obs_scales.lin_vel,
-                self._get_privileged_dynamics(),
-                self.simulator.link_contact_states,
-            )
-            self.privileged_obs_buf = torch.cat(privileged_parts, dim=-1)
-            self._validate_runtime_observation_dims(self.privileged_obs_buf, self.obs_spec.critic_dim, "critic")
+        prop_obs = self._compute_prop_obs()
+        scandots = self._stale_scandots
+        priv_explicit = self._compute_priv_explicit()
+        priv_latent = self._compute_priv_latent()
+        # Read history BEFORE pushing current obs (CAI23sbP updates buffer after reading)
+        history = self._get_history_flat()
+        self._update_obs_history(prop_obs)
 
-        self.obs_buf = actor_obs
+        # Full 753-dim observation
+        full_obs = torch.cat([prop_obs, scandots, priv_explicit, priv_latent, history], dim=1)
+
+        self.obs_buf = full_obs
+        self.privileged_obs_buf = full_obs
+
         if self.add_noise:
-            self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec
+            noise_vec = torch.zeros(self.obs_spec.full_obs_dim, device=self.device)
+            noise_scales = self.cfg.noise.noise_scales
+            noise_level = self.cfg.noise.noise_level
+            # Only add noise to specific prop ranges
+            noise_vec[self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * 0.25
+            noise_vec[self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level
+            noise_vec[self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * 0.05
+            # Scandots noise
+            noise_vec[self.obs_spec.scandots_slice] = noise_scales.scandots * noise_level
+            self.obs_buf = full_obs + (2 * torch.rand_like(full_obs) - 1) * noise_vec
 
     def _post_physics_step_callback(self):
         self.waypoint_reached_events.zero_()
@@ -261,33 +422,20 @@ class LeggedRobotParkour(LeggedRobot):
         self.simulator.reset_dofs(env_ids, dof_pos, dof_vel)
 
     def _get_noise_scale_vec(self):
-        noise_vec = torch.zeros_like(self.obs_buf[0])
+        noise_vec = torch.zeros(self.obs_spec.full_obs_dim, device=self.device)
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
 
-        noise_vec[self.obs_spec.command_slice] = 0.0
-        noise_vec[self.obs_spec.gravity_slice] = noise_scales.gravity * noise_level
-        noise_vec[self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-        noise_vec[self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
-        noise_vec[self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
-        noise_vec[self.obs_spec.actions_slice] = 0.0
-        noise_vec[self.obs_spec.foot_contacts_slice] = 0.0
+        noise_vec[self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * 0.25
+        noise_vec[self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level
+        noise_vec[self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * 0.05
         noise_vec[self.obs_spec.scandots_slice] = noise_scales.scandots * noise_level
         return noise_vec
 
     def _get_privileged_dynamics(self):
-        return torch.cat(
-            (
-                self.simulator.dr_friction_values - self.friction_value_offset,
-                self.simulator.dr_added_base_mass,
-                self.simulator.dr_base_com_bias,
-                self.simulator.dr_rand_push_vels[:, :2],
-                self.simulator.dr_kp_scale - self.kp_scale_offset,
-                self.simulator.dr_kd_scale - self.kd_scale_offset,
-            ),
-            dim=-1,
-        )
+        """For backward compatibility with any code that calls this."""
+        return self._compute_priv_latent()
 
     def _resolve_env_ids(self, env_ids=None):
         if env_ids is None:
@@ -401,6 +549,8 @@ class LeggedRobotParkour(LeggedRobot):
         world_points[:, 1] = local_points[:, 1] + tile_origin_xy[:, 1]
         return world_points
 
+    # --- Reward functions ---
+
     def _reward_lin_vel_z(self):
         return super()._reward_lin_vel_z() * self.motion_penalty_scale
 
@@ -411,8 +561,6 @@ class LeggedRobotParkour(LeggedRobot):
         return super()._reward_orientation() * self.motion_penalty_scale
 
     def _reward_flat_back(self):
-        # projected_gravity[:, 0]: positive = nose-down, negative = nose-up (butt sag).
-        # Target a slight nose-down pitch; penalize nose-up 3x harder.
         pg_x = self.simulator.projected_gravity[:, 0]
         error = pg_x - self.cfg.rewards.flat_back_target_pg_x
         weight = torch.where(error < 0.0, 3.0, 1.0)
@@ -496,13 +644,15 @@ class LeggedRobotParkour(LeggedRobot):
         return torch.sum(edge_hits.float() * foot_contacts.float() * active_mask, dim=1)
 
     def _validate_configured_observation_dims(self):
-        if self.num_obs != self.obs_spec.actor_dim:
+        if self.num_obs != self.obs_spec.full_obs_dim:
             raise RuntimeError(
-                f"Configured actor observation dim {self.num_obs} does not match parkour spec {self.obs_spec.actor_dim}."
+                f"Configured actor observation dim {self.num_obs} does not match "
+                f"parkour spec {self.obs_spec.full_obs_dim}."
             )
-        if self.num_privileged_obs is not None and self.num_privileged_obs != self.obs_spec.critic_dim:
+        if self.num_privileged_obs is not None and self.num_privileged_obs != self.obs_spec.full_obs_dim:
             raise RuntimeError(
-                f"Configured critic observation dim {self.num_privileged_obs} does not match parkour spec {self.obs_spec.critic_dim}."
+                f"Configured critic observation dim {self.num_privileged_obs} does not match "
+                f"parkour spec {self.obs_spec.full_obs_dim}."
             )
 
     def _validate_runtime_observation_dims(self, obs_tensor, expected_dim, obs_name):

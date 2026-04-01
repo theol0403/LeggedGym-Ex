@@ -107,6 +107,13 @@ class LeggedRobotCfg(BaseConfig):
         dt =  0.02 # control frequency 50Hz
         # decimation: Number of control action updates @ sim DT per policy DT
         decimation = 4
+        # DC motor saturation (optional, None = no saturation):
+        # effort_limit: max torque per joint type [N*m]
+        # saturation_effort: motor saturation effort for velocity-dependent clipping [N*m]
+        # velocity_limit: max joint velocity for saturation curve [rad/s]
+        effort_limit = None      # e.g. {"hip": 35.0, "thigh": 40.0, "calf": 40.0}
+        saturation_effort = None # e.g. {"hip": 35.0, "thigh": 45.0, "calf": 45.0}
+        velocity_limit = None    # e.g. {"hip": 52.4, "thigh": 30.1, "calf": 30.1}
     
     class asset:
         # Common

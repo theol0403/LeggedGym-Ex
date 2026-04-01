@@ -86,14 +86,14 @@ class Go2ParkourStudentCfgPPO(BaseConfig):
     runner_class_name = "ParkourStudentRunner"
 
     class policy:
-        clip_actions = LeggedRobotCfg.normalization.clip_actions
+        clip_actions = Go2ParkourTeacherCfg.normalization.clip_actions
         activation = "elu"
         student_depth_shape = [1, 58, 87]
         depth_backbone_output_dim = 32
         gru_hidden_dim = 512
         yaw_output_dim = 2
         yaw_scale = 1.5
-        heading_command_indices = (4, 5)
+        heading_command_indices = (6, 7)
         actor_hidden_dims = [512, 256, 128]
 
     class algorithm:
@@ -118,8 +118,8 @@ class Go2ParkourStudentCfgPPO(BaseConfig):
         checkpoint = -1
         resume_path = None
         teacher_task = "go2_parkour_teacher"
-        teacher_load_run = -1
-        teacher_ckpt = -1
+        teacher_load_run = "finetune_genesis"
+        teacher_ckpt = 400
 
 
 # --- Depth-estimation student: uses RGB -> DA-V2 -> inferred depth ---
@@ -141,7 +141,7 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
             enabled = True
             model_type = "depth_anything_v2_metric_outdoor"
             model_size = "base"
-            update_interval = 2
+            update_interval = 5
 
         class depth_camera_config(Go2ParkourStudentCfg.sensor.depth_camera_config):
             pass
@@ -174,11 +174,10 @@ class Go2ParkourDepthEstStudentCfgPPO(Go2ParkourStudentCfgPPO):
 def _finalize_student_cfg(cfg_cls):
     spec = ParkourObservationSpec.from_cfg(cfg_cls)
     cfg_cls.env.num_observations = spec.prop_dim
-    cfg_cls.env.num_privileged_obs = spec.teacher_actor_dim
-    cfg_cls.env.num_teacher_actor_obs = spec.teacher_actor_dim
+    cfg_cls.env.num_privileged_obs = spec.full_obs_dim
+    cfg_cls.env.num_teacher_actor_obs = spec.full_obs_dim
     depth_res = cfg_cls.sensor.depth_camera_config.processed_resolution
     # Network always receives a single frame (1, H, W) regardless of buffer size.
-    # The env selects which frame from the buffer to expose.
     cfg_cls.env.student_depth_shape = [1, depth_res[1], depth_res[0]]
 
 # --- Scandot-prediction student: depth encoder directly predicts scandots ---
@@ -206,7 +205,7 @@ class Go2ParkourScandotStudentCfgPPO(BaseConfig):
     runner_class_name = "ParkourScandotStudentRunner"
 
     class policy:
-        clip_actions = LeggedRobotCfg.normalization.clip_actions
+        clip_actions = Go2ParkourTeacherCfg.normalization.clip_actions
         activation = "elu"
         student_depth_shape = [1, 58, 87]
         depth_backbone_output_dim = 32
@@ -214,7 +213,7 @@ class Go2ParkourScandotStudentCfgPPO(BaseConfig):
         num_scandots = 132
         yaw_output_dim = 2
         yaw_scale = 1.5
-        heading_command_indices = (4, 5)
+        heading_command_indices = (6, 7)
 
     class algorithm:
         learning_rate = 2.0e-3
@@ -239,8 +238,8 @@ class Go2ParkourScandotStudentCfgPPO(BaseConfig):
         checkpoint = -1
         resume_path = None
         teacher_task = "go2_parkour_teacher"
-        teacher_load_run = -1
-        teacher_ckpt = -1
+        teacher_load_run = "finetune_genesis"
+        teacher_ckpt = 400
 
 
 class Go2ParkourDepthEstScandotStudentCfgPPO(Go2ParkourScandotStudentCfgPPO):

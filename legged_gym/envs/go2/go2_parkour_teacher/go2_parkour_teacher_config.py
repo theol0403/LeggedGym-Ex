@@ -35,9 +35,9 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
 
         class scandots(Go2RoughCommonCfg.terrain.scandots):
             enable = True
-            points_x = [-0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2, 1.35]
+            points_x = [-0.45, -0.30, -0.15, 0.0, 0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05, 1.20]
             points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.45, 0.6, 0.75]
-            base_height_offset = 0.5
+            base_height_offset = 0.3
             clip_min = -1.0
             clip_max = 1.0
 
@@ -60,13 +60,32 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         roll_random_scale = 0.0
         pitch_random_scale = 0.0
         yaw_random_scale = 0.0
+        # CAI23sbP defaults: asymmetric hips, rear thighs at 1.0
+        default_joint_angles = {
+            'FL_hip_joint': 0.1,
+            'FR_hip_joint': -0.1,
+            'RL_hip_joint': 0.1,
+            'RR_hip_joint': -0.1,
+            'FL_thigh_joint': 0.8,
+            'FR_thigh_joint': 0.8,
+            'RL_thigh_joint': 1.0,
+            'RR_thigh_joint': 1.0,
+            'FL_calf_joint': -1.5,
+            'FR_calf_joint': -1.5,
+            'RL_calf_joint': -1.5,
+            'RR_calf_joint': -1.5,
+        }
 
     class control(Go2RoughCommonCfg.control):
-        stiffness = {"joint": 30.0}
-        damping = {"joint": 0.75}
+        stiffness = {"joint": 40.0}
+        damping = {"joint": 1.0}
         action_scale = 0.25
         dt = 0.02
         decimation = 4
+        # DC motor saturation matching CAI23sbP ParkourDCMotor
+        effort_limit = {"hip": 35.0, "thigh": 40.0, "calf": 40.0}
+        saturation_effort = {"hip": 35.0, "thigh": 45.0, "calf": 45.0}
+        velocity_limit = {"hip": 52.4, "thigh": 30.1, "calf": 30.1}
 
     class asset(Go2RoughCommonCfg.asset):
         obtain_link_contact_states = True
@@ -131,7 +150,7 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         curriculum = False
         heading_command = False
         num_commands = 7
-        goal_speed_range = [0.8, 1.0]
+        goal_speed_range = [0.3, 0.8]
 
     class domain_rand(Go2RoughCommonCfg.domain_rand):
         randomize_friction = True
@@ -153,6 +172,8 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
         randomize_joint_damping = False
 
     class normalization(Go2RoughCommonCfg.normalization):
+        clip_actions = 4.8  # Match IsaacLab training clip
+
         class obs_scales(Go2RoughCommonCfg.normalization.obs_scales):
             goal_pos = 0.5
             heading = 1.0
@@ -166,16 +187,24 @@ class Go2ParkourTeacherCfg(Go2RoughCommonCfg):
 
 class Go2ParkourTeacherCfgPPO(LeggedRobotCfgPPO):
     class policy(LeggedRobotCfgPPO.policy):
-        scandot_encoder_hidden_dims = [128, 64, 32]
+        # RMA network config
+        num_prop = 53
+        num_scan = 132
+        num_priv_explicit = 9
+        num_priv_latent = 29
+        num_hist = 10
+        scan_encoder_dims = [128, 64, 32]
+        priv_encoder_dims = [64, 20]
         actor_hidden_dims = [512, 256, 128]
-        critic_hidden_dims = [1024, 512, 256]
+        critic_hidden_dims = [512, 256, 128]
+        history_encoder_channel_size = 10
 
     class algorithm(LeggedRobotCfgPPO.algorithm):
         entropy_coef = 0.01
         learning_rate = 1.0e-3
 
     class runner(LeggedRobotCfgPPO.runner):
-        policy_class_name = "ActorCriticParkour"
+        policy_class_name = "ActorCriticRMA"
         algorithm_class_name = "PPO"
         run_name = "teacher_genesis"
         experiment_name = "go2_parkour_teacher"
@@ -191,7 +220,5 @@ Go2ParkourTeacherCfg.terrain.num_subterrains = (
     Go2ParkourTeacherCfg.terrain.num_rows * Go2ParkourTeacherCfg.terrain.num_cols
 )
 _OBS_SPEC = ParkourObservationSpec.from_cfg(Go2ParkourTeacherCfg)
-Go2ParkourTeacherCfg.env.num_observations = parkour_actor_obs_dim(Go2ParkourTeacherCfg)
-Go2ParkourTeacherCfg.env.num_privileged_obs = parkour_critic_obs_dim(Go2ParkourTeacherCfg)
-Go2ParkourTeacherCfgPPO.policy.num_scandots = _OBS_SPEC.num_scandots
-Go2ParkourTeacherCfgPPO.policy.scandot_start_idx = _OBS_SPEC.scandots_slice.start
+Go2ParkourTeacherCfg.env.num_observations = _OBS_SPEC.full_obs_dim
+Go2ParkourTeacherCfg.env.num_privileged_obs = _OBS_SPEC.full_obs_dim

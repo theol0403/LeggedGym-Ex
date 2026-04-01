@@ -16,7 +16,7 @@ import torch
 from legged_gym import LEGGED_GYM_ROOT_DIR
 from legged_gym.utils.helpers import class_to_dict, get_load_path
 from rsl_rl.algorithms import ParkourDistillation
-from rsl_rl.modules import ActorCriticParkour, ActorCriticParkourScandotStudent
+from rsl_rl.modules import ActorCriticRMA, ActorCriticParkourScandotStudent
 from rsl_rl.runners.parkour_student_runner import ParkourStudentRunner
 
 
@@ -80,16 +80,16 @@ class ParkourScandotStudentRunner(ParkourStudentRunner):
                 )
 
                 # Apply MTS yaw to obs
-                oracle_heading = obs[:, 4:6]
+                oracle_heading = obs[:, 6:8]
                 obs_actor = self.alg.actor_critic.apply_mts_yaw_to_obs(
                     obs, yaw_scaled, oracle_heading, self._yaw_threshold
                 )
 
-                # Student actions: construct teacher obs and run through frozen teacher
-                student_teacher_obs = self.alg.actor_critic.construct_teacher_obs(
-                    obs_actor, predicted_scandots
-                )
-                student_actions = self.alg.actor_critic._teacher_actor_mean(student_teacher_obs)
+                # Student actions: replace scandots in full teacher obs with predicted scandots
+                student_teacher_obs = teacher_actor_obs.clone()
+                student_teacher_obs[:, :self._prop_dim] = obs_actor
+                student_teacher_obs[:, self._prop_dim:self._prop_dim + self._num_scandots] = predicted_scandots
+                student_actions = self.alg.actor_critic._teacher_act(student_teacher_obs)
 
                 self.alg.store_step(
                     student_actions=student_actions,
