@@ -44,6 +44,7 @@ class ActorCriticParkourScandotStudent(nn.Module):
         heading_command_indices=(6, 7),
         activation="elu",
         clip_actions=100.0,
+        backbone_type="cnn",
         **kwargs,
     ):
         if kwargs:
@@ -80,6 +81,7 @@ class ActorCriticParkourScandotStudent(nn.Module):
             yaw_dim=self.yaw_output_dim,
             activation=type(activation_layer),
             depth_in_channels=c,
+            backbone_type=backbone_type,
         )
 
         # Teacher reference (set via set_teacher). We use object.__setattr__

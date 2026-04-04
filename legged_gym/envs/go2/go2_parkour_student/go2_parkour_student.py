@@ -14,6 +14,12 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._use_inferred_depth = bool(
             getattr(self.cfg.sensor.depth_estimation, "enabled", False)
         )
+        # RGB backbone mode: raw RGB -> frozen ResNet (no DA2, no GT depth)
+        self._use_rgb_backbone = (
+            getattr(self.cfg.sensor, "add_rgb", False)
+            and not self._use_inferred_depth
+            and not getattr(self.cfg.sensor, "add_depth", False)
+        )
         self._depth_buffer_len = int(self.cfg.sensor.depth_camera_config.num_history)
 
         # Experiment flags (set via cfg.experiment_flags dict by train_experiment.py)
@@ -32,11 +38,22 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._experiment_fixed_range_hi = float(flags.get("fixed_range_hi", 12.0))
         self._experiment_depth_gradient = bool(flags.get("depth_gradient", False))
         self._experiment_depth_temporal_smooth = float(flags.get("depth_temporal_smooth", 0.0))
+        # Color jitter for domain invariance experiments (applied to RGB before DA2 or ResNet)
+        self._experiment_color_jitter = float(flags.get("color_jitter", 0.0))
+        self._experiment_brightness_jitter = float(flags.get("brightness_jitter", 0.0))
+        self._experiment_hue_jitter = float(flags.get("hue_jitter", 0.0))
 
     def _init_buffers(self):
         super()._init_buffers()
-        _, h, w = self.student_depth_shape  # always (1, H, W) for the network
-        if self._use_inferred_depth:
+        _, h, w = self.student_depth_shape  # (C, H, W) for the network
+        if self._use_rgb_backbone:
+            # RGB backbone: store float RGB in (num_envs, buffer_len, 3, H, W)
+            self._rgb_float_buffer = torch.zeros(
+                self.num_envs, self._depth_buffer_len, 3, h, w,
+                device=self.device, dtype=torch.float,
+            )
+            self._depth_buffer = self._rgb_float_buffer  # alias for reset_idx zeroing
+        elif self._use_inferred_depth:
             # Manual 2-frame buffer for inferred depth
             self._depth_buffer = torch.zeros(
                 self.num_envs, self._depth_buffer_len, h, w,
@@ -64,7 +81,10 @@ class Go2ParkourStudent(LeggedRobotParkour):
         # matching extreme-parkour which passes depth_buffer[:, -2].
         # Simulator buffer layout: index 0 = newest, index 1 = previous.
         self._prev_frame_idx = min(1, self._depth_buffer_len - 1)
-        if self._experiment_depth_gradient:
+        if self._use_rgb_backbone:
+            # RGB: (B, buf_len, 3, H, W) -> index gives (B, 3, H, W)
+            self.student_depth = self._rgb_float_buffer[:, self._prev_frame_idx]
+        elif self._experiment_depth_gradient:
             # 2-channel output: depth + Sobel gradient magnitude
             self._student_depth_buf = torch.zeros(
                 self.num_envs, 2, h, w, device=self.device, dtype=torch.float,
@@ -117,6 +137,10 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._depth_ema_std = torch.ones(1, device=self.device)
 
     def _refresh_student_depth(self):
+        if self._use_rgb_backbone:
+            self._refresh_student_rgb()
+            return
+
         if self._experiment_force_ema_norm:
             near = self.cfg.sensor.depth_camera_config.near_clip
             far = self.cfg.sensor.depth_camera_config.far_clip
@@ -150,6 +174,65 @@ class Go2ParkourStudent(LeggedRobotParkour):
             if self._depth_buffer_len > 1:
                 self._depth_buffer[:, 1:] = self._depth_buffer[:, :-1].clone()
             self._depth_buffer[:, 0:1] = processed
+
+    def _refresh_student_rgb(self):
+        """Fetch RGB from simulator, crop, resize, normalize to [0,1], store in buffer."""
+        rgb = self.simulator.get_rgb_images()  # (B, H, W, 3) uint8
+        if rgb is None:
+            return
+        _, h, w = self.student_depth_shape  # target (H, W)
+
+        # Convert to float [0, 1] and transpose to (B, 3, H, W)
+        rgb_float = rgb.float().div_(255.0).permute(0, 3, 1, 2)
+
+        # Apply color jitter for domain invariance testing
+        if self._experiment_brightness_jitter > 0:
+            factor = 1.0 + self._experiment_brightness_jitter * (2 * torch.rand(1, device=rgb_float.device) - 1)
+            rgb_float = (rgb_float * factor).clamp_(0, 1)
+        if self._experiment_color_jitter > 0:
+            j = self._experiment_color_jitter
+            # Per-channel color shift
+            shifts = j * (2 * torch.rand(3, 1, 1, device=rgb_float.device) - 1)
+            rgb_float = (rgb_float + shifts.unsqueeze(0)).clamp_(0, 1)
+        if self._experiment_hue_jitter > 0:
+            # Simple hue rotation via channel permutation blend
+            shift = self._experiment_hue_jitter * (2 * torch.rand(1, device=rgb_float.device).item() - 1)
+            # Convert to approximate HSV hue shift using rotation matrix
+            cos_h = torch.cos(torch.tensor(shift * 3.14159))
+            sin_h = torch.sin(torch.tensor(shift * 3.14159))
+            # Rotation in RGB space around (1,1,1) axis
+            one_third = 1.0 / 3.0
+            sqrt_third = 0.57735
+            rot = torch.tensor([
+                [cos_h + (1 - cos_h) * one_third, one_third * (1 - cos_h) - sqrt_third * sin_h, one_third * (1 - cos_h) + sqrt_third * sin_h],
+                [one_third * (1 - cos_h) + sqrt_third * sin_h, cos_h + (1 - cos_h) * one_third, one_third * (1 - cos_h) - sqrt_third * sin_h],
+                [one_third * (1 - cos_h) - sqrt_third * sin_h, one_third * (1 - cos_h) + sqrt_third * sin_h, cos_h + (1 - cos_h) * one_third],
+            ], device=rgb_float.device, dtype=rgb_float.dtype)
+            B = rgb_float.shape[0]
+            rgb_flat = rgb_float.reshape(B, 3, -1)  # (B, 3, H*W)
+            rgb_flat = torch.einsum("ij,bjk->bik", rot, rgb_flat)
+            rgb_float = rgb_flat.reshape(B, 3, rgb_float.shape[2], rgb_float.shape[3]).clamp_(0, 1)
+
+        # Crop (same offsets as depth camera)
+        depth_cfg = self.cfg.sensor.depth_camera_config
+        top = int(getattr(depth_cfg, "crop_top", 0))
+        bottom = int(getattr(depth_cfg, "crop_bottom", 0))
+        left = int(getattr(depth_cfg, "crop_left", 0))
+        right = int(getattr(depth_cfg, "crop_right", 0))
+        h_raw, w_raw = rgb_float.shape[2], rgb_float.shape[3]
+        end_h = h_raw - bottom if bottom > 0 else h_raw
+        end_w = w_raw - right if right > 0 else w_raw
+        if top > 0 or bottom > 0 or left > 0 or right > 0:
+            rgb_float = rgb_float[:, :, top:end_h, left:end_w]
+
+        # Resize to target resolution if needed
+        if rgb_float.shape[2:] != (h, w):
+            rgb_float = F.interpolate(rgb_float, size=(h, w), mode="bilinear", align_corners=False)
+
+        # Shift history buffer and store
+        if self._depth_buffer_len > 1:
+            self._rgb_float_buffer[:, 1:] = self._rgb_float_buffer[:, :-1].clone()
+        self._rgb_float_buffer[:, 0] = rgb_float
 
     def _process_inferred_depth(self, inferred_depth):
         depth_cfg = self.cfg.sensor.depth_camera_config
@@ -319,6 +402,8 @@ class Go2ParkourStudent(LeggedRobotParkour):
         super().reset_idx(env_ids)
         if len(env_ids) > 0:
             self._depth_buffer[env_ids] = 0.0
+            if self._use_rgb_backbone:
+                self._rgb_float_buffer[env_ids] = 0.0
             if self._experiment_depth_gradient:
                 self._student_depth_buf[env_ids] = 0.0
 

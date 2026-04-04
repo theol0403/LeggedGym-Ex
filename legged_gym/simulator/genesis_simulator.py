@@ -1022,7 +1022,21 @@ class GenesisSimulator(Simulator):
 
         estimator = self._ensure_depth_estimator()
         env_ids = sorted(int(env_idx) for env_idx in rendered_env_indices)
-        output = estimator.estimate({"rgb": self._rgb_images[env_ids], "env_ids": env_ids})
+        rgb_input = self._rgb_images[env_ids]
+        # Apply color jitter if experiment flag is set (domain invariance test)
+        flags = getattr(self._cfg, "experiment_flags", None) or {}
+        brightness_jitter = float(flags.get("brightness_jitter", 0.0))
+        color_jitter = float(flags.get("color_jitter", 0.0))
+        if brightness_jitter > 0 or color_jitter > 0:
+            rgb_input = rgb_input.clone().float()
+            if brightness_jitter > 0:
+                factor = 1.0 + brightness_jitter * (2 * torch.rand(1, device=rgb_input.device) - 1)
+                rgb_input = (rgb_input * factor).clamp_(0, 255)
+            if color_jitter > 0:
+                shifts = color_jitter * 255 * (2 * torch.rand(1, 1, 1, 3, device=rgb_input.device) - 1)
+                rgb_input = (rgb_input + shifts).clamp_(0, 255)
+            rgb_input = rgb_input.to(self._rgb_images.dtype)
+        output = estimator.estimate({"rgb": rgb_input, "env_ids": env_ids})
         if output.depth.ndim != 3:
             raise RuntimeError(
                 f"Unexpected inferred-depth shape from {output.backend_name}: {tuple(output.depth.shape)}"
@@ -1096,20 +1110,60 @@ class GenesisSimulator(Simulator):
             self._terrain.tot_rows, self._terrain.tot_cols).to(self._device)
     
     def _create_terrain_surface(self):
-        """Create a textured surface for terrain to give DA2 visual depth cues."""
-        # Generate a procedural checkerboard/grid texture as numpy array
+        """Create a textured surface for terrain to give DA2 visual depth cues.
+
+        Supports multiple texture modes via cfg.terrain.texture_mode:
+          - checkerboard: grey concrete with dark grid lines (default, used during training)
+          - solid_red/solid_green/solid_blue: solid color surfaces
+          - random_color: random solid color (seeded by current time)
+          - noise: random RGB noise texture
+          - bricks: brick-like pattern with mortar lines
+        """
         tex_size = 512
-        img = np.zeros((tex_size, tex_size, 3), dtype=np.uint8)
-        # Base color: light grey concrete
-        img[:] = [180, 175, 170]
-        # Add grid lines for depth cues
-        grid_spacing = 32
-        for i in range(0, tex_size, grid_spacing):
-            img[i:i+2, :] = [120, 115, 110]
-            img[:, i:i+2] = [120, 115, 110]
-        # Add some noise for texture
-        noise = np.random.RandomState(42).randint(-15, 16, img.shape, dtype=np.int16)
-        img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        mode = getattr(self._cfg.terrain, "texture_mode", "checkerboard")
+
+        if mode == "checkerboard":
+            img = np.zeros((tex_size, tex_size, 3), dtype=np.uint8)
+            img[:] = [180, 175, 170]
+            grid_spacing = 32
+            for i in range(0, tex_size, grid_spacing):
+                img[i:i+2, :] = [120, 115, 110]
+                img[:, i:i+2] = [120, 115, 110]
+            noise = np.random.RandomState(42).randint(-15, 16, img.shape, dtype=np.int16)
+            img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        elif mode.startswith("solid_"):
+            color_map = {
+                "solid_red": [200, 60, 60],
+                "solid_green": [60, 180, 60],
+                "solid_blue": [60, 60, 200],
+                "solid_yellow": [200, 200, 60],
+                "solid_white": [240, 240, 240],
+                "solid_dark": [40, 40, 40],
+            }
+            color = color_map.get(mode, [180, 180, 180])
+            img = np.full((tex_size, tex_size, 3), color, dtype=np.uint8)
+        elif mode == "random_color":
+            import time
+            rng = np.random.RandomState(int(time.time()) % 2**31)
+            color = rng.randint(30, 230, size=3).tolist()
+            img = np.full((tex_size, tex_size, 3), color, dtype=np.uint8)
+        elif mode == "noise":
+            rng = np.random.RandomState(123)
+            img = rng.randint(0, 256, (tex_size, tex_size, 3), dtype=np.uint8)
+        elif mode == "bricks":
+            img = np.full((tex_size, tex_size, 3), [180, 100, 70], dtype=np.uint8)
+            brick_h, brick_w, mortar = 32, 64, 2
+            for row in range(0, tex_size, brick_h):
+                img[row:row+mortar, :] = [160, 160, 155]
+                offset = (brick_w // 2) if ((row // brick_h) % 2) else 0
+                for col in range(offset, tex_size, brick_w):
+                    img[row:row+brick_h, col:col+mortar] = [160, 160, 155]
+            noise = np.random.RandomState(42).randint(-10, 11, img.shape, dtype=np.int16)
+            img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        else:
+            # Fallback: plain grey
+            img = np.full((tex_size, tex_size, 3), [180, 175, 170], dtype=np.uint8)
+
         return gs.surfaces.Rough(
             diffuse_texture=gs.textures.ImageTexture(image_array=img),
         )

@@ -177,8 +177,14 @@ def _finalize_student_cfg(cfg_cls):
     cfg_cls.env.num_privileged_obs = spec.full_obs_dim
     cfg_cls.env.num_teacher_actor_obs = spec.full_obs_dim
     depth_res = cfg_cls.sensor.depth_camera_config.processed_resolution
-    # Network always receives a single frame (1, H, W) regardless of buffer size.
-    cfg_cls.env.student_depth_shape = [1, depth_res[1], depth_res[0]]
+    # Determine input channels: 3 for RGB backbone, 1 for depth
+    is_rgb_backbone = (
+        getattr(cfg_cls.sensor, "add_rgb", False)
+        and not getattr(cfg_cls.sensor.depth_estimation, "enabled", False)
+        and not getattr(cfg_cls.sensor, "add_depth", False)
+    )
+    channels = 3 if is_rgb_backbone else 1
+    cfg_cls.env.student_depth_shape = [channels, depth_res[1], depth_res[0]]
 
 # --- Scandot-prediction student: depth encoder directly predicts scandots ---
 
@@ -248,7 +254,51 @@ class Go2ParkourDepthEstScandotStudentCfgPPO(Go2ParkourScandotStudentCfgPPO):
         experiment_name = "go2_parkour_depth_est_scandot_student"
 
 
+# --- Frozen ResNet-18 RGB backbone scandot student ---
+
+class Go2ParkourResNetRGBScandotStudentCfg(Go2ParkourScandotStudentCfg):
+    """Scandot prediction student using frozen ResNet-18 on raw RGB (no DA2)."""
+
+    class env(Go2ParkourScandotStudentCfg.env):
+        student_depth_shape = None  # computed by _finalize_student_cfg
+
+    class terrain(Go2ParkourScandotStudentCfg.terrain):
+        add_texture = True
+        texture_uv_scale = 10.0
+
+    class sensor(LeggedRobotCfg.sensor):
+        add_depth = False
+        add_rgb = True
+        depth_noise_level = 0.0
+
+        class depth_estimation(LeggedRobotCfg.sensor.depth_estimation):
+            enabled = False  # No DA2 — direct RGB to ResNet
+
+        class depth_camera_config(Go2ParkourStudentCfg.sensor.depth_camera_config):
+            pass  # Inherit crop/resolution settings for RGB cropping
+
+        class rgb_camera_config(LeggedRobotCfg.sensor.rgb_camera_config):
+            resolution = (106, 60)
+            horizontal_fov_deg = 87
+            pos = (0.327, 0.0, 0.043)
+            euler = (0.0, 0.087, 0.0)  # 5 deg pitch down
+            link_idx_local = 0
+            near_plane = 0.1
+            far_plane = 10.0
+
+
+class Go2ParkourResNetRGBScandotStudentCfgPPO(Go2ParkourScandotStudentCfgPPO):
+    class policy(Go2ParkourScandotStudentCfgPPO.policy):
+        student_depth_shape = [3, 58, 87]
+        backbone_type = "resnet18"
+
+    class runner(Go2ParkourScandotStudentCfgPPO.runner):
+        run_name = "resnet_rgb_scandot_student_genesis"
+        experiment_name = "go2_parkour_resnet_rgb_scandot_student"
+
+
 _finalize_student_cfg(Go2ParkourStudentCfg)
 _finalize_student_cfg(Go2ParkourDepthEstStudentCfg)
 _finalize_student_cfg(Go2ParkourScandotStudentCfg)
 _finalize_student_cfg(Go2ParkourDepthEstScandotStudentCfg)
+_finalize_student_cfg(Go2ParkourResNetRGBScandotStudentCfg)
