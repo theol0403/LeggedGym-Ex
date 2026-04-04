@@ -1,0 +1,26 @@
+\section{Related Work}
+
+\paragraph{Agile Locomotion}
+RL has demonstrated tremendous success in obtaining robust and adaptive controllers for legged robot~\citep{peng2020learning, fu2021minimizing,  kumar2021rma, rudin2022learning, aractingi2023controlling}.
+This includes agile skills such as high-speed running~\citep{bellegarda2022robust,caluwaerts2023barkour, margolis2024rapid, he2024agile}, recovering from falling~\citep{hwangbo2019learning,yang2020multi,smith2022legged, inoue2024body}, jumping~\citep{bellegarda2020robust, margolis2021learning, li2023robust, smith2023learning, li2023learning, yang2023generalized, li2024reinforcement, zhang2024learning},
+climbing obstacles~\cite{lee2020learning, siekmann2021blind,miki2022learning,hoeller2022neural,rudin2022advanced,agarwal2023legged,yang2023neural,loquercio2023learning, chane2024cat, cheng2024quadruped, hoeller2024anymal,zhuang2023robot,cheng2023parkour}
+bipedal walking with quadruped robots~\citep{fuchioka2023opt,li2023learning,smith2023learning,cheng2023parkour,huang2024diffuseloco} and walking inside confined spaces~\citep{miki2024learning, xu2024dexterous, cheng2024quadruped}.
+Learning multi-skill locomotion policies, as required in parkour, can be done by training separate policies for each skill, then coordinating them with a high-level planner~\citep{yang2020multi, kim2022humanconquad, huang2023creating, hoeller2024anymal} or distilling them into a single policy~\citep{caluwaerts2023barkour, zhuang2023robot, huang2024diffuseloco}.
+Instead, we follow~\citep{cheng2023parkour} and learn multi-task policies directly through RL.
+
+\paragraph{Safe Locomotion}
+Safety mechanisms have been implemented to ensure safer outcome while performing agile skills~\citep{yang2022safe, he2024agile}.
+Following~\citep{lee2023evaluation, kim2024not,chane2024cat}, we employ constraints alongside rewards in RL to deter undesired behaviors.
+This not only allows for aggressive optimization of agility while ensuring safety but also simplifies the process of reward tuning for RL.
+In particular, we exploit the reformulation of Constraints as Terminations~\citep{chane2024cat} (CaT), which was demonstrated as an overhead on top of on-policy RL algorithms~\citep{schulman2017proximal}, and which we extend to the off-policy formulation, more suitable to our case as explained below.
+
+
+\paragraph{Sample-Efficient Learning}
+\citep{bogdanovic2022model, smith2023learning} accelerate RL with demonstrations obtained from trajectory optimization.
+Other works aimed at exploring RL methods sample efficient enough to train locomotion policies directly in the real-world~\cite{smith2022legged, wu2023daydreamer}.
+Our approach repurposes many of these designs to bypass the computational cost of RL from pixels while obtaining a pure end-to-end RL method, unlocking several advantages exhibited below.
+
+\paragraph{Vision-Based Locomotion}
+Prior methods often separate perception from control using intermediate representations such as elevation maps~\citep{kleiner2007real,peng2017deeploco,fankhauser2018probabilistic,gangapurwala2021real,tsounis2020deepgait,rudin2022learning,miki2022learning, duan2023learning, hoeller2024anymal, chane2024cat}, traceability maps ~\citep{chavez2018learning, yang2021real} or visual odometry~\citep{bloesch2015robust,wisth2019robust,wisth2022vilens,buchanan2022learning},  for downstream planning and control~\citep{wermelinger2016navigation,mastalli2017trajectory,magana2019fast,jenelten2020perceptive,kim2020vision,agrawal2022vision}.
+Recently, locomotion from pixels~\citep{yu2021visual,margolis2021learning,loquercio2023learning,agarwal2023legged,zhuang2023robot,cheng2023parkour} has emerged as a powerful paradigm that more tightly coordinates vision and control, often relying on teacher-student approaches (typically by distilling an observation-privileged policy), yet raising some limited action-perception behaviors.
+

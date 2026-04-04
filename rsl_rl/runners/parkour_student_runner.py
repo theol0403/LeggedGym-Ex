@@ -20,16 +20,39 @@ class ParkourStudentRunner(OnPolicyRunner):
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
 
+    def _resume_uses_checkpoint_bootstrap(self):
+        return bool(self.cfg.get("resume", False))
+
+    def _try_init_teacher(self):
+        try:
+            return self._load_frozen_teacher()
+        except Exception as exc:
+            if not self._resume_uses_checkpoint_bootstrap():
+                raise
+            print(
+                "Warning: failed to load frozen teacher during runner initialization. "
+                "Continuing because resume=True and the resumed student checkpoint will "
+                "restore the actor weights. Teacher loading is deferred until training "
+                f"actually needs it.\nOriginal error: {exc}"
+            )
+            return None
+
+    def _ensure_teacher_loaded(self):
+        if self.teacher is None:
+            self.teacher = self._load_frozen_teacher()
+        return self.teacher
+
     def _init_agent_and_algo(self):
         self._configure_torch_fast_path()
-        self.teacher = self._load_frozen_teacher()
+        self.teacher = self._try_init_teacher()
         actor_critic = ActorCriticParkourStudent(
             self.env.num_obs,
             self.env.num_actions,
             self.env.num_teacher_actor_obs,
             **self.policy_cfg,
         ).to(self.device)
-        actor_critic.load_teacher_actor_weights(self.teacher.state_dict())
+        if self.teacher is not None:
+            actor_critic.load_teacher_actor_weights(self.teacher.state_dict())
         alg_cfg = dict(self.alg_cfg)
         self._yaw_threshold = float(alg_cfg.pop("yaw_threshold", 0.6))
         self.alg = ParkourDistillation(actor_critic, device=self.device, **alg_cfg)
@@ -83,9 +106,10 @@ class ParkourStudentRunner(OnPolicyRunner):
 
     def _teacher_actions(self, teacher_actor_obs):
         with torch.no_grad():
-            return self.teacher.act_inference(teacher_actor_obs)
+            return self._ensure_teacher_loaded().act_inference(teacher_actor_obs)
 
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
+        self._ensure_teacher_loaded()
         self._pre_learn(init_at_random_ep_len)
         obs, teacher_actor_obs, student_depth, _depth_updated = (
             t.to(self.device, non_blocking=True) for t in self.env.get_observations()

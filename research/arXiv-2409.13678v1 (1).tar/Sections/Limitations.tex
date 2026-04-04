@@ -1,0 +1,16 @@
+\section{Limitations}
+
+\iffalse
+During our experiments with the real Solo, we encountered a significant limitation related to the instantaneous electric power requirements for the robot’s movements, typically for leaping and climbing high steps.
+Some of our batteries were unable to deliver the necessary power, an issue that was not anticipated. 
+% Future work could model and limit the electric power consumption of the robot in simulation, perhaps by implementing a constraint to ensure that the power demands do not exceed the battery's capacity to deliver power.
+%Ludo suggestion:
+Future work could add a model of electric power consumption in the simulation. We could then add a constraint during training to ensure the power demands do not exceed the battery's capacity to deliver power.
+Such an approach would help push the limits on the type of behaviors Solo-12 can execute further.
+\fi 
+
+The experiments on the real hardware have revealed that our policy, while respecting the motor limitations, is likely hitting the battery current limits. This issue was not anticipated, hence not modeled neither in the simulation nor in the imposed constraints. It likely was amplified during the course of the experimental study by damaging the batteries when exceeding their capabilities. An exciting direction is to properly model this physical effect in the constrained-MDP, which has the potential to improve the performances of all other robots in future parkour research.
+
+Moreover, current parkour learning approaches, including ours, require that simulation terrains be manually constructed for each specific skill.
+Consequently, robots can only learn new skills by designing new types of terrain.
+Future work could explore procedural or generative simulators to create more diverse and realistic environments for training locomotion policies and transition from depth-based to RGB vision for legged robots.

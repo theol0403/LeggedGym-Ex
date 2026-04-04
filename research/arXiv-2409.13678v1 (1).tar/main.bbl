@@ -1,0 +1,399 @@
+\begin{thebibliography}{78}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Lee et~al.(2020)Lee, Hwangbo, Wellhausen, Koltun, and Hutter]{lee2020learning}
+J.~Lee, J.~Hwangbo, L.~Wellhausen, V.~Koltun, and M.~Hutter.
+\newblock Learning quadrupedal locomotion over challenging terrain.
+\newblock \emph{Science robotics}, 5\penalty0 (47):\penalty0 eabc5986, 2020.
+
+\bibitem[Bellegarda et~al.(2020)Bellegarda, Nguyen, and Nguyen]{bellegarda2020robust}
+G.~Bellegarda, C.~Nguyen, and Q.~Nguyen.
+\newblock Robust quadruped jumping via deep reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2011.07089}, 2020.
+
+\bibitem[Fu et~al.(2021)Fu, Kumar, Malik, and Pathak]{fu2021minimizing}
+Z.~Fu, A.~Kumar, J.~Malik, and D.~Pathak.
+\newblock Minimizing energy consumption leads to the emergence of gaits in legged robots.
+\newblock In \emph{Conference on Robot Learning ({CoRL})}, 2021.
+
+\bibitem[Margolis et~al.(2021)Margolis, Chen, Paigwar, Fu, Kim, Kim, and Agrawal]{margolis2021learning}
+G.~B. Margolis, T.~Chen, K.~Paigwar, X.~Fu, D.~Kim, S.~Kim, and P.~Agrawal.
+\newblock Learning to jump from pixels.
+\newblock \emph{arXiv preprint arXiv:2110.15344}, 2021.
+
+\bibitem[Rudin et~al.(2022)Rudin, Hoeller, Reist, and Hutter]{rudin2022learning}
+N.~Rudin, D.~Hoeller, P.~Reist, and M.~Hutter.
+\newblock Learning to walk in minutes using massively parallel deep reinforcement learning.
+\newblock In \emph{Conference on Robot Learning}, pages 91--100. PMLR, 2022.
+
+\bibitem[Bellegarda et~al.(2022)Bellegarda, Chen, Liu, and Nguyen]{bellegarda2022robust}
+G.~Bellegarda, Y.~Chen, Z.~Liu, and Q.~Nguyen.
+\newblock Robust high-speed running for quadruped robots via deep reinforcement learning.
+\newblock In \emph{IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, 2022.
+
+\bibitem[Li et~al.(2023)Li, Peng, Abbeel, Levine, Berseth, and Sreenath]{li2023robust}
+Z.~Li, X.~B. Peng, P.~Abbeel, S.~Levine, G.~Berseth, and K.~Sreenath.
+\newblock Robust and versatile bipedal jumping control through multi-task reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2302.09450}, 1, 2023.
+
+\bibitem[He et~al.(2024)He, Zhang, Xiao, He, Liu, and Shi]{he2024agile}
+T.~He, C.~Zhang, W.~Xiao, G.~He, C.~Liu, and G.~Shi.
+\newblock Agile but safe: Learning collision-free high-speed legged locomotion.
+\newblock \emph{arXiv preprint arXiv:2401.17583}, 2024.
+
+\bibitem[Inoue et~al.(2024)Inoue, Kawaharazuka, Okada, and Inaba]{inoue2024body}
+S.~Inoue, K.~Kawaharazuka, K.~Okada, and M.~Inaba.
+\newblock Body design and gait generation of chair-type asymmetrical tripedal low-rigidity robot.
+\newblock In \emph{2024 IEEE 7th International Conference on Soft Robotics (RoboSoft)}, pages 593--600. IEEE, 2024.
+
+\bibitem[Ma et~al.(2024)Ma, Liang, Wang, Wang, Zhu, Fan, Bastani, and Jayaraman]{ma2024dreureka}
+Y.~J. Ma, W.~Liang, H.~Wang, S.~Wang, Y.~Zhu, L.~Fan, O.~Bastani, and D.~Jayaraman.
+\newblock Dreureka: Language model guided sim-to-real transfer.
+\newblock In \emph{Robotics: Science and Systems (RSS)}, 2024.
+
+\bibitem[Caluwaerts et~al.(2023)Caluwaerts, Iscen, Kew, Yu, Zhang, Freeman, Lee, Lee, Saliceti, Zhuang, et~al.]{caluwaerts2023barkour}
+K.~Caluwaerts, A.~Iscen, J.~C. Kew, W.~Yu, T.~Zhang, D.~Freeman, K.-H. Lee, L.~Lee, S.~Saliceti, V.~Zhuang, et~al.
+\newblock Barkour: Benchmarking animal-level agility with quadruped robots.
+\newblock \emph{arXiv preprint arXiv:2305.14654}, 2023.
+
+\bibitem[Zhuang et~al.(2023)Zhuang, Fu, Wang, Atkeson, Schwertfeger, Finn, and Zhao]{zhuang2023robot}
+Z.~Zhuang, Z.~Fu, J.~Wang, C.~Atkeson, S.~Schwertfeger, C.~Finn, and H.~Zhao.
+\newblock Robot parkour learning.
+\newblock In \emph{Conference on Robot Learning ({CoRL})}, 2023.
+
+\bibitem[Cheng et~al.(2023)Cheng, Shi, Agarwal, and Pathak]{cheng2023parkour}
+X.~Cheng, K.~Shi, A.~Agarwal, and D.~Pathak.
+\newblock Extreme parkour with legged robots.
+\newblock \emph{arXiv preprint arXiv:2309.14341}, 2023.
+
+\bibitem[Hoeller et~al.(2024)Hoeller, Rudin, Sako, and Hutter]{hoeller2024anymal}
+D.~Hoeller, N.~Rudin, D.~Sako, and M.~Hutter.
+\newblock Anymal parkour: Learning agile navigation for quadrupedal robots.
+\newblock \emph{Science Robotics}, 2024.
+
+\bibitem[Grimminger et~al.(2020)Grimminger, Meduri, Khadiv, Viereck, W{\"u}thrich, Naveau, Berenz, Heim, Widmaier, Flayols, et~al.]{grimminger2020open}
+F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W{\"u}thrich, M.~Naveau, V.~Berenz, S.~Heim, F.~Widmaier, T.~Flayols, et~al.
+\newblock An open torque-controlled modular robot architecture for legged locomotion research.
+\newblock \emph{IEEE Robotics and Automation Letters}, 5\penalty0 (2):\penalty0 3650--3657, 2020.
+
+\bibitem[Agarwal et~al.(2023)Agarwal, Kumar, Malik, and Pathak]{agarwal2023legged}
+A.~Agarwal, A.~Kumar, J.~Malik, and D.~Pathak.
+\newblock Legged locomotion in challenging terrains using egocentric vision.
+\newblock In \emph{Conference on robot learning}, pages 403--415. PMLR, 2023.
+
+\bibitem[Ross et~al.(2011)Ross, Gordon, and Bagnell]{ross2011reduction}
+S.~Ross, G.~Gordon, and D.~Bagnell.
+\newblock A reduction of imitation learning and structured prediction to no-regret online learning.
+\newblock In \emph{Proceedings of the fourteenth international conference on artificial intelligence and statistics}, pages 627--635. JMLR Workshop and Conference Proceedings, 2011.
+
+\bibitem[Lee et~al.(2023)Lee, Schroth, Klemm, Bjelonic, Reske, and Hutter]{lee2023evaluation}
+J.~Lee, L.~Schroth, V.~Klemm, M.~Bjelonic, A.~Reske, and M.~Hutter.
+\newblock Evaluation of constrained reinforcement learning algorithms for legged locomotion.
+\newblock \emph{arXiv preprint arXiv:2309.15430}, 2023.
+
+\bibitem[Kim et~al.(2024)Kim, Oh, Lee, Choi, Ji, Jung, Youm, and Hwangbo]{kim2024not}
+Y.~Kim, H.~Oh, J.~Lee, J.~Choi, G.~Ji, M.~Jung, D.~Youm, and J.~Hwangbo.
+\newblock Not only rewards but also constraints: Applications on legged robot locomotion.
+\newblock \emph{IEEE Transactions on Robotics}, 2024.
+
+\bibitem[Chane-Sane et~al.(2024)Chane-Sane, Leziart, Flayols, Stasse, Sou{\`e}res, and Mansard]{chane2024cat}
+E.~Chane-Sane, P.-A. Leziart, T.~Flayols, O.~Stasse, P.~Sou{\`e}res, and N.~Mansard.
+\newblock Cat: Constraints as terminations for legged locomotion reinforcement learning.
+\newblock In \emph{IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, 2024.
+
+\bibitem[Ball et~al.(2023)Ball, Smith, Kostrikov, and Levine]{ball2023efficient}
+P.~J. Ball, L.~Smith, I.~Kostrikov, and S.~Levine.
+\newblock Efficient online reinforcement learning with offline data.
+\newblock In \emph{International Conference on Machine Learning}, pages 1577--1594. PMLR, 2023.
+
+\bibitem[Smith et~al.(2023)Smith, Kew, Li, Luu, Peng, Ha, Tan, and Levine]{smith2023learning}
+L.~Smith, J.~C. Kew, T.~Li, L.~Luu, X.~B. Peng, S.~Ha, J.~Tan, and S.~Levine.
+\newblock Learning and adapting agile locomotion skills by transferring experience.
+\newblock \emph{Proceedings of Robotics: Science and Systems}, 2023.
+
+\bibitem[Peng et~al.(2020)Peng, Coumans, Zhang, Lee, Tan, and Levine]{peng2020learning}
+X.~B. Peng, E.~Coumans, T.~Zhang, T.-W. Lee, J.~Tan, and S.~Levine.
+\newblock Learning agile robotic locomotion skills by imitating animals.
+\newblock \emph{arXiv preprint arXiv:2004.00784}, 2020.
+
+\bibitem[Kumar et~al.(2021)Kumar, Fu, Pathak, and Malik]{kumar2021rma}
+A.~Kumar, Z.~Fu, D.~Pathak, and J.~Malik.
+\newblock Rma: Rapid motor adaptation for legged robots.
+\newblock \emph{arXiv preprint arXiv:2107.04034}, 2021.
+
+\bibitem[Aractingi et~al.(2023)Aractingi, L{\'e}ziart, Flayols, Perez, Silander, and Sou{\`e}res]{aractingi2023controlling}
+M.~Aractingi, P.-A. L{\'e}ziart, T.~Flayols, J.~Perez, T.~Silander, and P.~Sou{\`e}res.
+\newblock Controlling the solo12 quadruped robot with deep reinforcement learning.
+\newblock \emph{Scientific Reports}, 13\penalty0 (1):\penalty0 11945, 2023.
+
+\bibitem[Margolis et~al.(2024)Margolis, Yang, Paigwar, Chen, and Agrawal]{margolis2024rapid}
+G.~B. Margolis, G.~Yang, K.~Paigwar, T.~Chen, and P.~Agrawal.
+\newblock Rapid locomotion via reinforcement learning.
+\newblock \emph{The International Journal of Robotics Research}, 43\penalty0 (4):\penalty0 572--587, 2024.
+
+\bibitem[Hwangbo et~al.(2019)Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, and Hutter]{hwangbo2019learning}
+J.~Hwangbo, J.~Lee, A.~Dosovitskiy, D.~Bellicoso, V.~Tsounis, V.~Koltun, and M.~Hutter.
+\newblock Learning agile and dynamic motor skills for legged robots.
+\newblock \emph{Science Robotics}, 4\penalty0 (26):\penalty0 eaau5872, 2019.
+
+\bibitem[Yang et~al.(2020)Yang, Yuan, Zhu, Yu, and Li]{yang2020multi}
+C.~Yang, K.~Yuan, Q.~Zhu, W.~Yu, and Z.~Li.
+\newblock Multi-expert learning of adaptive legged locomotion.
+\newblock \emph{Science Robotics}, 5\penalty0 (49):\penalty0 eabb2174, 2020.
+
+\bibitem[Smith et~al.(2022)Smith, Kew, Peng, Ha, Tan, and Levine]{smith2022legged}
+L.~Smith, J.~C. Kew, X.~B. Peng, S.~Ha, J.~Tan, and S.~Levine.
+\newblock Legged robots that keep on learning: Fine-tuning locomotion policies in the real world.
+\newblock In \emph{International Conference on Robotics and Automation (ICRA)}, 2022.
+
+\bibitem[Li et~al.(2023)Li, Vlastelica, Blaes, Frey, Grimminger, and Martius]{li2023learning}
+C.~Li, M.~Vlastelica, S.~Blaes, J.~Frey, F.~Grimminger, and G.~Martius.
+\newblock Learning agile skills via adversarial imitation of rough partial demonstrations.
+\newblock In \emph{Conference on Robot Learning}, pages 342--352. PMLR, 2023.
+
+\bibitem[Yang et~al.(2023)Yang, Chen, Ma, Zheng, Chen, Nguyen, and Wang]{yang2023generalized}
+R.~Yang, Z.~Chen, J.~Ma, C.~Zheng, Y.~Chen, Q.~Nguyen, and X.~Wang.
+\newblock Generalized animal imitator: Agile locomotion with versatile motion prior.
+\newblock \emph{arXiv preprint arXiv:2310.01408}, 2023.
+
+\bibitem[Li et~al.(2024)Li, Peng, Abbeel, Levine, Berseth, and Sreenath]{li2024reinforcement}
+Z.~Li, X.~B. Peng, P.~Abbeel, S.~Levine, G.~Berseth, and K.~Sreenath.
+\newblock Reinforcement learning for versatile, dynamic, and robust bipedal locomotion control.
+\newblock \emph{arXiv preprint arXiv:2401.16889}, 2024.
+
+\bibitem[Zhang et~al.(2024)Zhang, Sheng, Li, Zhang, Zhou, Zhu, Zhao, Zhang, and Han]{zhang2024learning}
+C.~Zhang, J.~Sheng, T.~Li, H.~Zhang, C.~Zhou, Q.~Zhu, R.~Zhao, Y.~Zhang, and L.~Han.
+\newblock Learning highly dynamic behaviors for quadrupedal robots.
+\newblock \emph{arXiv preprint arXiv:2402.13473}, 2024.
+
+\bibitem[Siekmann et~al.(2021)Siekmann, Green, Warila, Fern, and Hurst]{siekmann2021blind}
+J.~Siekmann, K.~Green, J.~Warila, A.~Fern, and J.~Hurst.
+\newblock Blind bipedal stair traversal via sim-to-real reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2105.08328}, 2021.
+
+\bibitem[Miki et~al.(2022)Miki, Lee, Hwangbo, Wellhausen, Koltun, and Hutter]{miki2022learning}
+T.~Miki, J.~Lee, J.~Hwangbo, L.~Wellhausen, V.~Koltun, and M.~Hutter.
+\newblock Learning robust perceptive locomotion for quadrupedal robots in the wild.
+\newblock \emph{Science Robotics}, 7\penalty0 (62):\penalty0 eabk2822, 2022.
+
+\bibitem[Hoeller et~al.(2022)Hoeller, Rudin, Choy, Anandkumar, and Hutter]{hoeller2022neural}
+D.~Hoeller, N.~Rudin, C.~Choy, A.~Anandkumar, and M.~Hutter.
+\newblock Neural scene representation for locomotion on structured terrain.
+\newblock \emph{IEEE Robotics and Automation Letters}, 7\penalty0 (4):\penalty0 8667--8674, 2022.
+
+\bibitem[Rudin et~al.(2022)Rudin, Hoeller, Bjelonic, and Hutter]{rudin2022advanced}
+N.~Rudin, D.~Hoeller, M.~Bjelonic, and M.~Hutter.
+\newblock Advanced skills by learning locomotion and local navigation end-to-end.
+\newblock In \emph{2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 2497--2503. IEEE, 2022.
+
+\bibitem[Yang et~al.(2023)Yang, Yang, and Wang]{yang2023neural}
+R.~Yang, G.~Yang, and X.~Wang.
+\newblock Neural volumetric memory for visual locomotion control.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 1430--1440, 2023.
+
+\bibitem[Loquercio et~al.(2023)Loquercio, Kumar, and Malik]{loquercio2023learning}
+A.~Loquercio, A.~Kumar, and J.~Malik.
+\newblock Learning visual locomotion with cross-modal supervision.
+\newblock In \emph{2023 IEEE International Conference on Robotics and Automation (ICRA)}, pages 7295--7302. IEEE, 2023.
+
+\bibitem[Cheng et~al.(2024)Cheng, Liu, Pan, Ye, Liu, and Liang]{cheng2024quadruped}
+Y.~Cheng, H.~Liu, G.~Pan, L.~Ye, H.~Liu, and B.~Liang.
+\newblock Quadruped robot traversing 3d complex environments with limited perception.
+\newblock \emph{arXiv preprint arXiv:2404.18225}, 2024.
+
+\bibitem[Fuchioka et~al.(2023)Fuchioka, Xie, and Van~de Panne]{fuchioka2023opt}
+Y.~Fuchioka, Z.~Xie, and M.~Van~de Panne.
+\newblock Opt-mimic: Imitation of optimized trajectories for dynamic quadruped behaviors.
+\newblock In \emph{2023 IEEE International Conference on Robotics and Automation (ICRA)}, pages 5092--5098. IEEE, 2023.
+
+\bibitem[Huang et~al.(2024)Huang, Chi, Wang, Li, Peng, Shao, Nikolic, and Sreenath]{huang2024diffuseloco}
+X.~Huang, Y.~Chi, R.~Wang, Z.~Li, X.~B. Peng, S.~Shao, B.~Nikolic, and K.~Sreenath.
+\newblock Diffuseloco: Real-time legged locomotion control with diffusion from offline datasets.
+\newblock \emph{arXiv preprint arXiv:2404.19264}, 2024.
+
+\bibitem[Miki et~al.(2024)Miki, Lee, Wellhausen, and Hutter]{miki2024learning}
+T.~Miki, J.~Lee, L.~Wellhausen, and M.~Hutter.
+\newblock Learning to walk in confined spaces using 3d representation.
+\newblock \emph{International Conference on Robotics and Automation (ICRA)}, 2024.
+
+\bibitem[Xu et~al.(2024)Xu, Raj, Xiao, and Stone]{xu2024dexterous}
+Z.~Xu, A.~H. Raj, X.~Xiao, and P.~Stone.
+\newblock Dexterous legged locomotion in confined 3d spaces with reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2403.03848}, 2024.
+
+\bibitem[Kim et~al.(2022)Kim, Sorokin, Lee, and Ha]{kim2022humanconquad}
+S.~Kim, M.~Sorokin, J.~Lee, and S.~Ha.
+\newblock Humanconquad: human motion control of quadrupedal robots using deep reinforcement learning.
+\newblock In \emph{SIGGRAPH Asia 2022 Emerging Technologies}, 2022.
+
+\bibitem[Huang et~al.(2023)Huang, Li, Xiang, Ni, Chi, Li, Yang, Peng, and Sreenath]{huang2023creating}
+X.~Huang, Z.~Li, Y.~Xiang, Y.~Ni, Y.~Chi, Y.~Li, L.~Yang, X.~B. Peng, and K.~Sreenath.
+\newblock Creating a dynamic quadrupedal robotic goalkeeper with reinforcement learning.
+\newblock In \emph{IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, 2023.
+
+\bibitem[Yang et~al.(2022)Yang, Zhang, Luu, Ha, Tan, and Yu]{yang2022safe}
+T.-Y. Yang, T.~Zhang, L.~Luu, S.~Ha, J.~Tan, and W.~Yu.
+\newblock Safe reinforcement learning for legged locomotion.
+\newblock In \emph{2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 2454--2461. IEEE, 2022.
+
+\bibitem[Schulman et~al.(2017)Schulman, Wolski, Dhariwal, Radford, and Klimov]{schulman2017proximal}
+J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov.
+\newblock Proximal policy optimization algorithms.
+\newblock \emph{arXiv preprint arXiv:1707.06347}, 2017.
+
+\bibitem[Bogdanovic et~al.(2022)Bogdanovic, Khadiv, and Righetti]{bogdanovic2022model}
+M.~Bogdanovic, M.~Khadiv, and L.~Righetti.
+\newblock Model-free reinforcement learning for robust locomotion using demonstrations from trajectory optimization.
+\newblock \emph{Frontiers in Robotics and AI}, 9:\penalty0 854212, 2022.
+
+\bibitem[Wu et~al.(2023)Wu, Escontrela, Hafner, Abbeel, and Goldberg]{wu2023daydreamer}
+P.~Wu, A.~Escontrela, D.~Hafner, P.~Abbeel, and K.~Goldberg.
+\newblock Daydreamer: World models for physical robot learning.
+\newblock In \emph{Conference on Robot Learning}, pages 2226--2240. PMLR, 2023.
+
+\bibitem[Kleiner and Dornhege(2007)]{kleiner2007real}
+A.~Kleiner and C.~Dornhege.
+\newblock Real-time localization and elevation mapping within urban search and rescue scenarios.
+\newblock \emph{Journal of Field Robotics}, 24\penalty0 (8-9):\penalty0 723--745, 2007.
+
+\bibitem[Peng et~al.(2017)Peng, Berseth, Yin, and Van De~Panne]{peng2017deeploco}
+X.~B. Peng, G.~Berseth, K.~Yin, and M.~Van De~Panne.
+\newblock Deeploco: Dynamic locomotion skills using hierarchical deep reinforcement learning.
+\newblock \emph{Acm transactions on graphics (tog)}, 36\penalty0 (4):\penalty0 1--13, 2017.
+
+\bibitem[Fankhauser et~al.(2018)Fankhauser, Bloesch, and Hutter]{fankhauser2018probabilistic}
+P.~Fankhauser, M.~Bloesch, and M.~Hutter.
+\newblock Probabilistic terrain mapping for mobile robots with uncertain localization.
+\newblock \emph{IEEE Robotics and Automation Letters}, 3\penalty0 (4):\penalty0 3019--3026, 2018.
+
+\bibitem[Gangapurwala et~al.(2021)Gangapurwala, Geisert, Orsolino, Fallon, and Havoutis]{gangapurwala2021real}
+S.~Gangapurwala, M.~Geisert, R.~Orsolino, M.~Fallon, and I.~Havoutis.
+\newblock Real-time trajectory adaptation for quadrupedal locomotion using deep reinforcement learning.
+\newblock In \emph{2021 IEEE International Conference on Robotics and Automation (ICRA)}, pages 5973--5979. IEEE, 2021.
+
+\bibitem[Tsounis et~al.(2020)Tsounis, Alge, Lee, Farshidian, and Hutter]{tsounis2020deepgait}
+V.~Tsounis, M.~Alge, J.~Lee, F.~Farshidian, and M.~Hutter.
+\newblock Deepgait: Planning and control of quadrupedal gaits using deep reinforcement learning.
+\newblock \emph{IEEE Robotics and Automation Letters}, 5\penalty0 (2):\penalty0 3699--3706, 2020.
+
+\bibitem[Duan et~al.(2024)Duan, Pandit, Gadde, van Marum, Dao, Kim, and Fern]{duan2023learning}
+H.~Duan, B.~Pandit, M.~S. Gadde, B.~J. van Marum, J.~Dao, C.~Kim, and A.~Fern.
+\newblock Learning vision-based bipedal locomotion for challenging terrain.
+\newblock \emph{IEEE International Conference on Robotics and Automation (ICRA)}, 2024.
+
+\bibitem[Chavez-Garcia et~al.(2018)Chavez-Garcia, Guzzi, Gambardella, and Giusti]{chavez2018learning}
+R.~O. Chavez-Garcia, J.~Guzzi, L.~M. Gambardella, and A.~Giusti.
+\newblock Learning ground traversability from simulations.
+\newblock \emph{IEEE Robotics and Automation letters}, 3\penalty0 (3):\penalty0 1695--1702, 2018.
+
+\bibitem[Yang et~al.(2021)Yang, Wellhausen, Miki, Liu, and Hutter]{yang2021real}
+B.~Yang, L.~Wellhausen, T.~Miki, M.~Liu, and M.~Hutter.
+\newblock Real-time optimal navigation planning using learned motion costs.
+\newblock In \emph{IEEE International Conference on Robotics and Automation (ICRA)}, pages 9283--9289. IEEE, 2021.
+
+\bibitem[Bloesch et~al.(2015)Bloesch, Omari, Hutter, and Siegwart]{bloesch2015robust}
+M.~Bloesch, S.~Omari, M.~Hutter, and R.~Siegwart.
+\newblock Robust visual inertial odometry using a direct ekf-based approach.
+\newblock In \emph{2015 IEEE/RSJ international conference on intelligent robots and systems (IROS)}, pages 298--304. IEEE, 2015.
+
+\bibitem[Wisth et~al.(2019)Wisth, Camurri, and Fallon]{wisth2019robust}
+D.~Wisth, M.~Camurri, and M.~Fallon.
+\newblock Robust legged robot state estimation using factor graph optimization.
+\newblock \emph{IEEE Robotics and Automation Letters}, 4\penalty0 (4):\penalty0 4507--4514, 2019.
+
+\bibitem[Wisth et~al.(2022)Wisth, Camurri, and Fallon]{wisth2022vilens}
+D.~Wisth, M.~Camurri, and M.~Fallon.
+\newblock Vilens: Visual, inertial, lidar, and leg odometry for all-terrain legged robots.
+\newblock \emph{IEEE Transactions on Robotics}, 39\penalty0 (1):\penalty0 309--326, 2022.
+
+\bibitem[Buchanan et~al.(2022)Buchanan, Camurri, Dellaert, and Fallon]{buchanan2022learning}
+R.~Buchanan, M.~Camurri, F.~Dellaert, and M.~Fallon.
+\newblock Learning inertial odometry for dynamic legged robot state estimation.
+\newblock In \emph{Conference on Robot Learning}, pages 1575--1584. PMLR, 2022.
+
+\bibitem[Wermelinger et~al.(2016)Wermelinger, Fankhauser, Diethelm, Kr{\"u}si, Siegwart, and Hutter]{wermelinger2016navigation}
+M.~Wermelinger, P.~Fankhauser, R.~Diethelm, P.~Kr{\"u}si, R.~Siegwart, and M.~Hutter.
+\newblock Navigation planning for legged robots in challenging terrain.
+\newblock In \emph{IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, 2016.
+
+\bibitem[Mastalli et~al.(2017)Mastalli, Focchi, Havoutis, Radulescu, Calinon, Buchli, Caldwell, and Semini]{mastalli2017trajectory}
+C.~Mastalli, M.~Focchi, I.~Havoutis, A.~Radulescu, S.~Calinon, J.~Buchli, D.~G. Caldwell, and C.~Semini.
+\newblock Trajectory and foothold optimization using low-dimensional models for rough terrain locomotion.
+\newblock In \emph{IEEE International Conference on Robotics and Automation (ICRA)}, 2017.
+
+\bibitem[Magana et~al.(2019)Magana, Barasuol, Camurri, Franceschi, Focchi, Pontil, Caldwell, and Semini]{magana2019fast}
+O.~A.~V. Magana, V.~Barasuol, M.~Camurri, L.~Franceschi, M.~Focchi, M.~Pontil, D.~G. Caldwell, and C.~Semini.
+\newblock Fast and continuous foothold adaptation for dynamic locomotion through cnns.
+\newblock \emph{IEEE Robotics and Automation Letters}, 4\penalty0 (2):\penalty0 2140--2147, 2019.
+
+\bibitem[Jenelten et~al.(2020)Jenelten, Miki, Vijayan, Bjelonic, and Hutter]{jenelten2020perceptive}
+F.~Jenelten, T.~Miki, A.~E. Vijayan, M.~Bjelonic, and M.~Hutter.
+\newblock Perceptive locomotion in rough terrain--online foothold optimization.
+\newblock \emph{IEEE Robotics and Automation Letters}, 5\penalty0 (4):\penalty0 5370--5376, 2020.
+
+\bibitem[Kim et~al.(2020)Kim, Carballo, Di~Carlo, Katz, Bledt, Lim, and Kim]{kim2020vision}
+D.~Kim, D.~Carballo, J.~Di~Carlo, B.~Katz, G.~Bledt, B.~Lim, and S.~Kim.
+\newblock Vision aided dynamic exploration of unstructured terrain with a small-scale quadruped robot.
+\newblock In \emph{IEEE International Conference on Robotics and Automation (ICRA)}, 2020.
+
+\bibitem[Agrawal et~al.(2022)Agrawal, Chen, Rai, and Sreenath]{agrawal2022vision}
+A.~Agrawal, S.~Chen, A.~Rai, and K.~Sreenath.
+\newblock Vision-aided dynamic quadrupedal locomotion on discrete terrain using motion libraries.
+\newblock In \emph{International Conference on Robotics and Automation (ICRA)}, 2022.
+
+\bibitem[Yu et~al.(2021)Yu, Jain, Escontrela, Iscen, Xu, Coumans, Ha, Tan, and Zhang]{yu2021visual}
+W.~Yu, D.~Jain, A.~Escontrela, A.~Iscen, P.~Xu, E.~Coumans, S.~Ha, J.~Tan, and T.~Zhang.
+\newblock Visual-locomotion: Learning to walk on complex terrains with vision.
+\newblock In \emph{5th Annual Conference on Robot Learning}, 2021.
+
+\bibitem[Makoviychuk et~al.(2021)Makoviychuk, Wawrzyniak, Guo, Lu, Storey, Macklin, Hoeller, Rudin, Allshire, Handa, et~al.]{makoviychuk2021isaac}
+V.~Makoviychuk, L.~Wawrzyniak, Y.~Guo, M.~Lu, K.~Storey, M.~Macklin, D.~Hoeller, N.~Rudin, A.~Allshire, A.~Handa, et~al.
+\newblock Isaac gym: High performance gpu-based physics simulation for robot learning.
+\newblock \emph{arXiv preprint arXiv:2108.10470}, 2021.
+
+\bibitem[Lillicrap et~al.(2015)Lillicrap, Hunt, Pritzel, Heess, Erez, Tassa, Silver, and Wierstra]{lillicrap2015continuous}
+T.~P. Lillicrap, J.~J. Hunt, A.~Pritzel, N.~Heess, T.~Erez, Y.~Tassa, D.~Silver, and D.~Wierstra.
+\newblock Continuous control with deep reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:1509.02971}, 2015.
+
+\bibitem[Chen et~al.(2021)Chen, Wang, Zhou, and Ross]{chen2021randomized}
+X.~Chen, C.~Wang, Z.~Zhou, and K.~W. Ross.
+\newblock Randomized ensembled double q-learning: Learning fast without a model.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+
+\bibitem[Ba et~al.(2016)Ba, Kiros, and Hinton]{ba2016layer}
+J.~L. Ba, J.~R. Kiros, and G.~E. Hinton.
+\newblock Layer normalization.
+\newblock \emph{arXiv preprint arXiv:1607.06450}, 2016.
+
+\bibitem[Smith et~al.(2022)Smith, Kostrikov, and Levine]{smith2022walk}
+L.~Smith, I.~Kostrikov, and S.~Levine.
+\newblock A walk in the park: Learning to walk in 20 minutes with model-free reinforcement learning.
+\newblock \emph{arXiv preprint arXiv:2208.07860}, 2022.
+
+\bibitem[Pinto et~al.(2018)Pinto, Andrychowicz, Welinder, Zaremba, and Abbeel]{pinto2017asymmetric}
+L.~Pinto, M.~Andrychowicz, P.~Welinder, W.~Zaremba, and P.~Abbeel.
+\newblock Asymmetric actor critic for image-based robot learning.
+\newblock \emph{Proceedings of Robotics: Science and Systems}, 2018.
+
+\bibitem[LeCun et~al.(1998)LeCun, Bottou, Bengio, and Haffner]{lecun1998gradient}
+Y.~LeCun, L.~Bottou, Y.~Bengio, and P.~Haffner.
+\newblock Gradient-based learning applied to document recognition.
+\newblock \emph{Proceedings of the IEEE}, 86\penalty0 (11):\penalty0 2278--2324, 1998.
+
+\bibitem[Chung et~al.(2014)Chung, Gulcehre, Cho, and Bengio]{chung2014empirical}
+J.~Chung, C.~Gulcehre, K.~Cho, and Y.~Bengio.
+\newblock Empirical evaluation of gated recurrent neural networks on sequence modeling.
+\newblock \emph{arXiv preprint arXiv:1412.3555}, 2014.
+
+\bibitem[Huang et~al.(2022)Huang, Dossa, Ye, Braga, Chakraborty, Mehta, and Araújo]{huang2022cleanrl}
+S.~Huang, R.~F.~J. Dossa, C.~Ye, J.~Braga, D.~Chakraborty, K.~Mehta, and J.~G. Araújo.
+\newblock Cleanrl: High-quality single-file implementations of deep reinforcement learning algorithms.
+\newblock \emph{Journal of Machine Learning Research}, 23\penalty0 (274):\penalty0 1--18, 2022.
+\newblock URL \url{http://jmlr.org/papers/v23/21-1342.html}.
+
+\end{thebibliography}
