@@ -94,34 +94,3 @@ minimizes:
 where $\hat{y} \in \R^2$ is the student's predicted heading and
 $y_\text{oracle}$ is the ground-truth heading.
 
-\subsection{Monocular Depth as Domain-Invariant Representation}
-\label{sec:depth_theory}
-
-\paragraph{Domain invariance.}
-We define a representation $f: \mathcal{I} \to \mathcal{Z}$ as
-\emph{domain-invariant} if the variance of $f(I)$ across visual
-domains $\mathcal{D}$ is much smaller than the variance of the
-input:
-\begin{equation}
-  \Var_{\mathcal{D}}\!\left[f(I_\mathcal{D})\right]
-  \ll
-  \Var_{\mathcal{D}}\!\left[I_\mathcal{D}\right].
-  \label{eq:domain_inv}
-\end{equation}
-The DA2 pipeline acts as an information bottleneck: it maps
-high-dimensional, domain-specific RGB images to a low-dimensional
-depth space that retains geometric structure while discarding
-appearance.  A student policy that consumes only this depth output
-should therefore be invariant to visual domain shifts by
-construction.
-
-In contrast, a student that directly processes RGB must learn its
-own invariances from data, making it vulnerable to domain shifts
-not seen during training.
-
-\paragraph{Depth normalization.}
-\label{sec:depth_norm}
-We normalize DA2's metric depth output to $[-0.5, 0.5]$ using online
-EMA percentile statistics before feeding it to the student CNN.
-This standardizes the input range across scenes and terrain
-configurations.

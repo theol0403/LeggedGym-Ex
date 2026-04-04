@@ -55,7 +55,10 @@ The student (ActorCriticParkourStudent) replaces the scandot encoder
 with a recurrent depth encoder (Figure~\ref{fig:student_arch}):
 
 \paragraph{Depth backbone.}
-A CNN processes single-channel depth images $(1 \times 58 \times 87)$:
+\label{sec:depth_norm}
+DA2's metric depth output is normalized to $[-0.5, 0.5]$ via online
+EMA percentile statistics to standardize the input range.
+A CNN then processes the single-channel depth images $(1 \times 58 \times 87)$:
 \begin{center}
   \small
   Conv2d(1,32,5) $\to$ MaxPool(2) $\to$ ELU \\
