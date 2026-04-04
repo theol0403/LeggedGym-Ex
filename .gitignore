@@ -61,3 +61,22 @@ build
 *debug*
 resources/terrains/*.stl
 .cache
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.xdv
+research/*.pdf
+research/arXiv-2409.13678v1 (1).tar/*.pdf
