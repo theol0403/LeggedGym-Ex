@@ -1,7 +1,7 @@
 \begin{abstract}
   Vision-based quadruped parkour typically relies on onboard depth cameras, limiting deployment to robots with specialized sensors. We investigate whether a pre-trained \emph{monocular depth estimator} can serve as a domain-invariant bridge, enabling sim-to-real transfer from only RGB without photorealistic rendering or domain randomization.
 
-  We present a two-phase pipeline: a privileged teacher trained via PPO with ground-truth terrain scans, distilled into a visual student via DAgger operating on depth images from Depth Anything~V2 (DA2).
+  We present a two-phase pipeline: a privileged teacher trained via PPO with ground-truth terrain scans, distilled into a visual student via DAgger operating on depth images from Depth Anything~V2.
   In simulation, we demonstrate that this pipeline achieves limited parkour capabilities under conditions characterized by a \emph{Depth Signal Quality} metric.
   Domain invariance experiments show that DA2 provides strong robustness to color and brightness changes and generalizes across simulated environments.
 \end{abstract}

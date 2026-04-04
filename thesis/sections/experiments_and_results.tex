@@ -4,8 +4,10 @@
 
 \subsection{Setup}
 
-All experiments use the Genesis GPU simulator on 4$\times$ NVIDIA
-L40S GPUs.  The Unitree Go2 quadruped has 12 actuated joints.
+All experiments use the Genesis GPU simulator~\cite{genesis2024}
+with the legged\_gym framework~\cite{rudin2022learning} and
+rsl\_rl~\cite{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
+The Unitree Go2 quadruped has 12 actuated joints.
 Evaluation uses forced terrain (all robots on the same obstacle type
 and difficulty) with 128--256 episodes per condition.  Success is
 defined as completing the full obstacle course.

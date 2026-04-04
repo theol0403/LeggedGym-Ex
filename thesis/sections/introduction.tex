@@ -3,7 +3,7 @@
 % ====================================================================
 
 Legged robots that traverse irregular terrain---stairs, hurdles, gaps---must perceive geometry and mantain tight coordination between vision and control.
-Training locomotion policies in simulation with reinforcement learning (RL) and transferring them to real hardware has proven effective for agile skills~\citep{lee2020learning, bellegarda2020robust, fu2021minimizing,margolis2021learning, rudin2022learning, bellegarda2022robust,li2023robust, he2024agile,inoue2024body, ma2024dreureka}, and recent work~\citep{caluwaerts2023barkour, zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has extended this to parkour---climbing, jumping, and crawling---via teacher--student distillation.
+Training locomotion policies in simulation with reinforcement learning (RL) and transferring them to real hardware has proven effective for agile skills~\citep{hwangbo2019learning, lee2020learning, rudin2022learning}, and recent work~\citep{zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has extended this to parkour---climbing, jumping, and crawling---via teacher--student distillation.
 In these systems, a \emph{teacher} trains with privileged terrain information (e.g.\ ground-truth heightmaps), then a \emph{student} reproduces the teacher's behavior from onboard sensors.
 
 A critical assumption, however, is access to an onboard depth sensor.
@@ -13,7 +13,7 @@ Deploying RGB-trained policies on real robots requires bridging the \emph{sim-to
 Three strategies have emerged: (1)~\textbf{domain randomization}~\citep{tobin2017domain}, which randomizes visual properties; (2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which uses diffusion models for photorealistic training images; and (3)~\textbf{canonical representations}, which project both domains into a shared space via a foundation model.
 
 We pursue strategy~(3) using Depth~Anything~V2 (DA2)~\citep{yang2024depth}, a pre-trained monocular depth estimator trained on millions of diverse real images.
-Because DA2 maps arbitrary RGB to a canonical depth space invariant to appearance, a student policy consuming DA2 depth should inherit that invariance without photorealistic rendering or explicit domain randomization.
+We propose that because DA2 maps arbitrary RGB to a depth space invariant to appearance, a student policy consuming depth should inherit that invariance without photorealistic rendering or explicit domain randomization.
 
 \paragraph{Thesis statement.}
 We hypothesize that pre-trained monocular depth estimation provides a

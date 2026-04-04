@@ -7,7 +7,8 @@
 The system follows a two-stage pipeline (Figure~\ref{fig:pipeline}):
 \begin{enumerate}
   \item \textbf{Stage 1 (Teacher).}  A privileged teacher policy is
-    trained via PPO with access to ground-truth scandot heightmaps.
+    trained via PPO with access to ground-truth scandot
+    heightmaps~\cite{agarwal2023legged}.
   \item \textbf{Stage 2 (Student).}  A student policy is trained via
     DAgger, replacing the privileged scandots with depth (GT, DA2, or
     RGB).

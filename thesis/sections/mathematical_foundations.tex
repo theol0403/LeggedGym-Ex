@@ -196,13 +196,6 @@ action selection.
 \subsection{Monocular Depth as Domain-Invariant Representation}
 \label{sec:depth_theory}
 
-\paragraph{Scale-shift ambiguity.}
-Monocular depth estimation is inherently ill-posed: a single image
-cannot determine absolute scale.  DA2 is trained with an
-affine-invariant loss, producing predictions
-$\hat{d} = \alpha \cdot d_{\text{true}} + \beta$ up to unknown
-scale $\alpha$ and shift $\beta$ that vary per frame.
-
 \paragraph{Domain invariance.}
 We define a representation $f: \mathcal{I} \to \mathcal{Z}$ as
 \emph{domain-invariant} if the variance of $f(I)$ across visual
@@ -225,18 +218,9 @@ In contrast, a student that directly processes RGB must learn its
 own invariances from data, making it vulnerable to domain shifts
 not seen during training.
 
-\paragraph{EMA normalization.}
+\paragraph{Depth normalization.}
 \label{sec:depth_norm}
-To handle DA2's affine ambiguity, we normalize inferred depth using
-online exponential moving average (EMA) percentile statistics.  Let
-$q_{t}^{(\text{lo})}$ and $q_{t}^{(\text{hi})}$ denote the 2nd and
-98th percentiles of the raw depth at step $t$:
-\begin{align}
-  \bar{q}^{(\text{lo})}_{t} &= (1 - \alpha)\,\bar{q}^{(\text{lo})}_{t-1} + \alpha\, q_{t}^{(\text{lo})}, \\
-  \bar{q}^{(\text{hi})}_{t} &= (1 - \alpha)\,\bar{q}^{(\text{hi})}_{t-1} + \alpha\, q_{t}^{(\text{hi})}, \\
-  d_{\text{norm}} &= \frac{d - \bar{q}^{(\text{lo})}}{\bar{q}^{(\text{hi})} - \bar{q}^{(\text{lo})}} - 0.5,
-  \label{eq:ema_norm}
-\end{align}
-where $\alpha = 0.02$ and $d_{\text{norm}}$ is clamped to
-$[-0.5, 0.5]$.  This maps the depth range to a fixed interval
-regardless of DA2's per-frame scale and shift.
+We normalize DA2's metric depth output to $[-0.5, 0.5]$ using online
+EMA percentile statistics before feeding it to the student CNN.
+This standardizes the input range across scenes and terrain
+configurations.
