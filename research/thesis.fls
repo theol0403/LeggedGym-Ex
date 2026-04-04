@@ -132,6 +132,8 @@ INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/caption/subcaption.sty
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/caption/subcaption.sty
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/natbib/natbib.sty
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/natbib/natbib.sty
+INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/parskip/parskip.sty
+INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/parskip/parskip.sty
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/lm/t1lmr.fd
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/lm/t1lmr.fd
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/lm/t1lmr.fd
@@ -230,7 +232,6 @@ INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/lm/ts1lmr.fd
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ts1-lmr10.tfm
 INPUT /usr/local/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-ec.enc
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-ts1.enc
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmbx12.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/rm-lmr10.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/rm-lmr7.tfm
@@ -258,9 +259,11 @@ INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/lmbsy7.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/lmbsy5.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmr7.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmr5.tfm
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-ts1.enc
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-rm.enc
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-mathsy.enc
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-mathit.enc
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-mathex.enc
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmr9.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/rm-lmr9.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/lmmi9.tfm
@@ -270,7 +273,6 @@ INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm1
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/rm-lmbx9.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/lmmib10.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/lmbsy10.tfm
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/lm/lm-mathex.enc
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmtt10.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmbx9.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/lm/ec-lmri9.tfm

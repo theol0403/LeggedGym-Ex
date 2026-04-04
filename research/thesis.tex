@@ -51,14 +51,14 @@
 \begin{abstract}
   Parkour poses a significant challenge for legged robots, requiring navigation through complex environments with agility and precision based on limited sensory inputs.
   Vision-based quadruped parkour typically relies on onboard depth cameras, limiting deployment to robots with specialized sensors. 
+
   In this work, we investigate whether a pre-trained \emph{monocular depth estimator} can serve as a domain-invariant bridge, enabling sim-to-real transfer from only an RGB camera, generalizing across visual domains without photorealistic rendering or explicit domain randomization.
+
   We present a two-phase pipeline: a privileged teacher trained via PPO with ground-truth terrain scans, distilled into a visual student via DAgger operating on depth images from Depth Anything~V2 (DA2).
   During simulated evaluations, we demonstrate that this approach results in limited emergent parkour capabilities, under specific conditions defined by a \emph{Depth Signal Quality} metric.
 Through domain invariance experiments, we show that DA2 provides strong robustness to
-  color and brightness changes and generalizes across structured textures.
+  color and brightness changes and generalizes across simulated environments.
 \end{abstract}
-
-
 
 % ====================================================================
 \section{Introduction}
@@ -66,9 +66,13 @@ Through domain invariance experiments, we show that DA2 provides strong robustne
 % ====================================================================
 
 Agile locomotion over challenging terrain is a central goal of legged robotics.
-In recent years, training locomotion policies in simulation using reinforcement learning (RL) then transferring them to real robots has proven highly effective in mastering agile skills~\citep{lee2020learning, bellegarda2020robust, fu2021minimizing,margolis2021learning, rudin2022learning, bellegarda2022robust,li2023robust, he2024agile,inoue2024body, ma2024dreureka}.
+Legged robots that traverse irregular terrain---stairs, hurdles,
+gaps---must perceive geometry. In recent years, training locomotion policies in simulation using reinforcement learning (RL) then transferring them to real robots has proven highly effective in mastering agile skills~\citep{lee2020learning, bellegarda2020robust, fu2021minimizing,margolis2021learning, rudin2022learning, bellegarda2022robust,li2023robust, he2024agile,inoue2024body, ma2024dreureka}.
 
-Notably, recent work~\citep{caluwaerts2023barkour, zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has shown that RL combined with teacher--student distillation can produce quadruped controllers capable of dynamic skills akin to the athletic maneuvers seen in parkour, including walking, climbing, jumping, and crawling, which necessitates tight coordination between vision and control. These systems follow a two-phase paradigm: a \emph{teacher} trains with privileged terrain information, then a \emph{student} reproduces the teacher's behavior from realistic sensors.
+Notably, recent work~\citep{caluwaerts2023barkour, zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has shown that RL combined with teacher--student distillation can produce quadruped controllers capable of dynamic skills akin to the athletic maneuvers seen in parkour, including walking, climbing, jumping, and crawling, which necessitates tight coordination between vision and control. 
+
+ In simulation, privileged information such as ground-truth heightmaps makes parkour straightforward, but real robots lack such oracles. 
+To address this, these systems follow a two-phase paradigm: a \emph{teacher} trains with privileged terrain information, then a \emph{student} reproduces the teacher's behavior from realistic sensors.
 
 A critical assumption in these papers, however, is the availability of an onboard depth sensor.
 Intel RealSense or structured-light cameras provide depth sensing that transfers well from simulation \ref{}.
@@ -77,38 +81,16 @@ However, not all platforms include depth sensors---for example, the Unitree Go2 
 Deploying vision-based policies trained in simulation requires bridging the \emph{sim-to-real gap}.
 Three strategies have emerged: (1)~\textbf{domain randomization}~\citep{tobin2017domain}, which randomizes visual properties; (2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which uses diffusion models for photorealistic images; and (3)~\textbf{canonical representations}, which project both domains into a shared space via a foundation model.
 
-We pursue strategy~(3) using Depth Anything V2 (DA2)~\citep{yang2024depth}.
-If DA2 produces structurally consistent depth from both simulated and real RGB, its output constitutes a domain-invariant canonical representation.
-We hypothesise that a student---trained on DA2 depth in simulation---deploys on DA2 depth from real images with a smaller sim-to-real gap, since the policy never sees raw RGB.
+% We pursue strategy~(3) using Depth Anything V2 (DA2)~\citep{yang2024depth}.
+% If DA2 produces structurally consistent depth from both simulated and real RGB, its output constitutes a domain-invariant canonical representation.
+% We hypothesise that a student---trained on DA2 depth in simulation---deploys on DA2 depth from real images with a smaller sim-to-real gap, since the policy never sees raw RGB.
 
-Our contributions:
-\begin{itemize}[nosep,leftmargin=*]
-  \item We demonstrate monocular depth as a sim-to-real bridge for quadruped parkour, achieving 94--100\% on stairs, 96--99\% on hurdles, and 80--96\% on gaps (within 7\,pp of GT depth).
-  \item A complete pipeline integrating DA2 into teacher--student distillation with a recurrent depth encoder and windowed BPTT.
-  \item Systematic ablation (30+ experiments) identifying depth model capacity and terrain texture as dominant factors.
-  \item A Depth Signal Quality metric diagnosing the failure mode on textureless surfaces.
-\end{itemize}
+We propose an application of strategy~(3): \emph{using a pre-trained monocular depth
+estimator as a fixed intermediate representation}. 
+If a depth estimator produces structurally consistent depth from both simulated and real RGB, its output can be used as a domain-invariant canonical representation. 
 
-Legged robots that traverse irregular terrain---stairs, hurdles,
-gaps---must perceive geometry.  In simulation, privileged information
-such as ground-truth heightmaps makes this straightforward, but
-real robots lack such oracles.  Depth cameras are a common substitute,
-yet many platforms (including the Unitree Go2) ship with RGB cameras
-only.
-
-The standard approach---training a student policy on rendered depth
-from a simulated depth camera---sidesteps appearance but still requires
-that the depth signal transfers from simulation to reality.  An
-alternative line of work uses photorealistic rendering
-\cite{yu2024lucidsim} or extensive domain randomization
-\cite{tobin2017domain} to close the visual gap, but both are
-computationally expensive and require domain-specific engineering.
-
-We propose a simpler route: \emph{use a pre-trained monocular depth
-estimator as a fixed intermediate representation.}  Foundation models
-such as Depth~Anything~V2 (DA2) \cite{yang2024depth} have been trained
-on millions of diverse real images with synthetic supervision, learning
-a mapping from arbitrary RGB to a canonical depth space.  Because this
+Specifically, foundation models such as Depth~Anything~V2 (DA2) \cite{yang2024depth} have been trained on millions of diverse real images, learning
+a mapping from arbitrary RGB to a canonical metric depth space. Because this
 mapping is trained to be invariant to appearance, a student policy that
 consumes DA2 depth should inherit that invariance for free.
 
@@ -121,22 +103,14 @@ simulation should generalize across visual domains without photorealistic
 rendering or explicit domain randomization.
 
 \paragraph{Contributions.}
-\begin{enumerate}
-  \item A two-stage teacher--student pipeline from privileged scandot
+\begin{itemize}[nosep,leftmargin=*]
+  \item A complete two-stage teacher--student pipeline from privileged scandot
     heightmaps to monocular depth for quadruped parkour.
+  \item A functional demonstration of monocular depth estimation as a viable vision pipeline for quadruped parkour, achieving basic performance on simulated stairs, hurdles, and gaps.
   \item Systematic identification of depth signal quality---governed by
-    model scale and terrain texture---as the key bottleneck.
-  \item A domain invariance experiment comparing DA2-based and
-    direct-RGB students under visual perturbations.
-\end{enumerate}
-
-\paragraph{Organization.}
-Section~\ref{sec:related} reviews related work.
-Section~\ref{sec:math} presents the mathematical foundations.
-Section~\ref{sec:arch} describes the system architecture.
-Section~\ref{sec:experiments} reports experimental results.
-Section~\ref{sec:domain} presents the domain invariance experiment.
-Section~\ref{sec:conclusion} concludes.
+    model scale and terrain texture---as the key factor impacting parkour performance.
+  \item A domain invariance experiment comparing DA2-based and direct-RGB students under visual perturbations.
+\end{itemize}
 
 
 % ====================================================================
