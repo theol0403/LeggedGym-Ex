@@ -42,6 +42,13 @@ The concatenated features plus proprioception feed into the actor MLP
 $[512 \to 256 \to 128 \to 12]$ with ELU activations.  A parallel
 critic network estimates $V(s)$ for GAE.
 
+\paragraph{PD control.}
+The 12-dim actor output specifies target joint position offsets,
+scaled by 0.25\,rad.  A PD controller converts these to torques
+at 250\,Hz (decimation ratio~5, yielding 50\,Hz policy frequency):
+$\tau = K_p (a_t^{\text{scaled}} - q) + K_d (-\dot{q})$,
+with $K_p = 35$ and $K_d = 0.5$ per joint.
+
 \subsection{Student Network}
 
 The student (ActorCriticParkourStudent) replaces the scandot encoder
