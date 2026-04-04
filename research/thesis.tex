@@ -34,53 +34,59 @@
 \newcommand{\clip}{\mathrm{clip}}
 
 \title{%
-Monocular Depth Estimation as a Domain-Invariant\\
-Representation for Vision-Based Quadruped Parkour
+  Monocular Depth Estimation as a Domain-Invariant\\
+  Representation for Vision-Based Quadruped Parkour
 }
 \author{
-Theo Lemay \\
-\textit{Undergraduate Thesis} \\
-\texttt{theo@example.edu}
+  Theo Lemay \\
+  \textit{Undergraduate Thesis} \\
+  \texttt{theo@example.edu}
 }
 \date{April 2026}
 
 \begin{document}
 \maketitle
 
-% ====================================================================
 \begin{abstract}
-% ====================================================================
-Training legged robots for parkour in simulation requires vision, but
-transferring vision policies to the real world is hindered by the
-sim-to-real appearance gap.  We hypothesize that \emph{monocular depth
-estimation} provides a domain-invariant intermediate representation:
-because a pre-trained depth model maps diverse RGB appearances to a
-canonical depth space, a student policy trained on estimated depth
-should generalize across visual domains without photorealistic rendering
-or explicit domain randomization.
-
-We present a complete two-stage pipeline---privileged teacher via PPO,
-then DAgger-based student distillation through a CNN--GRU depth
-encoder---for Unitree Go2 parkour in the Genesis simulator.  Through
-systematic experiments, we identify \emph{depth signal quality} as the
-primary bottleneck, not network architecture: upgrading Depth~Anything~V2
-from 25M to 100M parameters improves gap success by +49 percentage points,
-and adding terrain textures further improves the hardest gaps by +72~pp.
-Our best DA2-based student reaches 87\% gap success, within 7~pp of the
-ground-truth depth upper bound.  Domain invariance experiments under
-visual perturbations show that DA2 provides strong robustness to
-color and brightness changes ($\leq$5.5~pp drop at moderate severity)
-and generalizes across structured textures ($-$7~pp for brick
-patterns), while featureless surfaces cause failure---reflecting an
-input requirement of monocular depth estimation rather than a domain
-invariance limitation.
+  Parkour poses a significant challenge for legged robots, requiring navigation through complex environments with agility and precision based on limited sensory inputs.
+  Vision-based quadruped parkour typically relies on onboard depth cameras, limiting deployment to robots with specialized sensors. 
+  In this work, we investigate whether a pre-trained \emph{monocular depth estimator} can serve as a domain-invariant bridge, enabling sim-to-real transfer from only an RGB camera, generalizing across visual domains without photorealistic rendering or explicit domain randomization.
+  We present a two-phase pipeline: a privileged teacher trained via PPO with ground-truth terrain scans, distilled into a visual student via DAgger operating on depth images from Depth Anything~V2 (DA2).
+  During simulated evaluations, we demonstrate that this approach results in limited emergent parkour capabilities, under specific conditions defined by a \emph{Depth Signal Quality} metric.
+Through domain invariance experiments, we show that DA2 provides strong robustness to
+  color and brightness changes and generalizes across structured textures.
 \end{abstract}
+
 
 
 % ====================================================================
 \section{Introduction}
 \label{sec:intro}
 % ====================================================================
+
+Agile locomotion over challenging terrain is a central goal of legged robotics.
+In recent years, training locomotion policies in simulation using reinforcement learning (RL) then transferring them to real robots has proven highly effective in mastering agile skills~\citep{lee2020learning, bellegarda2020robust, fu2021minimizing,margolis2021learning, rudin2022learning, bellegarda2022robust,li2023robust, he2024agile,inoue2024body, ma2024dreureka}.
+
+Notably, recent work~\citep{caluwaerts2023barkour, zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has shown that RL combined with teacher--student distillation can produce quadruped controllers capable of dynamic skills akin to the athletic maneuvers seen in parkour, including walking, climbing, jumping, and crawling, which necessitates tight coordination between vision and control. These systems follow a two-phase paradigm: a \emph{teacher} trains with privileged terrain information, then a \emph{student} reproduces the teacher's behavior from realistic sensors.
+
+A critical assumption in these papers, however, is the availability of an onboard depth sensor.
+Intel RealSense or structured-light cameras provide depth sensing that transfers well from simulation \ref{}.
+However, not all platforms include depth sensors---for example, the Unitree Go2 ships with only a front-facing RGB camera \ref{}.
+
+Deploying vision-based policies trained in simulation requires bridging the \emph{sim-to-real gap}.
+Three strategies have emerged: (1)~\textbf{domain randomization}~\citep{tobin2017domain}, which randomizes visual properties; (2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which uses diffusion models for photorealistic images; and (3)~\textbf{canonical representations}, which project both domains into a shared space via a foundation model.
+
+We pursue strategy~(3) using Depth Anything V2 (DA2)~\citep{yang2024depth}.
+If DA2 produces structurally consistent depth from both simulated and real RGB, its output constitutes a domain-invariant canonical representation.
+We hypothesise that a student---trained on DA2 depth in simulation---deploys on DA2 depth from real images with a smaller sim-to-real gap, since the policy never sees raw RGB.
+
+Our contributions:
+\begin{itemize}[nosep,leftmargin=*]
+  \item We demonstrate monocular depth as a sim-to-real bridge for quadruped parkour, achieving 94--100\% on stairs, 96--99\% on hurdles, and 80--96\% on gaps (within 7\,pp of GT depth).
+  \item A complete pipeline integrating DA2 into teacher--student distillation with a recurrent depth encoder and windowed BPTT.
+  \item Systematic ablation (30+ experiments) identifying depth model capacity and terrain texture as dominant factors.
+  \item A Depth Signal Quality metric diagnosing the failure mode on textureless surfaces.
+\end{itemize}
 
 Legged robots that traverse irregular terrain---stairs, hurdles,
 gaps---must perceive geometry.  In simulation, privileged information
@@ -116,11 +122,11 @@ rendering or explicit domain randomization.
 \paragraph{Contributions.}
 \begin{enumerate}
   \item A two-stage teacher--student pipeline from privileged scandot
-        heightmaps to monocular depth for quadruped parkour.
+    heightmaps to monocular depth for quadruped parkour.
   \item Systematic identification of depth signal quality---governed by
-        model scale and terrain texture---as the key bottleneck.
+    model scale and terrain texture---as the key bottleneck.
   \item A domain invariance experiment comparing DA2-based and
-        direct-RGB students under visual perturbations.
+    direct-RGB students under visual perturbations.
 \end{enumerate}
 
 \paragraph{Organization.}
@@ -146,10 +152,10 @@ Lee~et~al.~\cite{lee2020learning} demonstrated sim-to-real transfer
 for rough terrain without explicit state estimation.
 
 \paragraph{Vision-based parkour.}
-Extreme Parkour \cite{cheng2024extreme} trains a scandot-based teacher
+Extreme Parkour \cite{cheng2023parkour} trains a scandot-based teacher
 and distills into a CNN--GRU student that processes depth images,
 demonstrating agile behaviors (jumping, climbing) on a real Go1.
-SoloParkour \cite{zhuang2024soloparkour} extends this with a
+SoloParkour \cite{chane2025soloparkour} extends this with a
 single end-to-end policy.  Robot Parkour Learning
 \cite{zhuang2023robot} uses a similar teacher--student approach with
 explicit depth processing.  All three systems assume access to a
@@ -167,7 +173,7 @@ computational overhead.
 \paragraph{Monocular depth estimation.}
 MiDaS \cite{ranftl2020towards} pioneered affine-invariant depth
 estimation across diverse datasets.  Depth~Anything~V2 (DA2)
-\cite{yang2024depth} builds on DINOv2 \cite{oquab2024dinov2}
+\cite{yang2024depth} builds on DINOv2 \cite{oquab2023dinov2}
 vision transformers trained with self-supervised learning on 142M
 images, achieving state-of-the-art zero-shot depth estimation.  DA2
 outputs are affine-invariant: they predict relative depth up to an
@@ -226,8 +232,8 @@ Optimization (PPO) \cite{schulman2017proximal}.  PPO maximizes a
 clipped surrogate objective:
 \begin{equation}
   L^{\text{CLIP}} = \E_t\!\left[\min\!\left(
-    r_t \hat{A}_t,\;
-    \clip(r_t, 1{-}\epsilon, 1{+}\epsilon)\,\hat{A}_t
+      r_t \hat{A}_t,\;
+      \clip(r_t, 1{-}\epsilon, 1{+}\epsilon)\,\hat{A}_t
   \right)\right],
   \label{eq:ppo}
 \end{equation}
@@ -260,26 +266,26 @@ $\sigma$ is a learned per-action-dimension standard deviation
 Table~\ref{tab:ppo_hypers} lists the PPO training configuration.
 
 \begin{table}[h]
-\centering
-\caption{PPO hyperparameters for teacher training.}
-\label{tab:ppo_hypers}
-\small
-\begin{tabular}{@{}ll@{}}
-\toprule
-Parameter & Value \\
-\midrule
-Discount $\gamma$ & 0.998 \\
-GAE $\lambda$ & 0.95 \\
-Clip $\epsilon$ & 0.2 \\
-Learning rate & $1 \times 10^{-3}$ \\
-Mini-batches & 4 \\
-Epochs per iteration & 5 \\
-Entropy coefficient & 0.0 \\
-Steps per env per iter & 48 \\
-\# environments & 4096 \\
-Simulator & Genesis (GPU) \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{PPO hyperparameters for teacher training.}
+  \label{tab:ppo_hypers}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Discount $\gamma$ & 0.998 \\
+    GAE $\lambda$ & 0.95 \\
+    Clip $\epsilon$ & 0.2 \\
+    Learning rate & $1 \times 10^{-3}$ \\
+    Mini-batches & 4 \\
+    Epochs per iteration & 5 \\
+    Entropy coefficient & 0.0 \\
+    Steps per env per iter & 48 \\
+    \# environments & 4096 \\
+    Simulator & Genesis (GPU) \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \subsection{Reward Function}
@@ -289,34 +295,34 @@ progress incentives, sparse bonuses, and regularization penalties.
 Table~\ref{tab:rewards} lists all terms with their scales.
 
 \begin{table}[h]
-\centering
-\caption{Reward function terms and scales.}
-\label{tab:rewards}
-\small
-\begin{tabular}{@{}p{3.2cm}rl@{}}
-\toprule
-Term & Scale & Description \\
-\midrule
-tracking\_goal\_vel & 3.0 & Track goal velocity \\
-tracking\_goal\_heading & 1.5 & Track heading \\
-progress\_along\_course & 2.0 & Forward progress \\
-waypoint\_bonus & 20.0 & Sparse bonus \\
-success\_bonus & 40.0 & Course completion \\
-termination & $-50.0$ & Early termination \\
-collision & $-2.0$ & Body contact \\
-feet\_stumble & $-1.0$ & Foot stumble \\
-feet\_edge & $-2.0$ & Foot on edge \\
-torques & $-2{\times}10^{-4}$ & Torque penalty \\
-dof\_acc & $-2{\times}10^{-7}$ & Joint accel. \\
-action\_rate & $-0.01$ & Action smooth. \\
-dof\_pos\_limits & $-2.0$ & Joint limit \\
-torque\_limits & $-0.2$ & Torque limit \\
-lin\_vel\_z & $-0.5$ & Vertical vel. \\
-ang\_vel\_xy & $-0.05$ & Roll/pitch rate \\
-orientation & $-0.5$ & Non-upright \\
-flat\_back & $-3.0$ & Torso orient. \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Reward function terms and scales.}
+  \label{tab:rewards}
+  \small
+  \begin{tabular}{@{}p{3.2cm}rl@{}}
+    \toprule
+    Term & Scale & Description \\
+    \midrule
+    tracking\_goal\_vel & 3.0 & Track goal velocity \\
+    tracking\_goal\_heading & 1.5 & Track heading \\
+    progress\_along\_course & 2.0 & Forward progress \\
+    waypoint\_bonus & 20.0 & Sparse bonus \\
+    success\_bonus & 40.0 & Course completion \\
+    termination & $-50.0$ & Early termination \\
+    collision & $-2.0$ & Body contact \\
+    feet\_stumble & $-1.0$ & Foot stumble \\
+    feet\_edge & $-2.0$ & Foot on edge \\
+    torques & $-2{\times}10^{-4}$ & Torque penalty \\
+    dof\_acc & $-2{\times}10^{-7}$ & Joint accel. \\
+    action\_rate & $-0.01$ & Action smooth. \\
+    dof\_pos\_limits & $-2.0$ & Joint limit \\
+    torque\_limits & $-0.2$ & Torque limit \\
+    lin\_vel\_z & $-0.5$ & Vertical vel. \\
+    ang\_vel\_xy & $-0.05$ & Roll/pitch rate \\
+    orientation & $-0.5$ & Non-upright \\
+    flat\_back & $-3.0$ & Torso orient. \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \subsection{DAgger Distillation}
@@ -335,8 +341,8 @@ $a_\text{student}$, but the \emph{teacher's} action $a_\text{teacher}$
 is executed in the environment.  The student is trained to minimize:
 \begin{equation}
   \mathcal{L} =
-    \underbrace{\|a_\text{teacher} - a_\text{student}\|_2}_{\text{action loss}}
-    + \underbrace{\|y_\text{oracle} - \hat{y}\|_2}_{\text{yaw loss}},
+  \underbrace{\|a_\text{teacher} - a_\text{student}\|_2}_{\text{action loss}}
+  + \underbrace{\|y_\text{oracle} - \hat{y}\|_2}_{\text{yaw loss}},
   \label{eq:dagger_loss}
 \end{equation}
 where $\hat{y} \in \R^2$ is the student's predicted heading
@@ -353,7 +359,7 @@ through each window independently, detaching the GRU hidden state
 at window boundaries:
 \begin{equation}
   \mathcal{L}_{\text{total}} = \frac{1}{\lfloor N/W \rfloor}
-    \sum_{k=1}^{\lfloor N/W \rfloor} \mathcal{L}_k,
+  \sum_{k=1}^{\lfloor N/W \rfloor} \mathcal{L}_k,
   \label{eq:bptt}
 \end{equation}
 where $\mathcal{L}_k$ is the loss over window $k$.  Gradients from
@@ -439,12 +445,11 @@ The system follows a two-stage pipeline (Figure~\ref{fig:pipeline}):
 \begin{figure}[t]
   \centering
   % \includegraphics[width=\columnwidth]{figures/pipeline.pdf}
-  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{2em}
-    \textbf{[Pipeline diagram]}\\
-    Teacher (scandots) $\to$ Student (depth/RGB)
-  \vspace{2em}}}
+  \fbox{\parbox[c][4.5em][c]{0.9\columnwidth}{\centering
+      \textbf{[Pipeline diagram]}\\
+      Teacher (scandots) $\to$ Student (depth/RGB)}}
   \caption{Two-stage training pipeline.  The teacher uses privileged
-  scandot observations; the student replaces these with either GT depth,
+    scandot observations; the student replaces these with either GT depth,
   DA2-inferred depth, or direct RGB through a frozen ResNet-18.}
   \label{fig:pipeline}
 \end{figure}
@@ -473,11 +478,11 @@ with a recurrent depth encoder (Figure~\ref{fig:student_arch}):
 \paragraph{Depth backbone.}
 A CNN processes single-channel depth images $(1 \times 58 \times 87)$:
 \begin{center}
-\small
-Conv2d(1,32,5) $\to$ MaxPool(2) $\to$ ELU \\
-$\to$ Conv2d(32,64,3) $\to$ ELU \\
-$\to$ Flatten $\to$ Linear($64{\times}25{\times}39$, 128) \\
-$\to$ ELU $\to$ Linear(128, 32)
+  \small
+  Conv2d(1,32,5) $\to$ MaxPool(2) $\to$ ELU \\
+  $\to$ Conv2d(32,64,3) $\to$ ELU \\
+  $\to$ Flatten $\to$ Linear($64{\times}25{\times}39$, 128) \\
+  $\to$ ELU $\to$ Linear(128, 32)
 \end{center}
 
 \paragraph{Combination MLP.}
@@ -504,13 +509,12 @@ output clipping.
 
 \begin{figure}[t]
   \centering
-  \fbox{\parbox{0.9\columnwidth}{\centering\vspace{2em}
-    \textbf{[Student architecture diagram]}\\
-    Depth CNN $\to$ Combo MLP $\to$ GRU $\to$ [latent + yaw]\\
-    [proprio; latent] $\to$ Actor MLP $\to$ actions
-  \vspace{2em}}}
+  \fbox{\parbox[c][5.5em][c]{0.9\columnwidth}{\centering
+      \textbf{[Student architecture diagram]}\\
+      Depth CNN $\to$ Combo MLP $\to$ GRU $\to$ [latent + yaw]\\
+      {}\![proprio; latent] $\to$ Actor MLP $\to$ actions}}
   \caption{Student recurrent depth encoder architecture.  The CNN
-  depth backbone and proprioception feed into a GRU that produces
+    depth backbone and proprioception feed into a GRU that produces
   a terrain latent and heading estimate.}
   \label{fig:student_arch}
 \end{figure}
@@ -557,18 +561,18 @@ Table~\ref{tab:baselines} shows the teacher and ground-truth depth
 student performance on gap terrain across difficulty rows.
 
 \begin{table}[h]
-\centering
-\caption{Teacher and GT-depth baselines (gap success rate, \%).}
-\label{tab:baselines}
-\small
-\begin{tabular}{@{}lcccc@{}}
-\toprule
+  \centering
+  \caption{Teacher and GT-depth baselines (gap success rate, \%).}
+  \label{tab:baselines}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
 & Row~0 & Row~1 & Row~2 & Row~3 \\
 \midrule
-Teacher (GT scandots) & 98.5 & 100.0 & 99.0 & 98.5 \\
-GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
-\bottomrule
-\end{tabular}
+    Teacher (GT scandots) & 98.5 & 100.0 & 99.0 & 98.5 \\
+    GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 The GT-depth student achieves $\geq$87\% on all rows, confirming
@@ -592,20 +596,20 @@ and normalization schemes (Table~\ref{tab:da2_small}).
 Over 30 training runs established this as a consistent ceiling.
 
 \begin{table}[h]
-\centering
-\caption{DA2-small experiments (best of 30+ runs).}
-\label{tab:da2_small}
-\small
-\begin{tabular}{@{}lcc@{}}
-\toprule
-Configuration & Row~0 & Row~1 \\
-\midrule
-Best (diff-lr + cosine) & 56.3\% & 33.6\% \\
-Fixed-range normalization & $\sim$45\% & --- \\
-Calibrated linear & $\sim$45\% & --- \\
-Frozen actor & $\sim$40\% & --- \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{DA2-small experiments (best of 30+ runs).}
+  \label{tab:da2_small}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Configuration & Row~0 & Row~1 \\
+    \midrule
+    Best (diff-lr + cosine) & 56.3\% & 33.6\% \\
+    Fixed-range normalization & $\sim$45\% & --- \\
+    Calibrated linear & $\sim$45\% & --- \\
+    Frozen actor & $\sim$40\% & --- \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \paragraph{Root cause: depth signal quality.}
@@ -631,23 +635,23 @@ learned priors.  Combined with DA2-base, this produced a
 breakthrough:
 
 \begin{table}[h]
-\centering
-\caption{Effect of DA2 model size and terrain texture on gap
-success rate (\%).}
-\label{tab:da2_main}
-\small
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Configuration & Row~0 & Row~1 & Row~2 & Row~3 \\
-\midrule
-DA2-small & 56.3 & 33.6 & --- & --- \\
-DA2-base & 68.4 & 83.2 & 26.6 & 0.8 \\
-\textbf{DA2-base + texture} & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
-\midrule
-GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
-Gap to GT & $-$7.0 & $-$1.5 & $-$2.0 & $-$7.0 \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Effect of DA2 model size and terrain texture on gap
+  success rate (\%).}
+  \label{tab:da2_main}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Configuration & Row~0 & Row~1 & Row~2 & Row~3 \\
+    \midrule
+    DA2-small & 56.3 & 33.6 & --- & --- \\
+    DA2-base & 68.4 & 83.2 & 26.6 & 0.8 \\
+    \textbf{DA2-base + texture} & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
+    \midrule
+    GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    Gap to GT & $-$7.0 & $-$1.5 & $-$2.0 & $-$7.0 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 The DA2-base + texture student (checkpoint 7000) reaches 80--93\%
@@ -745,38 +749,38 @@ perturbations reveal a clean separation between two types of
 visual domain shift.
 
 \begin{table}[h]
-\centering
-\caption{Domain invariance results: DA2-base+texture student on gap
-Row~0 (128 episodes per condition).}
-\label{tab:domain_inv}
-\small
-\begin{tabular}{@{}p{3.6cm}rrr@{}}
-\toprule
-Perturbation & Succ. & Prog. & $\Delta$ \\
-\midrule
-Baseline (checkerboard) & 96.9\% & .948 & --- \\
-\midrule
-\multicolumn{4}{@{}l}{\textit{Texture replacement (structured)}} \\
-\quad Bricks & 89.8\% & .908 & $-$7.1 \\
-\quad Noise & 78.1\% & .843 & $-$18.8 \\
-\midrule
-\multicolumn{4}{@{}l}{\textit{Texture removal (featureless)}} \\
-\quad No texture & 18.0\% & .437 & $-$78.9 \\
-\quad Solid red & 23.4\% & .471 & $-$73.5 \\
-\quad Solid blue & 14.8\% & .417 & $-$82.1 \\
-\quad Flat grey & 18.0\% & .456 & $-$78.9 \\
-\midrule
-\multicolumn{4}{@{}l}{\textit{Color / brightness jitter}} \\
-\quad Brightness $\pm$30\% & 95.3\% & .937 & $-$1.6 \\
-\quad Brightness $\pm$60\% & 94.5\% & .935 & $-$2.4 \\
-\quad Color $\pm$15\% & 91.4\% & .914 & $-$5.5 \\
-\quad Color $\pm$30\% & 76.6\% & .816 & $-$20.3 \\
-\midrule
-\multicolumn{4}{@{}l}{\textit{Combined}} \\
-\quad Mild (bricks+b30+c15) & 82.0\% & .862 & $-$14.9 \\
-\quad Extreme (noise+b60+c30) & 63.3\% & .747 & $-$33.6 \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Domain invariance results: DA2-base+texture student on gap
+  Row~0 (128 episodes per condition).}
+  \label{tab:domain_inv}
+  \small
+  \begin{tabular}{@{}p{3.6cm}rrr@{}}
+    \toprule
+    Perturbation & Succ. & Prog. & $\Delta$ \\
+    \midrule
+    Baseline (checkerboard) & 96.9\% & .948 & --- \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Texture replacement (structured)}} \\
+    \quad Bricks & 89.8\% & .908 & $-$7.1 \\
+    \quad Noise & 78.1\% & .843 & $-$18.8 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Texture removal (featureless)}} \\
+    \quad No texture & 18.0\% & .437 & $-$78.9 \\
+    \quad Solid red & 23.4\% & .471 & $-$73.5 \\
+    \quad Solid blue & 14.8\% & .417 & $-$82.1 \\
+    \quad Flat grey & 18.0\% & .456 & $-$78.9 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Color / brightness jitter}} \\
+    \quad Brightness $\pm$30\% & 95.3\% & .937 & $-$1.6 \\
+    \quad Brightness $\pm$60\% & 94.5\% & .935 & $-$2.4 \\
+    \quad Color $\pm$15\% & 91.4\% & .914 & $-$5.5 \\
+    \quad Color $\pm$30\% & 76.6\% & .816 & $-$20.3 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Combined}} \\
+    \quad Mild (bricks+b30+c15) & 82.0\% & .862 & $-$14.9 \\
+    \quad Extreme (noise+b60+c30) & 63.3\% & .747 & $-$33.6 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \subsection{Analysis}
@@ -903,90 +907,6 @@ the visual pipeline.
 % References
 % ====================================================================
 \bibliographystyle{plainnat}
-\begin{thebibliography}{20}
-
-\bibitem[Cheng et~al.(2024)]{cheng2024extreme}
-X.~Cheng, K.~Shi, A.~Agarwal, and D.~Pathak.
-\newblock Extreme parkour with legged robots.
-\newblock In \emph{IEEE ICRA}, 2024.
-
-\bibitem[He et~al.(2016)]{he2016deep}
-K.~He, X.~Zhang, S.~Ren, and J.~Sun.
-\newblock Deep residual learning for image recognition.
-\newblock In \emph{IEEE CVPR}, 2016.
-
-\bibitem[Kumar et~al.(2021)]{kumar2021rma}
-A.~Kumar, Z.~Fu, D.~Pathak, and J.~Malik.
-\newblock {RMA}: Rapid motor adaptation for legged robots.
-\newblock In \emph{RSS}, 2021.
-
-\bibitem[Lee et~al.(2020)]{lee2020learning}
-J.~Lee, J.~Hwangbo, L.~Wellhausen, V.~Koltun, and M.~Hutter.
-\newblock Learning quadrupedal locomotion over challenging terrain.
-\newblock \emph{Science Robotics}, 5(47), 2020.
-
-\bibitem[Oquab et~al.(2024)]{oquab2024dinov2}
-M.~Oquab, T.~Darcet, T.~Moutakanni, et~al.
-\newblock {DINOv2}: Learning robust visual features without supervision.
-\newblock \emph{TMLR}, 2024.
-
-\bibitem[Ranftl et~al.(2020)]{ranftl2020towards}
-R.~Ranftl, K.~Lasinger, D.~Hafner, K.~Schindler, and V.~Koltun.
-\newblock Towards robust monocular depth estimation: Mixing datasets for
-  zero-shot cross-dataset transfer.
-\newblock \emph{IEEE TPAMI}, 2020.
-
-\bibitem[Ross et~al.(2011)]{ross2011reduction}
-S.~Ross, G.~Gordon, and D.~Bain.
-\newblock A reduction of imitation learning and structured prediction to
-  no-regret online learning.
-\newblock In \emph{AISTATS}, 2011.
-
-\bibitem[Schulman et~al.(2016)]{schulman2016high}
-J.~Schulman, P.~Moritz, S.~Levine, M.~Jordan, and P.~Abbeel.
-\newblock High-dimensional continuous control using generalized advantage
-  estimation.
-\newblock In \emph{ICLR}, 2016.
-
-\bibitem[Schulman et~al.(2017)]{schulman2017proximal}
-J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov.
-\newblock Proximal policy optimization algorithms.
-\newblock \emph{arXiv:1707.06347}, 2017.
-
-\bibitem[Tobin et~al.(2017)]{tobin2017domain}
-J.~Tobin, R.~Fong, A.~Ray, J.~Schneider, W.~Zaremba, and P.~Abbeel.
-\newblock Domain randomization for transferring deep neural networks from
-  simulation to the real world.
-\newblock In \emph{IEEE/RSJ IROS}, 2017.
-
-\bibitem[Yang et~al.(2024)]{yang2024depth}
-L.~Yang, B.~Kang, Z.~Huang, et~al.
-\newblock Depth {A}nything {V2}.
-\newblock \emph{NeurIPS}, 2024.
-
-\bibitem[Yu et~al.(2024)]{yu2024lucidsim}
-W.~Yu, A.~Sharma, G.~Varma, and D.~Pathak.
-\newblock {LucidSim}: Learning visual robot policies with generated experience.
-\newblock \emph{arXiv:2405.20745}, 2024.
-
-\bibitem[Zhuang et~al.(2023)]{zhuang2023robot}
-Z.~Zhuang, Z.~Fu, J.~Wang, et~al.
-\newblock Robot parkour learning.
-\newblock In \emph{CoRL}, 2023.
-
-\bibitem[Zhuang et~al.(2024)]{zhuang2024soloparkour}
-Z.~Zhuang, Z.~Zhao, and H.~Zhao.
-\newblock {SoloParkour}: Constrained reinforcement learning for visual
-  locomotion from privileged experience of soloist.
-\newblock \emph{arXiv}, 2024.
-
-\bibitem[Cho et~al.(2014)]{cho2014learning}
-K.~Cho, B.~van Merrienboer, C.~Gulcehre, D.~Bahdanau, F.~Bougares,
-  H.~Schwenk, and Y.~Bengio.
-\newblock Learning phrase representations using {RNN} encoder-decoder for
-  statistical machine translation.
-\newblock In \emph{EMNLP}, 2014.
-
-\end{thebibliography}
+\bibliography{thesis}
 
 \end{document}

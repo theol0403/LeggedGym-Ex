@@ -1,0 +1,9 @@
+\begin{abstract}
+Parkour poses a significant challenge for legged robots, requiring navigation through complex environments with agility and precision based on limited sensory inputs.
+In this work,  we introduce a novel method for training end-to-end visual policies, from depth pixels to robot control commands, to achieve agile and safe quadruped locomotion.
+We formulate robot parkour as a constrained reinforcement learning (RL) problem designed to maximize the emergence of agile skills within the robot's physical limits while ensuring safety. 
+We first train a policy without vision using privileged information about the robot's surroundings. 
+We then generate experience from this privileged policy to warm-start a sample efficient off-policy RL algorithm from depth images.
+This allows the robot to adapt behaviors from this privileged experience to visual locomotion while circumventing the high computational costs of RL directly from pixels.
+We demonstrate the effectiveness of our method on a real Solo-12 robot, showcasing its capability to perform a variety of parkour skills such as walking, climbing, leaping, and crawling.
+\end{abstract}

@@ -1,0 +1,247 @@
+\relax 
+\bibstyle{corlabbrvnat}
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{lee2020learning,bellegarda2020robust,fu2021minimizing,margolis2021learning,rudin2022learning,bellegarda2022robust,li2023robust,he2024agile,inoue2024body,ma2024dreureka}
+\citation{caluwaerts2023barkour,zhuang2023robot,cheng2023parkour,hoeller2024anymal}
+\citation{grimminger2020open}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The open-hardware quadruped robot Solo-12 performs agile skills that are reminiscent of parkour, such as walking, climbing high steps, leaping over gaps, and crawling under obstacles.}}{1}{figure.caption.2}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:teaser}{{1}{1}{The open-hardware quadruped robot Solo-12 performs agile skills that are reminiscent of parkour, such as walking, climbing high steps, leaping over gaps, and crawling under obstacles}{figure.caption.2}{}}
+\citation{agarwal2023legged,zhuang2023robot,cheng2023parkour}
+\citation{ross2011reduction}
+\citation{agarwal2023legged}
+\citation{lee2023evaluation,kim2024not,chane2024cat}
+\citation{ball2023efficient,smith2023learning}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{2}{section.1}\protected@file@percent }
+\citation{peng2020learning,fu2021minimizing,kumar2021rma,rudin2022learning,aractingi2023controlling}
+\citation{bellegarda2022robust,caluwaerts2023barkour,margolis2024rapid,he2024agile}
+\citation{hwangbo2019learning,yang2020multi,smith2022legged,inoue2024body}
+\citation{bellegarda2020robust,margolis2021learning,li2023robust,smith2023learning,li2023learning,yang2023generalized,li2024reinforcement,zhang2024learning}
+\citation{lee2020learning,siekmann2021blind,miki2022learning,hoeller2022neural,rudin2022advanced,agarwal2023legged,yang2023neural,loquercio2023learning,chane2024cat,cheng2024quadruped,hoeller2024anymal,zhuang2023robot,cheng2023parkour}
+\citation{fuchioka2023opt,li2023learning,smith2023learning,cheng2023parkour,huang2024diffuseloco}
+\citation{miki2024learning,xu2024dexterous,cheng2024quadruped}
+\citation{yang2020multi,kim2022humanconquad,huang2023creating,hoeller2024anymal}
+\citation{caluwaerts2023barkour,zhuang2023robot,huang2024diffuseloco}
+\citation{cheng2023parkour}
+\citation{yang2022safe,he2024agile}
+\citation{lee2023evaluation,kim2024not,chane2024cat}
+\citation{chane2024cat}
+\citation{schulman2017proximal}
+\citation{bogdanovic2022model,smith2023learning}
+\citation{smith2022legged,wu2023daydreamer}
+\citation{kleiner2007real,peng2017deeploco,fankhauser2018probabilistic,gangapurwala2021real,tsounis2020deepgait,rudin2022learning,miki2022learning,duan2023learning,hoeller2024anymal,chane2024cat}
+\citation{chavez2018learning,yang2021real}
+\citation{bloesch2015robust,wisth2019robust,wisth2022vilens,buchanan2022learning}
+\citation{wermelinger2016navigation,mastalli2017trajectory,magana2019fast,jenelten2020perceptive,kim2020vision,agrawal2022vision}
+\citation{yu2021visual,margolis2021learning,loquercio2023learning,agarwal2023legged,zhuang2023robot,cheng2023parkour}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{3}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Agile Locomotion}{3}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Safe Locomotion}{3}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Sample-Efficient Learning}{3}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Vision-Based Locomotion}{3}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Method}{3}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Agile and Safe Parkour Learning Problem Formulation}{3}{subsection.3.1}\protected@file@percent }
+\newlabel{eq:mdp}{{1}{3}{Agile and Safe Parkour Learning Problem Formulation}{equation.1}{}}
+\newlabel{eq:cstr_prob}{{2}{3}{Agile and Safe Parkour Learning Problem Formulation}{equation.2}{}}
+\citation{cheng2023parkour}
+\citation{makoviychuk2021isaac}
+\citation{rudin2022learning}
+\citation{agarwal2023legged,cheng2023parkour,zhuang2023robot}
+\newlabel{fig:terrains:crawl}{{2a}{4}{Crawl}{figure.caption.10}{}}
+\newlabel{sub@fig:terrains:crawl}{{a}{4}{Crawl}{figure.caption.10}{}}
+\newlabel{fig:terrains:steps}{{2b}{4}{Climb}{figure.caption.10}{}}
+\newlabel{sub@fig:terrains:steps}{{b}{4}{Climb}{figure.caption.10}{}}
+\newlabel{fig:terrains:gap}{{2c}{4}{Leap}{figure.caption.10}{}}
+\newlabel{sub@fig:terrains:gap}{{c}{4}{Leap}{figure.caption.10}{}}
+\newlabel{fig:terrains:hurdle}{{2d}{4}{Hurdle}{figure.caption.10}{}}
+\newlabel{sub@fig:terrains:hurdle}{{d}{4}{Hurdle}{figure.caption.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Terrains used to train SoloParkour in simulation: the crawl parkour contains floating objects the robot must crawl under, the step and hurdle parkour contain obstacles for the robot to climb up and down, and the leap parkour contains gaps over which the robot must leap.}}{4}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:terrains}{{2}{4}{Terrains used to train SoloParkour in simulation: the crawl parkour contains floating objects the robot must crawl under, the step and hurdle parkour contain obstacles for the robot to climb up and down, and the leap parkour contains gaps over which the robot must leap}{figure.caption.10}{}}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{States and Actions}{4}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Rewards}{4}{section*.8}\protected@file@percent }
+\newlabel{eq:rew_lin_vel}{{3}{4}{Rewards}{equation.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{Constraints}{4}{section*.9}\protected@file@percent }
+\newlabel{eq:cstr_torque}{{4}{4}{Constraints}{equation.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{Terrains}{4}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Visual Policy Learning}{4}{subsection.3.2}\protected@file@percent }
+\citation{chane2024cat}
+\citation{chane2024cat}
+\citation{agarwal2023legged,zhuang2023robot,cheng2023parkour}
+\citation{agarwal2023legged,zhuang2023robot,cheng2023parkour}
+\citation{schulman2017proximal}
+\citation{chane2024cat}
+\citation{ball2023efficient}
+\citation{smith2022legged,ball2023efficient,smith2023learning}
+\citation{lillicrap2015continuous}
+\citation{chen2021randomized}
+\citation{ba2016layer}
+\citation{smith2022walk,ball2023efficient,smith2023learning}
+\citation{pinto2017asymmetric}
+\citation{chane2024cat}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces SoloParkour leverages a two-stage RL approach to train visual locomotion policies in simulation. Stage 1: we train a privileged policy that observes a heightmap scan of its surroundings and the height of the nearby floating objects using PPO with Constraints as Terminations (CaT)~\citep  {chane2024cat}. Stage 2: we train a policy from depth pixels using a variant of DDPG with CaT that learns from a dataset of privileged experience collected using the Stage 1 policy. }}{5}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:method}{{3}{5}{SoloParkour leverages a two-stage RL approach to train visual locomotion policies in simulation. Stage 1: we train a privileged policy that observes a heightmap scan of its surroundings and the height of the nearby floating objects using PPO with Constraints as Terminations (CaT)~\citep {chane2024cat}. Stage 2: we train a policy from depth pixels using a variant of DDPG with CaT that learns from a dataset of privileged experience collected using the Stage 1 policy}{figure.caption.12}{}}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Stage 1: Privileged Policy Learning}{5}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Stage 2: End-to-End Vision-Based RL from Privileged Experience}{5}{section*.14}\protected@file@percent }
+\citation{lecun1998gradient}
+\citation{chung2014empirical}
+\citation{makoviychuk2021isaac}
+\citation{zhuang2023robot,cheng2023parkour}
+\citation{zhuang2023robot,cheng2023parkour}
+\citation{ross2011reduction}
+\citation{cheng2023parkour,zhuang2023robot,agarwal2023legged}
+\citation{agarwal2023legged,duan2023learning}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{6}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Experimental setup}{6}{subsection.4.1}\protected@file@percent }
+\newlabel{sec:experiments:setup}{{4.1}{6}{Experimental setup}{subsection.4.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Simulation and robot}{6}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Baselines and ablations}{6}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Simulation Experiments}{6}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Comparison to supervised distillation}{6}{section*.18}\protected@file@percent }
+\newlabel{fig:completion_main}{{4a}{7}{Comparison between SoloParkour and imitation-based distillation methods}{figure.caption.17}{}}
+\newlabel{sub@fig:completion_main}{{a}{7}{Comparison between SoloParkour and imitation-based distillation methods}{figure.caption.17}{}}
+\newlabel{fig:completion_abla}{{4b}{7}{Ablations of the proposed methods}{figure.caption.17}{}}
+\newlabel{sub@fig:completion_abla}{{b}{7}{Ablations of the proposed methods}{figure.caption.17}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Average terrain completion (over 4 training seeds) by obstacle dimension for each policy.}}{7}{figure.caption.17}\protected@file@percent }
+\newlabel{fig:completion_results}{{4}{7}{Average terrain completion (over 4 training seeds) by obstacle dimension for each policy}{figure.caption.17}{}}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Ablative analysis}{7}{section*.19}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Success rates achieved by the policies for different obstacles on the real robot, averaged over 2 training seeds and 10 trials per obstacle per seed.}}{7}{table.caption.21}\protected@file@percent }
+\newlabel{table:results}{{1}{7}{Success rates achieved by the policies for different obstacles on the real robot, averaged over 2 training seeds and 10 trials per obstacle per seed}{table.caption.21}{}}
+\@writefile{toc}{\contentsline {paragraph}{Constraints satisfaction}{7}{table.caption.21}\protected@file@percent }
+\newlabel{fig:torque1}{{5a}{8}{Constraint for the base orientation around the roll axis}{figure.caption.22}{}}
+\newlabel{sub@fig:torque1}{{a}{8}{Constraint for the base orientation around the roll axis}{figure.caption.22}{}}
+\newlabel{fig:torque2}{{5b}{8}{Torque constraint for the front left knee joint}{figure.caption.22}{}}
+\newlabel{sub@fig:torque2}{{b}{8}{Torque constraint for the front left knee joint}{figure.caption.22}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Constraint violations (in \%) when the policies successfully traverse the terrain level by obstacle dimension, averaged across 4 training seeds.}}{8}{figure.caption.22}\protected@file@percent }
+\newlabel{fig:torque_comparison}{{5}{8}{Constraint violations (in \%) when the policies successfully traverse the terrain level by obstacle dimension, averaged across 4 training seeds}{figure.caption.22}{}}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Real-Robot Experiments}{8}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Limitations}{8}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{8}{section.6}\protected@file@percent }
+\bibdata{biblio}
+\bibcite{lee2020learning}{{1}{2020}{{Lee et~al.}}{{Lee, Hwangbo, Wellhausen, Koltun, and Hutter}}}
+\bibcite{bellegarda2020robust}{{2}{2020}{{Bellegarda et~al.}}{{Bellegarda, Nguyen, and Nguyen}}}
+\bibcite{fu2021minimizing}{{3}{2021}{{Fu et~al.}}{{Fu, Kumar, Malik, and Pathak}}}
+\bibcite{margolis2021learning}{{4}{2021}{{Margolis et~al.}}{{Margolis, Chen, Paigwar, Fu, Kim, Kim, and Agrawal}}}
+\bibcite{rudin2022learning}{{5}{2022}{{Rudin et~al.}}{{Rudin, Hoeller, Reist, and Hutter}}}
+\bibcite{bellegarda2022robust}{{6}{2022}{{Bellegarda et~al.}}{{Bellegarda, Chen, Liu, and Nguyen}}}
+\bibcite{li2023robust}{{7}{2023}{{Li et~al.}}{{Li, Peng, Abbeel, Levine, Berseth, and Sreenath}}}
+\bibcite{he2024agile}{{8}{2024}{{He et~al.}}{{He, Zhang, Xiao, He, Liu, and Shi}}}
+\bibcite{inoue2024body}{{9}{2024}{{Inoue et~al.}}{{Inoue, Kawaharazuka, Okada, and Inaba}}}
+\bibcite{ma2024dreureka}{{10}{2024}{{Ma et~al.}}{{Ma, Liang, Wang, Wang, Zhu, Fan, Bastani, and Jayaraman}}}
+\bibcite{caluwaerts2023barkour}{{11}{2023}{{Caluwaerts et~al.}}{{Caluwaerts, Iscen, Kew, Yu, Zhang, Freeman, Lee, Lee, Saliceti, Zhuang, et~al.}}}
+\bibcite{zhuang2023robot}{{12}{2023}{{Zhuang et~al.}}{{Zhuang, Fu, Wang, Atkeson, Schwertfeger, Finn, and Zhao}}}
+\bibcite{cheng2023parkour}{{13}{2023}{{Cheng et~al.}}{{Cheng, Shi, Agarwal, and Pathak}}}
+\bibcite{hoeller2024anymal}{{14}{2024}{{Hoeller et~al.}}{{Hoeller, Rudin, Sako, and Hutter}}}
+\bibcite{grimminger2020open}{{15}{2020}{{Grimminger et~al.}}{{Grimminger, Meduri, Khadiv, Viereck, W{\"u}thrich, Naveau, Berenz, Heim, Widmaier, Flayols, et~al.}}}
+\def\@LN@column{1}
+\bibcite{agarwal2023legged}{{16}{2023}{{Agarwal et~al.}}{{Agarwal, Kumar, Malik, and Pathak}}}
+\bibcite{ross2011reduction}{{17}{2011}{{Ross et~al.}}{{Ross, Gordon, and Bagnell}}}
+\bibcite{lee2023evaluation}{{18}{2023}{{Lee et~al.}}{{Lee, Schroth, Klemm, Bjelonic, Reske, and Hutter}}}
+\bibcite{kim2024not}{{19}{2024}{{Kim et~al.}}{{Kim, Oh, Lee, Choi, Ji, Jung, Youm, and Hwangbo}}}
+\bibcite{chane2024cat}{{20}{2024}{{Chane-Sane et~al.}}{{Chane-Sane, Leziart, Flayols, Stasse, Sou{\`e}res, and Mansard}}}
+\bibcite{ball2023efficient}{{21}{2023}{{Ball et~al.}}{{Ball, Smith, Kostrikov, and Levine}}}
+\bibcite{smith2023learning}{{22}{2023}{{Smith et~al.}}{{Smith, Kew, Li, Luu, Peng, Ha, Tan, and Levine}}}
+\bibcite{peng2020learning}{{23}{2020}{{Peng et~al.}}{{Peng, Coumans, Zhang, Lee, Tan, and Levine}}}
+\bibcite{kumar2021rma}{{24}{2021}{{Kumar et~al.}}{{Kumar, Fu, Pathak, and Malik}}}
+\bibcite{aractingi2023controlling}{{25}{2023}{{Aractingi et~al.}}{{Aractingi, L{\'e}ziart, Flayols, Perez, Silander, and Sou{\`e}res}}}
+\bibcite{margolis2024rapid}{{26}{2024}{{Margolis et~al.}}{{Margolis, Yang, Paigwar, Chen, and Agrawal}}}
+\bibcite{hwangbo2019learning}{{27}{2019}{{Hwangbo et~al.}}{{Hwangbo, Lee, Dosovitskiy, Bellicoso, Tsounis, Koltun, and Hutter}}}
+\bibcite{yang2020multi}{{28}{2020}{{Yang et~al.}}{{Yang, Yuan, Zhu, Yu, and Li}}}
+\bibcite{smith2022legged}{{29}{2022}{{Smith et~al.}}{{Smith, Kew, Peng, Ha, Tan, and Levine}}}
+\bibcite{li2023learning}{{30}{2023}{{Li et~al.}}{{Li, Vlastelica, Blaes, Frey, Grimminger, and Martius}}}
+\bibcite{yang2023generalized}{{31}{2023}{{Yang et~al.}}{{Yang, Chen, Ma, Zheng, Chen, Nguyen, and Wang}}}
+\def\@LN@column{1}
+\bibcite{li2024reinforcement}{{32}{2024}{{Li et~al.}}{{Li, Peng, Abbeel, Levine, Berseth, and Sreenath}}}
+\bibcite{zhang2024learning}{{33}{2024}{{Zhang et~al.}}{{Zhang, Sheng, Li, Zhang, Zhou, Zhu, Zhao, Zhang, and Han}}}
+\bibcite{siekmann2021blind}{{34}{2021}{{Siekmann et~al.}}{{Siekmann, Green, Warila, Fern, and Hurst}}}
+\bibcite{miki2022learning}{{35}{2022}{{Miki et~al.}}{{Miki, Lee, Hwangbo, Wellhausen, Koltun, and Hutter}}}
+\bibcite{hoeller2022neural}{{36}{2022}{{Hoeller et~al.}}{{Hoeller, Rudin, Choy, Anandkumar, and Hutter}}}
+\bibcite{rudin2022advanced}{{37}{2022}{{Rudin et~al.}}{{Rudin, Hoeller, Bjelonic, and Hutter}}}
+\bibcite{yang2023neural}{{38}{2023}{{Yang et~al.}}{{Yang, Yang, and Wang}}}
+\bibcite{loquercio2023learning}{{39}{2023}{{Loquercio et~al.}}{{Loquercio, Kumar, and Malik}}}
+\bibcite{cheng2024quadruped}{{40}{2024}{{Cheng et~al.}}{{Cheng, Liu, Pan, Ye, Liu, and Liang}}}
+\bibcite{fuchioka2023opt}{{41}{2023}{{Fuchioka et~al.}}{{Fuchioka, Xie, and Van~de Panne}}}
+\bibcite{huang2024diffuseloco}{{42}{2024}{{Huang et~al.}}{{Huang, Chi, Wang, Li, Peng, Shao, Nikolic, and Sreenath}}}
+\bibcite{miki2024learning}{{43}{2024}{{Miki et~al.}}{{Miki, Lee, Wellhausen, and Hutter}}}
+\bibcite{xu2024dexterous}{{44}{2024}{{Xu et~al.}}{{Xu, Raj, Xiao, and Stone}}}
+\bibcite{kim2022humanconquad}{{45}{2022}{{Kim et~al.}}{{Kim, Sorokin, Lee, and Ha}}}
+\bibcite{huang2023creating}{{46}{2023}{{Huang et~al.}}{{Huang, Li, Xiang, Ni, Chi, Li, Yang, Peng, and Sreenath}}}
+\bibcite{yang2022safe}{{47}{2022}{{Yang et~al.}}{{Yang, Zhang, Luu, Ha, Tan, and Yu}}}
+\bibcite{schulman2017proximal}{{48}{2017}{{Schulman et~al.}}{{Schulman, Wolski, Dhariwal, Radford, and Klimov}}}
+\def\@LN@column{1}
+\bibcite{bogdanovic2022model}{{49}{2022}{{Bogdanovic et~al.}}{{Bogdanovic, Khadiv, and Righetti}}}
+\bibcite{wu2023daydreamer}{{50}{2023}{{Wu et~al.}}{{Wu, Escontrela, Hafner, Abbeel, and Goldberg}}}
+\bibcite{kleiner2007real}{{51}{2007}{{Kleiner and Dornhege}}{{}}}
+\bibcite{peng2017deeploco}{{52}{2017}{{Peng et~al.}}{{Peng, Berseth, Yin, and Van De~Panne}}}
+\bibcite{fankhauser2018probabilistic}{{53}{2018}{{Fankhauser et~al.}}{{Fankhauser, Bloesch, and Hutter}}}
+\bibcite{gangapurwala2021real}{{54}{2021}{{Gangapurwala et~al.}}{{Gangapurwala, Geisert, Orsolino, Fallon, and Havoutis}}}
+\bibcite{tsounis2020deepgait}{{55}{2020}{{Tsounis et~al.}}{{Tsounis, Alge, Lee, Farshidian, and Hutter}}}
+\bibcite{duan2023learning}{{56}{2024}{{Duan et~al.}}{{Duan, Pandit, Gadde, van Marum, Dao, Kim, and Fern}}}
+\bibcite{chavez2018learning}{{57}{2018}{{Chavez-Garcia et~al.}}{{Chavez-Garcia, Guzzi, Gambardella, and Giusti}}}
+\bibcite{yang2021real}{{58}{2021}{{Yang et~al.}}{{Yang, Wellhausen, Miki, Liu, and Hutter}}}
+\bibcite{bloesch2015robust}{{59}{2015}{{Bloesch et~al.}}{{Bloesch, Omari, Hutter, and Siegwart}}}
+\bibcite{wisth2019robust}{{60}{2019}{{Wisth et~al.}}{{Wisth, Camurri, and Fallon}}}
+\bibcite{wisth2022vilens}{{61}{2022}{{Wisth et~al.}}{{Wisth, Camurri, and Fallon}}}
+\bibcite{buchanan2022learning}{{62}{2022}{{Buchanan et~al.}}{{Buchanan, Camurri, Dellaert, and Fallon}}}
+\bibcite{wermelinger2016navigation}{{63}{2016}{{Wermelinger et~al.}}{{Wermelinger, Fankhauser, Diethelm, Kr{\"u}si, Siegwart, and Hutter}}}
+\bibcite{mastalli2017trajectory}{{64}{2017}{{Mastalli et~al.}}{{Mastalli, Focchi, Havoutis, Radulescu, Calinon, Buchli, Caldwell, and Semini}}}
+\def\@LN@column{1}
+\bibcite{magana2019fast}{{65}{2019}{{Magana et~al.}}{{Magana, Barasuol, Camurri, Franceschi, Focchi, Pontil, Caldwell, and Semini}}}
+\bibcite{jenelten2020perceptive}{{66}{2020}{{Jenelten et~al.}}{{Jenelten, Miki, Vijayan, Bjelonic, and Hutter}}}
+\bibcite{kim2020vision}{{67}{2020}{{Kim et~al.}}{{Kim, Carballo, Di~Carlo, Katz, Bledt, Lim, and Kim}}}
+\bibcite{agrawal2022vision}{{68}{2022}{{Agrawal et~al.}}{{Agrawal, Chen, Rai, and Sreenath}}}
+\bibcite{yu2021visual}{{69}{2021}{{Yu et~al.}}{{Yu, Jain, Escontrela, Iscen, Xu, Coumans, Ha, Tan, and Zhang}}}
+\bibcite{makoviychuk2021isaac}{{70}{2021}{{Makoviychuk et~al.}}{{Makoviychuk, Wawrzyniak, Guo, Lu, Storey, Macklin, Hoeller, Rudin, Allshire, Handa, et~al.}}}
+\bibcite{lillicrap2015continuous}{{71}{2015}{{Lillicrap et~al.}}{{Lillicrap, Hunt, Pritzel, Heess, Erez, Tassa, Silver, and Wierstra}}}
+\bibcite{chen2021randomized}{{72}{2021}{{Chen et~al.}}{{Chen, Wang, Zhou, and Ross}}}
+\bibcite{ba2016layer}{{73}{2016}{{Ba et~al.}}{{Ba, Kiros, and Hinton}}}
+\bibcite{smith2022walk}{{74}{2022}{{Smith et~al.}}{{Smith, Kostrikov, and Levine}}}
+\bibcite{pinto2017asymmetric}{{75}{2018}{{Pinto et~al.}}{{Pinto, Andrychowicz, Welinder, Zaremba, and Abbeel}}}
+\bibcite{lecun1998gradient}{{76}{1998}{{LeCun et~al.}}{{LeCun, Bottou, Bengio, and Haffner}}}
+\bibcite{chung2014empirical}{{77}{2014}{{Chung et~al.}}{{Chung, Gulcehre, Cho, and Bengio}}}
+\bibcite{huang2022cleanrl}{{78}{2022}{{Huang et~al.}}{{Huang, Dossa, Ye, Braga, Chakraborty, Mehta, and Araújo}}}
+\def\@LN@column{1}
+\citation{cheng2023parkour}
+\citation{rudin2022learning}
+\citation{chane2024cat}
+\citation{chane2024cat}
+\citation{huang2022cleanrl}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation Details}{14}{appendix.A}\protected@file@percent }
+\newlabel{appendix:implementation_details}{{A}{14}{Implementation Details}{appendix.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Rewards and Constraints}{14}{subsection.A.1}\protected@file@percent }
+\newlabel{eq:cat_mdp}{{5}{14}{Rewards and Constraints}{equation.5}{}}
+\newlabel{eq:delta_function}{{6}{14}{Rewards and Constraints}{equation.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces List of constraints, where \textit  {Hard} indicates whether each row corresponds to a hard constraint and \textit  {Cond.} indicates whether a constraint is active only under certain conditions.}}{14}{table.caption.25}\protected@file@percent }
+\newlabel{table:constraint_list}{{2}{14}{List of constraints, where \textit {Hard} indicates whether each row corresponds to a hard constraint and \textit {Cond.} indicates whether a constraint is active only under certain conditions}{table.caption.25}{}}
+\citation{schulman2017proximal}
+\citation{rudin2022learning,cheng2023parkour,chane2024cat}
+\citation{chung2014empirical}
+\citation{ball2023efficient}
+\citation{lillicrap2015continuous}
+\citation{chen2021randomized}
+\citation{agarwal2023legged}
+\citation{duan2023learning}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Policy Learning}{15}{subsection.A.2}\protected@file@percent }
+\newlabel{appendix:policy_learning}{{A.2}{15}{Policy Learning}{subsection.A.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Privileged Policy Learning}{15}{section*.26}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Visual Policy Learning}{15}{section*.27}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Baselines}{15}{subsection.A.3}\protected@file@percent }
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {B}Real Robot Setup}{16}{appendix.B}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {C}Additional Results}{16}{appendix.C}\protected@file@percent }
+\newlabel{appendix:additional_results}{{C}{16}{Additional Results}{appendix.C}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Constraint violations (in \%) when the policies successfully traverse the terrain level by obstacle dimension, averaged across 4 training seeds.}}{17}{figure.caption.28}\protected@file@percent }
+\newlabel{fig:additional_constraints_1}{{6}{17}{Constraint violations (in \%) when the policies successfully traverse the terrain level by obstacle dimension, averaged across 4 training seeds}{figure.caption.28}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Constraint violations (in \%) when the policies successfully traverse the terrain level by obstacle dimension, averaged across 4 training seeds.}}{18}{figure.caption.29}\protected@file@percent }
+\newlabel{fig:additional_constraints_2}{{7}{18}{Constraint violations (in \%) when the policies successfully traverse the terrain level by obstacle dimension, averaged across 4 training seeds}{figure.caption.29}{}}
+\gdef \@abspage@last{18}

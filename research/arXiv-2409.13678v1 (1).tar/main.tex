@@ -1,0 +1,82 @@
+\documentclass{article}
+
+%\usepackage{corl_2024} % Use this for the initial submission.
+\usepackage[final]{corl_2024} % Uncomment for the camera-ready ``final'' version.
+%\usepackage[preprint]{corl_2024} % Uncomment for pre-prints (e.g., arxiv); This is like ``final'', but will remove the CORL footnote.
+
+
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+\usepackage{enumitem}
+\usepackage{amssymb}
+
+\usepackage{ulem} % Just for strikeout
+
+\title{SoloParkour: Constrained Reinforcement Learning for Visual Locomotion from Privileged Experience}
+
+% The \author macro works with any number of authors. There are two
+% commands used to separate the names and addresses of multiple
+% authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to
+% break the lines. Using \AND forces a line break at that point. So,
+% if LaTeX puts 3 of 4 authors names on the first line, and the last
+% on the second line, try using \AND instead of \And before the third
+% author name.
+
+% NOTE: authors will be visible only in the camera-ready and preprint versions (i.e., when using the option 'final' or 'preprint'). 
+% 	For the initial submission the authors will be anonymized.
+
+\author{
+  Elliot Chane-Sane$^{*1}$, Joseph Amigo$^{*12}$, Thomas Flayols$ ^{1}$,
+  \\ \textbf{Ludovic Righetti$^{23}$, Nicolas Mansard$^{13}$}
+  \\ $^{1}$LAAS-CNRS, Universit\'e de Toulouse, CNRS, Toulouse, France
+  \\ $^{2}$Machines in Motion Laboratory, New York University, USA
+  \\ $^{3}$Artificial and Natural Intelligence Toulouse Institute, Toulouse, France
+  \\ {\texttt~\url{https://gepetto.github.io/SoloParkour/}}
+}
+
+
+\begin{document}
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+\footnotetext[1]{Equal contribution. Correspondence to \texttt{elliot.chane-sane@laas.fr}}
+\renewcommand{\thefootnote}{\arabic{footnote}}
+\maketitle
+
+
+
+\begin{figure}[h]
+\vspace{-0.8cm}
+\centering
+\includegraphics[width=1.0\linewidth]{Assets/teaser_final.jpg}
+\caption{The open-hardware quadruped robot Solo-12 performs agile skills that are reminiscent of parkour, such as walking, climbing high steps, leaping over gaps, and crawling under obstacles.}
+\label{fig:teaser}
+\end{figure}
+\vspace{-0.5cm}
+\input{Sections/Abstract}
+\vspace{-0.8cm}
+~\keywords{Reinforcement Learning, Agile Locomotion, Visuomotor Control} 
+
+\input{Sections/Introduction}
+\input{Sections/RelatedWork}
+\input{Sections/Method}
+\input{Sections/Experiments}
+\input{Sections/Limitations}
+\input{Sections/Conclusion}
+\input{Sections/Acknowledgments}
+
+% no \bibliographystyle is required, since the corl style is automatically used.
+\bibliography{biblio}  % .bib
+
+\newpage
+\input{Sections/Appendix}
+
+\end{document}
