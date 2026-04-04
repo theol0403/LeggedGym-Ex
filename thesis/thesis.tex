@@ -1,0 +1,63 @@
+% !TEX program = pdflatex
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[margin=0.85in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+% \usepackage{algorithm}
+% \usepackage{algpseudocode}
+\usepackage{bm}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[skip=4pt plus 0pt,indent=0pt]{parskip}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,citecolor=green!50!black,urlcolor=blue!70!black}
+
+% Compact lists
+\setlist{nosep,leftmargin=*}
+
+% Shorthand
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\newcommand{\clip}{\mathrm{clip}}
+
+\title{%
+  Monocular Depth Estimation as a Domain-Invariant\\
+  Representation for Vision-Based Quadruped Parkour
+}
+\author{
+  Theo Lemay \\
+  \textit{Undergraduate Thesis} \\
+  \texttt{theo@example.edu}
+}
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/mathematical_foundations}
+\input{sections/system_architecture}
+\input{sections/experiments_and_results}
+\input{sections/domain_invariance_experiment}
+\input{sections/discussion_and_conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{thesis}
+
+\end{document}

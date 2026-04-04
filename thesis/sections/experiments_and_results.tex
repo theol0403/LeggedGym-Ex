@@ -1,0 +1,147 @@
+\section{Experiments and Results}
+\label{sec:experiments}
+% ====================================================================
+
+\subsection{Setup}
+
+All experiments use the Genesis GPU simulator on 4$\times$ NVIDIA
+L40S GPUs.  The Unitree Go2 quadruped has 12 actuated joints.
+Evaluation uses forced terrain (all robots on the same obstacle type
+and difficulty) with 128--256 episodes per condition.  Success is
+defined as completing the full obstacle course.
+
+\subsection{Teacher and GT-Depth Baselines}
+
+Table~\ref{tab:baselines} shows the teacher and ground-truth depth
+student performance on gap terrain across difficulty rows.
+
+\begin{table}[h]
+  \centering
+  \caption{Teacher and GT-depth baselines (gap success rate, \%).}
+  \label{tab:baselines}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+& Row~0 & Row~1 & Row~2 & Row~3 \\
+\midrule
+    Teacher (GT scandots) & 98.5 & 100.0 & 99.0 & 98.5 \\
+    GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The GT-depth student achieves $\geq$87\% on all rows, confirming
+the CNN--GRU architecture can extract sufficient geometric
+information from depth images.  The gap to the teacher (5--11~pp)
+reflects the inherent information loss from scandots to a single
+depth viewpoint.
+
+A zero-depth ablation (replacing all depth pixels with zero)
+drops success to 0--8\%, confirming the student relies on depth
+for gap navigation rather than exploiting proprioceptive heuristics.
+
+\subsection{DA2 Depth Estimation Students}
+\label{sec:da2_results}
+
+\paragraph{DA2-small ($\sim$25M params).}
+Initial experiments with the smaller DA2 model plateaued at
+$\sim$56\% gap success on Row~0, despite extensive
+hyperparameter search across learning rates, curriculum schedules,
+and normalization schemes (Table~\ref{tab:da2_small}).
+Over 30 training runs established this as a consistent ceiling.
+
+\begin{table}[h]
+  \centering
+  \caption{DA2-small experiments (best of 30+ runs).}
+  \label{tab:da2_small}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Configuration & Row~0 & Row~1 \\
+    \midrule
+    Best (diff-lr + cosine) & 56.3\% & 33.6\% \\
+    Fixed-range normalization & $\sim$45\% & --- \\
+    Calibrated linear & $\sim$45\% & --- \\
+    Frozen actor & $\sim$40\% & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Root cause: depth signal quality.}
+Analysis of DA2-small depth maps on untextured terrain revealed
+the core issue.  Without visual texture, DA2 produces nearly flat
+depth estimates (terrain--depth correlation $r = -0.10$), making
+gaps almost invisible.  The gap-vs-ground pixel signal spans only
+4.5\% of the normalized output range---too weak for reliable
+detection through the CNN encoder.
+
+\paragraph{DA2-base ($\sim$100M params).}
+Upgrading to the four-times-larger DA2-base model immediately
+improved performance.  Row~0 improved from 56\% to 68\% (+12~pp)
+and Row~1 from 34\% to 83\% (+49~pp).  However, Row~3 remained
+near zero (0.8\%), indicating that model scale alone does not solve
+the hardest gaps.
+
+\paragraph{Terrain texture.}
+Adding a checkerboard texture to the terrain surface provides DA2
+with visual features to estimate depth from, since monocular depth
+estimation relies on texture gradients, perspective cues, and
+learned priors.  Combined with DA2-base, this produced a
+breakthrough:
+
+\begin{table}[h]
+  \centering
+  \caption{Effect of DA2 model size and terrain texture on gap
+  success rate (\%).}
+  \label{tab:da2_main}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Configuration & Row~0 & Row~1 & Row~2 & Row~3 \\
+    \midrule
+    DA2-small & 56.3 & 33.6 & --- & --- \\
+    DA2-base & 68.4 & 83.2 & 26.6 & 0.8 \\
+    \textbf{DA2-base + texture} & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
+    \midrule
+    GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    Gap to GT & $-$7.0 & $-$1.5 & $-$2.0 & $-$7.0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The DA2-base + texture student (checkpoint 7000) reaches 80--93\%
+across all rows, within 7~pp of the GT-depth upper bound.  Row~3
+improved from 0.8\% to 80.5\%---a +80~pp gain from texture alone.
+
+\paragraph{Negative results.}
+Several architectural modifications did not improve performance:
+temporal EMA smoothing of depth frames hurt convergence;
+Sobel gradient channels produced $\sim$40\% (below baseline);
+alternative normalizations (calibrated linear, fixed range, mean-std)
+performed comparably to EMA percentile.  This reinforces the finding
+that depth \emph{signal quality} dominates architectural choices.
+
+\subsection{ResNet-18 RGB Baseline}
+
+The frozen-ResNet-18 student (Section~\ref{sec:resnet}) achieves
+98\% overall parkour success (stairs + hurdles) but only 69\% on
+gaps.  It converges in $\sim$4500 iterations with 3.2\,s/iter, making
+it computationally efficient.  However, its gap performance
+(69\% vs.\ 87\% for DA2-base+texture) suggests that direct RGB
+features, while sufficient for stair and hurdle geometry, lack the
+precision needed for narrow gap detection.
+
+\subsection{Key Finding: Signal Quality Over Architecture}
+
+Across all experiments, the dominant factor in student performance
+was the quality of the depth signal reaching the encoder, not the
+encoder architecture itself.  Evidence:
+\begin{itemize}
+  \item Architecture ablations (Sobel gradients, scandot prediction,
+    GRU size, frozen actor) produced $<$15~pp variation.
+  \item Depth quality changes (model size: +12--49~pp; texture:
+    +72~pp on Row~3) produced order-of-magnitude larger effects.
+\end{itemize}
+This suggests that future work should prioritize depth estimation
+quality (larger models, better training data) over student
+architecture complexity.

@@ -1,0 +1,242 @@
+\section{Mathematical Foundations}
+\label{sec:math}
+% ====================================================================
+
+\subsection{POMDP Formulation}
+
+We model the parkour task as a Partially Observable Markov Decision
+Process $(\mathcal{S}, \mathcal{A}, \mathcal{O}, T, R, \gamma)$.
+At each timestep $t$, the full state $s_t \in \mathcal{S}$ includes
+robot configuration, terrain geometry, and physics quantities.
+The agent receives a partial observation $o_t \in \mathcal{O}$
+and selects action $a_t \in \mathcal{A} = \R^{12}$ (one target angle
+per joint).
+
+\paragraph{Observation decomposition.}
+Observations decompose into three groups:
+\begin{itemize}
+  \item \textbf{Proprioception} $o_\text{prop} \in \R^{53}$: base
+    angular velocity~(3), projected gravity~(3), velocity
+    commands~(3), heading commands~(2), additional commands~(2),
+    joint positions~(12), joint velocities~(12), previous
+    actions~(12), foot contacts~(4).
+  \item \textbf{Exteroception} $o_\text{ext}$: either scandot
+    heightmaps ($\R^{132}$ for the teacher), depth images
+    ($\R^{58 \times 87}$), or RGB images ($\R^{3 \times 58 \times 87}$).
+  \item \textbf{Privileged} $o_\text{priv}$: friction, restitution,
+    and other environment parameters available only during teacher
+    training.
+\end{itemize}
+
+\paragraph{Action space and PD control.}
+Actions are target joint position offsets $a_t \in \R^{12}$ scaled
+by 0.25~rad.  A PD controller converts these to torques at 250\,Hz
+(decimation ratio 5, yielding 50\,Hz policy frequency):
+\begin{equation}
+  \tau = K_p \cdot (a_t^{\text{scaled}} - q) + K_d \cdot (-\dot{q}),
+  \label{eq:pd}
+\end{equation}
+where $K_p = \text{diag}(35, 35, 35, \ldots)$ and $K_d = \text{diag}(0.5, 0.5, 0.5, \ldots)$
+are per-joint gains, $q$ is the current joint position vector, and
+$\dot{q}$ is the joint velocity vector.
+
+\subsection{PPO with Generalized Advantage Estimation}
+\label{sec:ppo}
+
+The teacher policy $\pi_\theta$ is trained with Proximal Policy
+Optimization (PPO) \cite{schulman2017proximal}.  PPO maximizes a
+clipped surrogate objective:
+\begin{equation}
+  L^{\text{CLIP}} = \E_t\!\left[\min\!\left(
+      r_t \hat{A}_t,\;
+      \clip(r_t, 1{-}\epsilon, 1{+}\epsilon)\,\hat{A}_t
+  \right)\right],
+  \label{eq:ppo}
+\end{equation}
+where $r_t = \pi_\theta(a_t|o_t) / \pi_{\theta_{\text{old}}}(a_t|o_t)$
+is the probability ratio and $\hat{A}_t$ is the advantage estimate.
+The clipping parameter $\epsilon = 0.2$ prevents destructively large
+policy updates.
+
+\paragraph{Generalized Advantage Estimation (GAE).}
+Advantages are computed recursively via GAE
+\cite{schulman2016high}:
+\begin{equation}
+  \hat{A}_t = \sum_{l=0}^{T-t} (\gamma\lambda)^l \delta_{t+l},
+  \quad
+  \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t),
+  \label{eq:gae}
+\end{equation}
+where $\gamma = 0.998$ is the discount factor and $\lambda = 0.95$
+controls the bias--variance tradeoff.  At $\lambda = 0$, GAE reduces
+to the one-step TD error (low variance, high bias); at $\lambda = 1$,
+it becomes Monte Carlo estimation (high variance, low bias).
+
+\paragraph{Policy parameterization.}
+The policy outputs a Gaussian distribution
+$\pi_\theta(a|o) = \mathcal{N}(\mu_\theta(o), \sigma^2)$, where
+$\sigma$ is a learned per-action-dimension standard deviation
+(state-independent).
+
+\paragraph{Hyperparameters.}
+Table~\ref{tab:ppo_hypers} lists the PPO training configuration.
+
+\begin{table}[h]
+  \centering
+  \caption{PPO hyperparameters for teacher training.}
+  \label{tab:ppo_hypers}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Discount $\gamma$ & 0.998 \\
+    GAE $\lambda$ & 0.95 \\
+    Clip $\epsilon$ & 0.2 \\
+    Learning rate & $1 \times 10^{-3}$ \\
+    Mini-batches & 4 \\
+    Epochs per iteration & 5 \\
+    Entropy coefficient & 0.0 \\
+    Steps per env per iter & 48 \\
+    \# environments & 4096 \\
+    Simulator & Genesis (GPU) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Reward Function}
+
+The teacher is trained with a shaped reward function combining
+progress incentives, sparse bonuses, and regularization penalties.
+Table~\ref{tab:rewards} lists all terms with their scales.
+
+\begin{table}[h]
+  \centering
+  \caption{Reward function terms and scales.}
+  \label{tab:rewards}
+  \small
+  \begin{tabular}{@{}p{3.2cm}rl@{}}
+    \toprule
+    Term & Scale & Description \\
+    \midrule
+    tracking\_goal\_vel & 3.0 & Track goal velocity \\
+    tracking\_goal\_heading & 1.5 & Track heading \\
+    progress\_along\_course & 2.0 & Forward progress \\
+    waypoint\_bonus & 20.0 & Sparse bonus \\
+    success\_bonus & 40.0 & Course completion \\
+    termination & $-50.0$ & Early termination \\
+    collision & $-2.0$ & Body contact \\
+    feet\_stumble & $-1.0$ & Foot stumble \\
+    feet\_edge & $-2.0$ & Foot on edge \\
+    torques & $-2{\times}10^{-4}$ & Torque penalty \\
+    dof\_acc & $-2{\times}10^{-7}$ & Joint accel. \\
+    action\_rate & $-0.01$ & Action smooth. \\
+    dof\_pos\_limits & $-2.0$ & Joint limit \\
+    torque\_limits & $-0.2$ & Torque limit \\
+    lin\_vel\_z & $-0.5$ & Vertical vel. \\
+    ang\_vel\_xy & $-0.05$ & Roll/pitch rate \\
+    orientation & $-0.5$ & Non-upright \\
+    flat\_back & $-3.0$ & Torso orient. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{DAgger Distillation}
+\label{sec:dagger}
+
+The student policy is trained via Dataset Aggregation (DAgger)
+\cite{ross2011reduction}.  Unlike behavioral cloning (BC), which
+trains on a fixed dataset of expert demonstrations and suffers
+$O(T^2 \varepsilon)$ compounding error over horizon $T$, DAgger
+iteratively collects on-policy student rollouts labeled by the
+teacher, achieving $O(T\varepsilon)$ regret.
+
+In our setting, at each environment step the student observes
+$o_\text{prop}$ and a depth image, produces an action
+$a_\text{student}$, but the \emph{teacher's} action $a_\text{teacher}$
+is executed in the environment.  The student is trained to minimize:
+\begin{equation}
+  \mathcal{L} =
+  \underbrace{\|a_\text{teacher} - a_\text{student}\|_2}_{\text{action loss}}
+  + \underbrace{\|y_\text{oracle} - \hat{y}\|_2}_{\text{yaw loss}},
+  \label{eq:dagger_loss}
+\end{equation}
+where $\hat{y} \in \R^2$ is the student's predicted heading
+command and $y_\text{oracle}$ is the ground-truth heading.
+Both loss terms are weighted equally ($\alpha_\text{action} =
+\alpha_\text{yaw} = 1.0$).
+
+\paragraph{Windowed BPTT.}
+The student uses a GRU for temporal aggregation.  Na\"ive
+backpropagation through the full rollout ($N = 120$ steps) is
+memory-prohibitive.  Instead, we partition each rollout into
+$\lfloor N/W \rfloor$ windows of $W = 24$ steps and backpropagate
+through each window independently, detaching the GRU hidden state
+at window boundaries:
+\begin{equation}
+  \mathcal{L}_{\text{total}} = \frac{1}{\lfloor N/W \rfloor}
+  \sum_{k=1}^{\lfloor N/W \rfloor} \mathcal{L}_k,
+  \label{eq:bptt}
+\end{equation}
+where $\mathcal{L}_k$ is the loss over window $k$.  Gradients from
+all windows are accumulated before a single optimizer step.  This
+bounds peak memory to $O(W)$ while providing temporal gradient flow
+within each window.
+
+\paragraph{MTS yaw injection.}
+During training, the student's predicted heading is compared against
+the oracle.  When the prediction error
+$\|\hat{y}_\text{scaled} - y_\text{oracle}\|_2 < \tau_\text{yaw}$
+($\tau_\text{yaw} = 0.6$), the predicted heading replaces the
+masked heading in the student's proprioceptive observation,
+creating an implicit curriculum: the student must first learn accurate
+heading prediction before its heading estimate is used for
+action selection.
+
+\subsection{Monocular Depth as Domain-Invariant Representation}
+\label{sec:depth_theory}
+
+\paragraph{Scale-shift ambiguity.}
+Monocular depth estimation is inherently ill-posed: a single image
+cannot determine absolute scale.  DA2 is trained with an
+affine-invariant loss, producing predictions
+$\hat{d} = \alpha \cdot d_{\text{true}} + \beta$ up to unknown
+scale $\alpha$ and shift $\beta$ that vary per frame.
+
+\paragraph{Domain invariance.}
+We define a representation $f: \mathcal{I} \to \mathcal{Z}$ as
+\emph{domain-invariant} if the variance of $f(I)$ across visual
+domains $\mathcal{D}$ is much smaller than the variance of the
+input:
+\begin{equation}
+  \Var_{\mathcal{D}}\!\left[f(I_\mathcal{D})\right]
+  \ll
+  \Var_{\mathcal{D}}\!\left[I_\mathcal{D}\right].
+  \label{eq:domain_inv}
+\end{equation}
+The DA2 pipeline acts as an information bottleneck: it maps
+high-dimensional, domain-specific RGB images to a low-dimensional
+depth space that retains geometric structure while discarding
+appearance.  A student policy that consumes only this depth output
+should therefore be invariant to visual domain shifts by
+construction.
+
+In contrast, a student that directly processes RGB must learn its
+own invariances from data, making it vulnerable to domain shifts
+not seen during training.
+
+\paragraph{EMA normalization.}
+\label{sec:depth_norm}
+To handle DA2's affine ambiguity, we normalize inferred depth using
+online exponential moving average (EMA) percentile statistics.  Let
+$q_{t}^{(\text{lo})}$ and $q_{t}^{(\text{hi})}$ denote the 2nd and
+98th percentiles of the raw depth at step $t$:
+\begin{align}
+  \bar{q}^{(\text{lo})}_{t} &= (1 - \alpha)\,\bar{q}^{(\text{lo})}_{t-1} + \alpha\, q_{t}^{(\text{lo})}, \\
+  \bar{q}^{(\text{hi})}_{t} &= (1 - \alpha)\,\bar{q}^{(\text{hi})}_{t-1} + \alpha\, q_{t}^{(\text{hi})}, \\
+  d_{\text{norm}} &= \frac{d - \bar{q}^{(\text{lo})}}{\bar{q}^{(\text{hi})} - \bar{q}^{(\text{lo})}} - 0.5,
+  \label{eq:ema_norm}
+\end{align}
+where $\alpha = 0.02$ and $d_{\text{norm}}$ is clamped to
+$[-0.5, 0.5]$.  This maps the depth range to a fixed interval
+regardless of DA2's per-frame scale and shift.

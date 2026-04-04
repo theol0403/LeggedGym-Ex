@@ -1,0 +1,40 @@
+\section{Related Work}
+\label{sec:related}
+% ====================================================================
+
+\paragraph{RL for legged locomotion.}
+Modern quadruped controllers are typically learned via reinforcement
+learning in simulation.  RMA \cite{kumar2021rma} introduced the
+adaptation module paradigm, where a privileged teacher distills
+environment-specific knowledge into a deployable student.
+Lee~et~al.~\cite{lee2020learning} demonstrated sim-to-real transfer
+for rough terrain without explicit state estimation.
+
+\paragraph{Vision-based parkour.}
+Extreme Parkour \cite{cheng2023parkour} trains a scandot-based teacher
+and distills into a CNN--GRU student that processes depth images,
+demonstrating agile behaviors (jumping, climbing) on a real Go1.
+SoloParkour \cite{chane2025soloparkour} extends this with a
+single end-to-end policy.  Robot Parkour Learning
+\cite{zhuang2023robot} uses a similar teacher--student approach with
+explicit depth processing.  All three systems assume access to a
+depth camera at deployment.
+
+\paragraph{Sim-to-real for vision.}
+LucidSim \cite{yu2024lucidsim} uses generative models to produce
+photorealistic training images, achieving sim-to-real transfer for
+vision-based locomotion without real-world data.  Domain
+randomization \cite{tobin2017domain} perturbs visual properties
+(textures, lighting, colors) during training so the policy learns
+invariance through exposure.  Both approaches require significant
+computational overhead.
+
+\paragraph{Monocular depth estimation.}
+MiDaS \cite{ranftl2020towards} pioneered affine-invariant depth
+estimation across diverse datasets.  Depth~Anything~V2 (DA2)
+\cite{yang2024depth} builds on DINOv2 \cite{oquab2023dinov2}
+vision transformers trained with self-supervised learning on 142M
+images, achieving state-of-the-art zero-shot depth estimation.  DA2
+outputs are affine-invariant: they predict relative depth up to an
+unknown scale and shift, which we handle through online EMA
+normalization (Section~\ref{sec:depth_norm}).

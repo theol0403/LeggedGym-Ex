@@ -1,0 +1,70 @@
+\section{Discussion and Conclusion}
+\label{sec:conclusion}
+% ====================================================================
+
+\subsection{Summary}
+
+We presented a pipeline for vision-based quadruped parkour that uses
+monocular depth estimation as an intermediate representation.  Our
+systematic experiments revealed that depth signal quality---governed
+by model scale and terrain texture---is the primary bottleneck for
+student performance, not network architecture.  The best DA2-based
+student achieves 87\% gap success, within 7~pp of the ground-truth
+depth upper bound.
+
+The domain invariance experiment (Section~\ref{sec:domain}) revealed
+a nuanced picture: the DA2 pipeline provides strong invariance to
+color and brightness perturbations ($\leq$5.5~pp drop at moderate
+severity), which are the dominant sources of sim-to-real visual
+discrepancy.  DA2 also generalizes across different structured textures
+(bricks: $-$7.1~pp).  However, completely featureless surfaces cause
+catastrophic failure, reflecting a fundamental input requirement of
+monocular depth estimation rather than a domain invariance failure.
+
+\subsection{Implications}
+
+The DA2 pipeline provides effective domain invariance for the visual
+perturbations most relevant to sim-to-real transfer: lighting
+variation and color shifts.  This suggests that a student policy
+trained on DA2 depth in a simple simulation (with any structured
+texture) could transfer to real-world environments without
+photorealistic rendering, provided the real surfaces have natural
+visual texture---which is nearly universally the case.
+
+The key practical implication is a separation of concerns:
+the depth estimator handles domain invariance (absorbing
+appearance variation), while the student policy handles
+behavior (mapping depth to actions).  This modularity means
+improvements to either component are independent: better depth
+models improve signal quality without retraining the policy;
+better training curricula improve behavior without changing
+the visual pipeline.
+
+\subsection{Limitations}
+
+\begin{itemize}
+  \item \textbf{No real-world deployment.}  All experiments are in
+    simulation.  Real-world validation is needed to confirm
+    domain invariance transfers beyond simulated visual shifts.
+  \item \textbf{Computational cost.}  DA2-base (100M params) runs
+    at $\sim$40\,ms/frame on an L40S GPU, which may be too slow for
+    real-time deployment.  Distillation into a smaller network or
+    quantization could address this.
+  \item \textbf{Texture requirement.}  DA2 needs surface texture to
+    produce useful depth estimates.  Truly featureless surfaces (e.g.,
+    uniformly painted walls) may degrade performance.  However, most
+    real-world surfaces have natural texture.
+\end{itemize}
+
+\subsection{Future Work}
+
+\begin{itemize}
+  \item \textbf{Real-world deployment} on the Unitree Go2 with
+    onboard RGB camera.
+  \item \textbf{Larger depth models}: DA2-large (335M params) or
+    Video Depth Anything for temporal consistency.
+  \item \textbf{End-to-end fine-tuning} of the depth estimator
+    jointly with the student policy.
+  \item \textbf{Multi-task evaluation} across diverse real-world
+    environments (indoor, outdoor, varied lighting).
+\end{itemize}
