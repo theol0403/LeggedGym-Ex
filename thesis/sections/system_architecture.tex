@@ -2,7 +2,7 @@
 \label{sec:arch}
 % ====================================================================
 
-\subsection{Setup}
+\subsection{Overview}
 
 All experiments use the Genesis GPU
 simulator~\cite{genesis2024} with the
@@ -10,6 +10,17 @@ legged\_gym framework~\cite{rudin2022learning} and
 rsl\_rl~\cite{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
 The robot is a Unitree Go2 quadruped with 12 actuated joints.
 Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and converted to torques via a PD controller.
+\begin{equation}
+  \tau = K_p (a_t - q) - K_d \dot{q},
+  \label{eq:pd}
+\end{equation} 
+
+The system follows the two-stage privileged distillation pipeline
+described in Section~\ref{sec:intro}: a teacher trains with
+ground-truth scandot heightmaps~\cite{agarwal2023legged}, then a
+student reproduces the teacher's behavior from depth or RGB images
+via DAgger (Figure~\ref{fig:pipeline}).
+
 \begin{figure}[t]
   \centering
   % \includegraphics[width=\columnwidth]{figures/pipeline.pdf}
@@ -22,13 +33,13 @@ Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and conver
   \label{fig:pipeline}
 \end{figure}
 
-\subsection{Teacher Network}
+\subsection{Teacher}
 
-The teacher processes observations through three parallel MLP
-encoders---scandot ($\R^{132} \to \R^{32}$), privileged environment
-parameters ($\to \R^{32}$), and a 1D convolution over proprioceptive
-history---whose outputs are concatenated with proprioception and
-fed into the actor MLP ($\to \R^{12}$ joint targets).
+The teacher policy $\pi_T$ maps proprioception, privileged physics
+parameters, and scandot heightmaps to joint targets.  Three parallel
+MLPs encode each observation group into 32-dim latent vectors, which
+are concatenated with proprioception and fed through the actor MLP
+$\R^{n} \to \R^{12}$ to produce joint position offsets. 
 
 \subsection{Student Network}
 
