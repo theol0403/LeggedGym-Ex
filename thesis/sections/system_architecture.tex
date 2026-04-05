@@ -9,11 +9,7 @@ simulator~\cite{genesis2024} with the
 legged\_gym framework~\cite{rudin2022learning} and
 rsl\_rl~\cite{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
 The robot is a Unitree Go2 quadruped with 12 actuated joints.
-Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and converted to torques via a PD controller.
-\begin{equation}
-  \tau = K_p (a_t - q) - K_d \dot{q},
-  \label{eq:pd}
-\end{equation} 
+Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and converted to torques via a PD controller $\tau = K_p (a_t - q) - K_d \dot{q}$.
 
 The system follows the two-stage privileged distillation pipeline
 described in Section~\ref{sec:intro}: a teacher trains with
@@ -66,10 +62,11 @@ in the environment.
 
 The simulator generates parkour terrains with three obstacle families
 (stairs, hurdles, gaps) at four difficulty levels per family
-(Figure~\ref{fig:terrains}).  
-These obstacles are simpler than those in
+(Figure~\ref{fig:terrains})
+with gap widths from 0.24\,m to 0.50\,m.
+While these obstacles are simpler than those in
 prior work~\citep{cheng2023parkour, zhuang2023robot,
-chane2025soloparkour}; our goal is to establish a baseline for
+chane2025soloparkour}, our goal is to establish a baseline for
 evaluating the DA2 depth pipeline rather than to push the limits of
 agile locomotion.  During teacher training, a curriculum advances
 robots to harder rows upon reaching a success threshold.
@@ -84,3 +81,4 @@ robots to harder rows upon reaching a success threshold.
     (left to right within each family).}
   \label{fig:terrains}
 \end{figure}
+

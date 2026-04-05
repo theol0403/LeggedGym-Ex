@@ -2,38 +2,54 @@
 \label{sec:experiments}
 % ====================================================================
 
-\subsection{Teacher and GT-Depth Baselines}
+We evaluate the DA2 pipeline through three experiments:
+(1)~establishing upper-bound baselines with ground-truth sensing,
+(2)~closing the gap between estimated and ground-truth depth by
+varying model capacity and terrain texture, and
+(3)~testing domain invariance under visual perturbations.
+We report \emph{success rate} (fraction of episodes completing the
+full course) and \emph{progress ratio} (mean fractional distance
+along the course before termination), both averaged over 256
+episodes.
 
-Table~\ref{tab:baselines} shows the teacher and ground-truth depth
-student performance on gap terrain across difficulty rows.
+% ====================================================================
+\subsection{Baselines}
+\label{sec:baselines}
+
+Table~\ref{tab:baselines} 
+establishes upper bounds for the privileged teacher and the ground-truth depth sensing student (GT-depth).
+The privileged teacher achieves near-perfect success across all gap difficulties.
+
+The GT-depth student, receiving simulator depth images,
+achieves $\geq$87\% success on all rows, confirming the CNN--GRU
+architecture extracts sufficient geometry from a single depth viewpoint.
+A zero-depth ablation (all depth pixels set to zero)
+drops success to 8\%, verifying the policy relies on depth
+rather than exploiting proprioceptive heuristics.
 
 \begin{table}[h]
   \centering
-  \caption{Teacher and GT-depth baselines (gap success rate, \%).}
+  \caption{Baseline success rates on gap terrain (\%).}
   \label{tab:baselines}
   \small
   \begin{tabular}{@{}lcccc@{}}
     \toprule
-& Row~0 & Row~1 & Row~2 & Row~3 \\
-\midrule
-    Teacher (GT scandots) & 98.5 & 100.0 & 99.0 & 98.5 \\
+    & Row~0 & Row~1 & Row~2 & Row~3 \\
+    \midrule
+    Scandots teacher & 98.5 & 100.0 & 99.0 & 98.5 \\
     GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    Zero-depth ablation & 8.0 & 2.0 & 0.0 & 0.0 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The GT-depth student achieves $\geq$87\% on all rows, confirming
-the CNN--GRU architecture can extract sufficient geometric
-information from depth images.  The gap to the teacher (5--11~pp)
-reflects the inherent information loss from scandots to a single
-depth viewpoint.
 
 Figure~\ref{fig:teacher_training} shows the teacher's training
-dynamics.  Reward and success rate rise steeply over the first
-200 iterations as the policy masters flat terrain, then continue
-climbing as the adaptive curriculum exposes progressively harder
-obstacles.  By iteration~400, the curriculum has reached its
-maximum difficulty level and success saturates near~100\%.
+dynamics.  Reward rises steeply as the policy masters flat
+terrain, then continues climbing as the adaptive curriculum
+exposes progressively harder obstacles.  By iteration~400 the
+curriculum has reached maximum difficulty and success saturates
+near~100\%.
 
 \begin{figure}[h]
   \centering
@@ -44,63 +60,33 @@ maximum difficulty level and success saturates near~100\%.
   \label{fig:teacher_training}
 \end{figure}
 
-A zero-depth ablation (replacing all depth pixels with zero)
-drops success to 0--8\%, confirming the student relies on depth
-for gap navigation rather than exploiting proprioceptive heuristics.
 
-\subsection{DA2 Depth Estimation Students}
+% ====================================================================
+\subsection{Parkour from Estimated Depth}
 \label{sec:da2_results}
 
-\paragraph{DA2-small ($\sim$25M params).}
-Initial experiments with the smaller DA2 model plateaued at
-$\sim$56\% gap success on Row~0, despite extensive
-hyperparameter search across learning rates, curriculum schedules,
-and normalization schemes (Table~\ref{tab:da2_small}).
-Over 30 training runs established this as a consistent ceiling.
+We progressively close the gap between DA2-estimated depth and
+the GT-depth upper bound by improving two factors that govern
+depth signal quality: model scale and terrain texture.
 
-\begin{table}[h]
-  \centering
-  \caption{DA2-small experiments (best of 30+ runs).}
-  \label{tab:da2_small}
-  \small
-  \begin{tabular}{@{}lcc@{}}
-    \toprule
-    Configuration & Row~0 & Row~1 \\
-    \midrule
-    Best (diff-lr + cosine) & 56.3\% & 33.6\% \\
-    Fixed-range normalization & $\sim$45\% & --- \\
-    Calibrated linear & $\sim$45\% & --- \\
-    Frozen actor & $\sim$40\% & --- \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\paragraph{Root cause: depth signal quality.}
-Analysis of DA2-small depth maps on untextured terrain revealed
-the core issue.  Without visual texture, DA2 produces nearly flat
-depth estimates (terrain--depth correlation $r = -0.10$), making
-gaps almost invisible.  The gap-vs-ground pixel signal spans only
-4.5\% of the normalized output range---too weak for reliable
-detection through the CNN encoder.
-
-\paragraph{DA2-base ($\sim$100M params).}
-Upgrading to the four-times-larger DA2-base model immediately
-improved performance.  Row~0 improved from 56\% to 68\% (+12~pp)
-and Row~1 from 34\% to 83\% (+49~pp).  However, Row~3 remained
-near zero (0.8\%), indicating that model scale alone does not solve
-the hardest gaps.
+\paragraph{Model scale.}
+DA2-small ($\sim$25M params) plateaued at $\sim$56\% on Row~0.
+DA2-base ($\sim$100M params) improved Row~0 to 68\% and Row~1
+to 83\%, but Row~3 remained near zero.
+On untextured terrain, DA2-small produces nearly flat depth
+estimates (terrain--depth correlation $r = -0.10$), making gaps
+invisible to the CNN.
 
 \paragraph{Terrain texture.}
-Adding a checkerboard texture to the terrain surface provides DA2
-with visual features to estimate depth from, since monocular depth
-estimation relies on texture gradients, perspective cues, and
-learned priors.  Combined with DA2-base, this produced a
-breakthrough:
+Monocular depth estimation relies on visual features (texture
+gradients, edges, perspective cues).  Adding a checkerboard
+texture to the simulated terrain provides these features, and
+combined with DA2-base produced a step-change in performance:
 
 \begin{table}[h]
   \centering
-  \caption{Effect of DA2 model size and terrain texture on gap
-  success rate (\%).}
+  \caption{Effect of model scale and terrain texture on gap
+  success (\%).  GT-depth shown as upper bound.}
   \label{tab:da2_main}
   \small
   \begin{tabular}{@{}lcccc@{}}
@@ -112,79 +98,118 @@ breakthrough:
     \textbf{DA2-base + texture} & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
     \midrule
     GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
-    Gap to GT & $-$7.0 & $-$1.5 & $-$2.0 & $-$7.0 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The DA2-base + texture student (checkpoint 7000) reaches 80--93\%
-across all rows, within 7~pp of the GT-depth upper bound.  Row~3
-improved from 0.8\% to 80.5\%---a +80~pp gain from texture alone.
+DA2-base + texture reaches 80--93\% across all rows, within 7~pp
+of the GT-depth upper bound.  Row~3 improved from 0.8\% to
+80.5\%---a +80~pp gain from texture alone.
 
-Figure~\ref{fig:student_success} shows training dynamics across
-all student pipelines.  DA2-base + texture converges to near-100\%
-overall success by iteration~5000, matching the GT-depth student
-upper bound.  DA2-base (no texture) plateaus around~82\%, while
-DA2-small saturates at~56\%.
+Figure~\ref{fig:student_success} shows training dynamics.
+DA2-base + texture converges to near-100\% overall success by
+iteration~5000.  Figure~\ref{fig:per_obstacle} breaks down
+performance by obstacle type: the texture effect is concentrated
+on gaps, where ground-level geometry provides no vertical surfaces
+for DA2 to detect.  Stairs and hurdles are solved equally well
+with or without texture.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
   \caption{Overall success rate during student training.
-  DA2-base + texture matches the GT-depth upper bound, while
+    DA2-base + texture matches the GT-depth upper bound, while
   DA2-base (no texture) and DA2-small plateau at lower levels.}
   \label{fig:student_success}
 \end{figure}
-
-Figure~\ref{fig:per_obstacle} breaks down success by obstacle
-type.  The texture effect is concentrated on gap terrain: without
-texture, DA2-base achieves only~64\% gap success vs.~100\% with
-texture.  Stairs and hurdle/block obstacles are solved equally
-well with or without texture, since these obstacles are detectable
-from their vertical surfaces regardless of ground texture.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/per_obstacle_success.pdf}
   \caption{Per-obstacle success rate.  Terrain texture is critical
-  for gap detection but unnecessary for stairs and hurdles, which
+    for gap detection but unnecessary for stairs and hurdles, which
   present vertical surfaces visible without ground texture.}
   \label{fig:per_obstacle}
 \end{figure}
 
-\paragraph{Negative results.}
-Several architectural modifications did not improve performance:
-temporal EMA smoothing of depth frames hurt convergence;
-Sobel gradient channels produced $\sim$40\% (below baseline);
-alternative normalizations (calibrated linear, fixed range, mean-std)
-performed comparably to EMA percentile.  This reinforces the finding
-that depth \emph{signal quality} dominates architectural choices.
+% ====================================================================
+\subsection{Domain Invariance}
+\label{sec:domain}
 
-\subsection{Key Finding: Signal Quality Over Architecture}
+The preceding results establish that DA2 enables strong parkour
+performance.  We now test the core hypothesis: does the DA2 pipeline
+provide invariance to visual domain shifts?
 
-Across all experiments, the dominant factor in student performance
-was the quality of the depth signal reaching the encoder, not the
-encoder architecture itself.  Evidence:
+\paragraph{Protocol.}
+We apply perturbations at \emph{test time only} to the trained
+DA2-base + texture student (Section~\ref{sec:da2_results}).
+Perturbations span two categories:
 \begin{itemize}
-  \item Architecture ablations (Sobel gradients, scandot prediction,
-    GRU size, frozen actor) produced $<$15~pp variation.
-  \item Depth quality changes (model size: +12--49~pp; texture:
-    +72~pp on Row~3) produced order-of-magnitude larger effects.
+  \item \textbf{Texture replacement}: the training checkerboard is
+    replaced with structured alternatives (bricks, perlin noise)
+    or featureless surfaces (no texture, solid colors, flat grey).
+  \item \textbf{Color jitter}: global brightness scaling
+    ($\pm$30\%, $\pm$60\%) and per-channel color shifts
+    ($\pm$15\%, $\pm$30\%) applied to rendered RGB before DA2
+    inference.
 \end{itemize}
-This suggests that future work should prioritize depth estimation
-quality (larger models, better training data) over student
-architecture complexity.
+We also test combined perturbations at mild and extreme severity.
+Each condition uses 128 episodes on gap Row~0.
 
-The distillation loss curves (Figure~\ref{fig:loss}) corroborate
-this finding: DA2-base + texture achieves the lowest action loss
-(0.25), followed by DA2-base (0.37) and DA2-small (0.47).
-Better depth signals produce lower imitation error, which
-directly translates to higher task success.
+\paragraph{Results.}
+Table~\ref{tab:domain_inv} shows a clean separation between two
+types of visual shift.
 
-\begin{figure}[h]
+\begin{table}[h]
   \centering
-  \includegraphics[width=\linewidth]{figures/distillation_loss.pdf}
-  \caption{Distillation action loss.  Lower loss correlates with
-  better depth signal quality and higher task success.}
-  \label{fig:loss}
-\end{figure}
+  \caption{Domain invariance: DA2-base + texture student on gap
+  Row~0 under visual perturbations.}
+  \label{tab:domain_inv}
+  \small
+  \begin{tabular}{@{}p{3.6cm}rrr@{}}
+    \toprule
+    Perturbation & Succ. & Prog. & $\Delta$ \\
+    \midrule
+    Baseline (checkerboard) & 96.9\% & .948 & --- \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Texture replacement (structured)}} \\
+    \quad Bricks & 89.8\% & .908 & $-$7.1 \\
+    \quad Noise & 78.1\% & .843 & $-$18.8 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Texture removal (featureless)}} \\
+    \quad No texture & 18.0\% & .437 & $-$78.9 \\
+    \quad Solid red & 23.4\% & .471 & $-$73.5 \\
+    \quad Solid blue & 14.8\% & .417 & $-$82.1 \\
+    \quad Flat grey & 18.0\% & .456 & $-$78.9 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Color / brightness jitter}} \\
+    \quad Brightness $\pm$30\% & 95.3\% & .937 & $-$1.6 \\
+    \quad Brightness $\pm$60\% & 94.5\% & .935 & $-$2.4 \\
+    \quad Color $\pm$15\% & 91.4\% & .914 & $-$5.5 \\
+    \quad Color $\pm$30\% & 76.6\% & .816 & $-$20.3 \\
+    \midrule
+    \multicolumn{4}{@{}l}{\textit{Combined}} \\
+    \quad Mild (bricks+b30+c15) & 82.0\% & .862 & $-$14.9 \\
+    \quad Extreme (noise+b60+c30) & 63.3\% & .747 & $-$33.6 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Analysis.}
+DA2 is robust to color and brightness changes---the perturbations
+most relevant to sim-to-real transfer.  Brightness jitter at
+$\pm$60\% causes only 2.4~pp drop; color jitter at $\pm$15\%
+causes 5.5~pp.  DA2 also generalizes across structured textures
+(bricks: $-$7.1~pp).
+
+Removing texture entirely causes catastrophic failure
+($-$73 to $-$82~pp).  This is not a domain invariance failure
+but an input quality requirement: monocular depth fundamentally
+needs visual features to infer geometry.  Real-world surfaces
+(concrete, wood, soil) universally have natural texture, so this
+failure mode is an artifact of the simulator's ability to create
+unrealistically featureless geometry.
+
+Combined perturbations compound but degrade gracefully: the
+mild condition (bricks + brightness~30\% + color~15\%) maintains
+82.0\% success, while the extreme condition drops to 63.3\%.

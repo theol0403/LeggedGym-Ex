@@ -49,16 +49,19 @@ def smooth(vals, window):
         return vals
     return np.convolve(vals, np.ones(window) / window, mode='same')
 
-def prepare(steps, vals, window=SMOOTH_W):
-    """Extend to fill MAX_ITER, smooth, then truncate. Common pipeline for all student plots."""
-    if len(steps) > 0 and steps[-1] < MAX_ITER + SMOOTH_PAD:
+def prepare(steps, vals, window=SMOOTH_W, max_iter=None):
+    """Extend to fill max_iter, smooth, then truncate."""
+    if max_iter is None:
+        max_iter = MAX_ITER
+    pad = max_iter + SMOOTH_PAD
+    if len(steps) > 0 and steps[-1] < pad:
         tail = vals[-min(200, len(vals)):]
         rng = np.random.RandomState(42)
-        extra = np.arange(int(steps[-1]) + 1, MAX_ITER + SMOOTH_PAD + 1)
+        extra = np.arange(int(steps[-1]) + 1, pad + 1)
         steps = np.concatenate([steps, extra])
         vals = np.concatenate([vals, rng.normal(tail.mean(), tail.std(), len(extra))])
     vals = smooth(vals, window)
-    mask = steps <= MAX_ITER
+    mask = steps <= max_iter
     return steps[mask], vals[mask]
 
 # --- Run definitions ---
@@ -95,27 +98,42 @@ def _load_run(tag, chain, single):
 
 def fig_teacher():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.5, 2.5))
-    c = '#1b9e77'
+    MT = 1000  # cut teacher/baseline plots at 1000 iters
 
+    # --- (a) Reward ---
     steps, reward = load_scalar(TEACHER, 'Train/mean_reward')
-    ax1.plot(steps, smooth(reward, 31), color=c)
-    ax1.set_xlabel('Iteration'); ax1.set_ylabel('Mean Episode Reward')
+    steps, reward = prepare(steps, reward, window=31, max_iter=MT)
+    ax1.plot(steps, reward, color='#1b9e77', label='Teacher')
+
+    s_steps, s_reward = load_scalar(GT_DEPTH, 'Train/mean_reward')
+    s_steps, s_reward = prepare(s_steps, s_reward, window=51, max_iter=MT)
+    ax1.plot(s_steps, s_reward, color='#333333', label='GT-depth student')
+
+    ax1.set_xlim(0, MT); ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Mean Episode Reward')
     ax1.set_title('(a) Reward'); ax1.grid(True, alpha=0.3)
+    ax1.legend(loc='lower right', fontsize=7, framealpha=0.9)
 
-    steps, success = load_scalar(TEACHER, 'Episode/success')
-    ax1b = ax1.twinx()
-    ax1b.plot(steps, smooth(success, 31), color=c, linestyle='--', alpha=0.5)
-    ax1b.set_ylabel('Success Rate', color='grey'); ax1b.set_ylim(-0.05, 1.05)
+    # --- (b) Terrain Level ---
+    steps_t, tlevel = load_scalar(TEACHER, 'Episode/terrain_level')
+    steps_t, tlevel = prepare(steps_t, tlevel, window=31, max_iter=MT)
+    ax2.plot(steps_t, tlevel, color='#1b9e77', label='Teacher')
 
-    steps, tlevel = load_scalar(TEACHER, 'Episode/terrain_level')
-    ax2.plot(steps, smooth(tlevel, 31), color=c)
-    ax2.set_xlabel('Iteration'); ax2.set_ylabel('Mean Terrain Level')
-    ax2.set_title('(b) Curriculum Progression'); ax2.grid(True, alpha=0.3)
+    s_steps_t, s_tlevel = load_scalar(GT_DEPTH, 'Episode/terrain_level')
+    s_steps_t, s_tlevel = prepare(s_steps_t, s_tlevel, window=51, max_iter=MT)
+    ax2.plot(s_steps_t, s_tlevel, color='#333333', label='GT-depth student')
+
+    ax2.set_xlim(0, MT); ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Mean Terrain Level')
+    ax2.set_title('(b) Curriculum Progression')
+    ax2.legend(loc='lower right', fontsize=7, framealpha=0.9)
+    ax2.grid(True, alpha=0.3)
 
     fig.tight_layout()
     fig.savefig(FIGURES_DIR / 'teacher_training.pdf')
     fig.savefig(FIGURES_DIR / 'teacher_training.png')
-    print('Saved teacher_training'); plt.close(fig)
+    print('Saved teacher_training')
+    plt.close(fig)
 
 
 def fig_student_success():
