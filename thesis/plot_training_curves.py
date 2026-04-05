@@ -21,7 +21,7 @@ plt.rcParams.update({
 })
 
 FIGURES_DIR = Path('thesis/figures')
-LOG_ROOT = Path('logs')
+LOG_ROOT = Path('logs_archive')
 
 # --- Helpers ---
 
@@ -42,12 +42,12 @@ def smooth(vals, window=51):
     return np.convolve(vals, kernel, mode='same')
 
 # --- Run paths ---
-TEACHER = LOG_ROOT / 'go2_parkour_teacher/Mar26_05-05-21_teacher_genesis'
-GT_SCANDOT = LOG_ROOT / 'go2_parkour_scandot_student/Mar31_22-48-40_scandot_student_genesis'
-DA2_BASE_TEX = LOG_ROOT / 'go2_parkour_depth_est_student/Mar29_13-36-08_BASE3_da2_base_texture'
-DA2_BASE = LOG_ROOT / 'go2_parkour_depth_est_student/Mar29_08-06-01_BASE1_da2_base'
-DA2_SMALL = LOG_ROOT / 'go2_parkour_depth_est_student/Mar27_21-12-08_S14_diff_lr_cosine'
-RESNET_RGB = LOG_ROOT / 'go2_parkour_resnet_rgb_scandot_student/Apr01_23-47-30_resnet_rgb_scandot_student_genesis'
+TEACHER = LOG_ROOT / '01_teacher_primary/Mar26_05-05-21_teacher_genesis'
+GT_SCANDOT = LOG_ROOT / '02_scandot_student_GT/Mar31_22-48-40_scandot_student_genesis'
+DA2_BASE_TEX = LOG_ROOT / '03_da2_base_texture_BEST/Mar29_13-36-08_BASE3_da2_base_texture'
+DA2_BASE = LOG_ROOT / '04_da2_base_no_texture/Mar29_08-06-01_BASE1_da2_base'
+DA2_SMALL = LOG_ROOT / '05_da2_small_best/Mar27_21-12-08_S14_diff_lr_cosine'
+RESNET_RGB = LOG_ROOT / '06_resnet_rgb_student/Apr01_23-47-30_resnet_rgb_scandot_student_genesis'
 
 COLORS = {
     'teacher': '#1b9e77',
@@ -64,24 +64,38 @@ COLORS = {
 def fig_teacher():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.5, 2.5))
 
+    # Trim last iteration to avoid artifact
+    trim = -20
+
     steps, reward = load_scalar(TEACHER, 'Train/mean_reward')
-    ax1.plot(steps, smooth(reward, 31), color=COLORS['teacher'])
+    ax1.plot(steps[:trim], smooth(reward, 31)[:trim],
+             color=COLORS['teacher'], label='Reward')
     ax1.set_xlabel('Iteration')
     ax1.set_ylabel('Mean Episode Reward')
     ax1.set_title('(a) Reward')
     ax1.grid(True, alpha=0.3)
 
-    steps, success = load_scalar(TEACHER, 'Episode/success')
+    steps_s, success = load_scalar(TEACHER, 'Episode/success')
     ax1b = ax1.twinx()
-    ax1b.plot(steps, smooth(success, 31), color=COLORS['teacher'], linestyle='--', alpha=0.5)
-    ax1b.set_ylabel('Success Rate', color='grey')
+    ax1b.plot(steps_s[:trim], smooth(success, 31)[:trim],
+              color=COLORS['teacher'], linestyle='--', alpha=0.6,
+              label='Success Rate')
+    ax1b.set_ylabel('Success Rate')
     ax1b.set_ylim(-0.05, 1.05)
 
-    steps, tlevel = load_scalar(TEACHER, 'Episode/terrain_level')
-    ax2.plot(steps, smooth(tlevel, 31), color=COLORS['teacher'])
+    # Combined legend from both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax1b.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2,
+               loc='center right', framealpha=0.9)
+
+    steps_t, tlevel = load_scalar(TEACHER, 'Episode/terrain_level')
+    ax2.plot(steps_t[:trim], smooth(tlevel, 31)[:trim],
+             color=COLORS['teacher'], label='Terrain Level')
     ax2.set_xlabel('Iteration')
     ax2.set_ylabel('Mean Terrain Level')
     ax2.set_title('(b) Curriculum Progression')
+    ax2.legend(loc='center right', framealpha=0.9)
     ax2.grid(True, alpha=0.3)
 
     fig.tight_layout()

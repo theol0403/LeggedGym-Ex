@@ -79,4 +79,6 @@ resources/terrains/*.stl
 *.toc
 *.xdv
 research/*.pdf
+thesis/*.pdf
 research/arXiv-2409.13678v1 (1).tar/*.pdf
+logs_archive

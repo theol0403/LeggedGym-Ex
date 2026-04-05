@@ -2,31 +2,51 @@
 \label{sec:experiments}
 % ====================================================================
 
-\subsection{Teacher and GT-Depth Baselines}
+\subsection{Methodology}
 
-Table~\ref{tab:baselines} shows the teacher and ground-truth depth
-student performance on gap terrain across difficulty rows.
+We evaluate the DA2 pipeline through three sets of experiments in simulation:
+(1)~establishing upper-bound baselines of a ground-truth depth sensing student,
+(2)~demonstrating that parkour from estimated monocular depth is
+viable and identifying the conditions required to do so, and
+(3)~testing the domain-invariance hypothesis under visual
+perturbations. We report \emph{success rate} (fraction of episodes completing the
+full course) and \emph{progress ratio} (mean fractional distance
+reached before termination).
+
+% ====================================================================
+\subsection{Baselines}
+\label{sec:baselines}
+
+Table~\ref{tab:baselines} 
+establishes upper bounds for the privileged teacher and the ground-truth depth sensing student (GT-depth).
+The privileged teacher achieves near-perfect success across all gap difficulties.
+
+The GT-depth student, which receives depth images from
+the simulator, achieves $\geq$87\% success on all rows, confirming the CNN--GRU
+architecture can extract sufficient geometry from depth.
+The slight performance gap reflects the inherent information loss from
+scandots to a single depth viewpoint.
+
+A zero-depth ablation (replacing all depth pixels with zero)
+drops success to 0--8\%, confirming the student relies on depth
+for gap navigation rather than exploiting proprioceptive heuristics.
 
 \begin{table}[h]
   \centering
-  \caption{Teacher and GT-depth baselines (gap success rate, \%).}
+  \caption{Baseline success rates on gap terrain (\%).}
   \label{tab:baselines}
   \small
   \begin{tabular}{@{}lcccc@{}}
     \toprule
-& Row~0 & Row~1 & Row~2 & Row~3 \\
-\midrule
-    Teacher (GT scandots) & 98.5 & 100.0 & 99.0 & 98.5 \\
+    & Row~0 & Row~1 & Row~2 & Row~3 \\
+    \midrule
+    Scandots teacher & 98.5 & 100.0 & 99.0 & 98.5 \\
     GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    Zero-depth ablation & 8.0 & 2.0 & 0.0 & 0.0 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The GT-depth student achieves $\geq$87\% on all rows, confirming
-the CNN--GRU architecture can extract sufficient geometric
-information from depth images.  The gap to the teacher (5--11~pp)
-reflects the inherent information loss from scandots to a single
-depth viewpoint.
 
 Figure~\ref{fig:teacher_training} shows the teacher's training
 dynamics.  Reward and success rate rise steeply over the first
@@ -38,15 +58,10 @@ maximum difficulty level and success saturates near~100\%.
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/teacher_training.pdf}
-  \caption{Teacher training curves.  (a)~Mean episode reward
-  (solid) and success rate (dashed).  (b)~Mean terrain difficulty
-  level assigned by the adaptive curriculum.}
+  \caption{Teacher training curves.}
   \label{fig:teacher_training}
 \end{figure}
 
-A zero-depth ablation (replacing all depth pixels with zero)
-drops success to 0--8\%, confirming the student relies on depth
-for gap navigation rather than exploiting proprioceptive heuristics.
 
 \subsection{DA2 Depth Estimation Students}
 \label{sec:da2_results}
