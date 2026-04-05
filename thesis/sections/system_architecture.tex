@@ -2,6 +2,14 @@
 \label{sec:arch}
 % ====================================================================
 
+\subsection{Setup}
+
+All experiments use the Genesis GPU
+simulator~\cite{genesis2024} with the
+legged\_gym framework~\cite{rudin2022learning} and
+rsl\_rl~\cite{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
+The robot is a Unitree Go2 quadruped with 12 actuated joints.
+Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and converted to torques via a PD controller.
 \begin{figure}[t]
   \centering
   % \includegraphics[width=\columnwidth]{figures/pipeline.pdf}
@@ -51,11 +59,10 @@ architecture as the teacher actor.
   \label{fig:student_arch}
 \end{figure}
 
-\subsection{ResNet-18 RGB Baseline}
+\paragraph{RGB baseline.}
 \label{sec:resnet}
-
-To compare DA2-mediated depth with direct RGB, we train a student
-variant that replaces the depth CNN with a frozen
+To compare DA2 depth with direct RGB, we train a student that
+replaces the depth CNN with a frozen
 ResNet-18~\cite{he2016deep} truncated at \texttt{layer2}, producing
 a 32-dim feature via adaptive pooling and a trainable projection.
 The rest of the architecture (GRU, actor) is identical.
