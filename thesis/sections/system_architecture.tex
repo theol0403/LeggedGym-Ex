@@ -60,18 +60,33 @@ in the environment.
   \centering
   \fbox{\parbox[c][5.5em][c]{0.9\columnwidth}{\centering
       \textbf{[Student architecture diagram]}\\
-      Depth CNN $\to$ Combo MLP $\to$ GRU $\to$ [latent + yaw]\\
+      Depth CNN $\to$ Fusion MLP $\to$ GRU $\to$ [latent + yaw]\\
       {}\![proprio; latent] $\to$ Actor MLP $\to$ actions}}
-  \caption{Student recurrent depth encoder architecture.  The CNN
-    depth backbone and proprioception feed into a GRU that produces
-  a terrain latent and heading estimate.}
+  \caption{Student visual encoder.  The depth CNN and proprioception
+    are fused and processed by a GRU that produces the terrain latent
+  and heading estimate used by the teacher's actor MLP.}
   \label{fig:student_arch}
 \end{figure}
 
 \subsection{Terrain and Curriculum}
 
-The simulator generates parkour terrains with three obstacle
-families (stairs, hurdles, gaps) at four difficulty levels.
-Gap widths range from 0.24\,m (Row~0) to 0.50\,m (Row~3).  During
-teacher training, a curriculum advances robots to harder rows upon
-success.
+The simulator generates parkour terrains with three obstacle families
+(stairs, hurdles, gaps) at four difficulty levels per family
+(Figure~\ref{fig:terrains}).  
+These obstacles are simpler than those in
+prior work~\citep{cheng2023parkour, zhuang2023robot,
+chane2025soloparkour}; our goal is to establish a baseline for
+evaluating the DA2 depth pipeline rather than to push the limits of
+agile locomotion.  During teacher training, a curriculum advances
+robots to harder rows upon reaching a success threshold.
+
+\begin{figure}[t]
+  \centering
+  % \includegraphics[width=\columnwidth]{figures/terrains.pdf}
+  \fbox{\parbox[c][5em][c]{0.9\columnwidth}{\centering
+      \textbf{[Terrain screenshots]}\\
+      Stairs \quad Hurdles \quad Gaps}}
+  \caption{Simulated parkour terrains at increasing difficulty
+    (left to right within each family).}
+  \label{fig:terrains}
+\end{figure}
