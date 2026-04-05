@@ -2,18 +2,6 @@
 \label{sec:arch}
 % ====================================================================
 
-\subsection{Training Pipeline}
-
-The system follows a two-stage pipeline (Figure~\ref{fig:pipeline}):
-\begin{enumerate}
-  \item \textbf{Stage 1 (Teacher).}  A privileged teacher policy is
-    trained via PPO with access to ground-truth scandot
-    heightmaps~\cite{agarwal2023legged}.
-  \item \textbf{Stage 2 (Student).}  A student policy is trained via
-    DAgger, replacing the privileged scandots with depth (GT, DA2, or
-    RGB).
-\end{enumerate}
-
 \begin{figure}[t]
   \centering
   % \includegraphics[width=\columnwidth]{figures/pipeline.pdf}
@@ -28,66 +16,28 @@ The system follows a two-stage pipeline (Figure~\ref{fig:pipeline}):
 
 \subsection{Teacher Network}
 
-The teacher (ActorCriticRMA) processes observations through three
-parallel encoders:
-\begin{itemize}
-  \item \textbf{Scandot encoder}: $\R^{132} \to \R^{32}$ via MLP
-    $[132 \to 128 \to 64 \to 32]$.
-  \item \textbf{Privileged encoder}: $\R^{k_\text{priv}} \to \R^{32}$
-    via MLP.
-  \item \textbf{History encoder}: 1D convolution over past
-    proprioceptive observations.
-\end{itemize}
-The concatenated features plus proprioception feed into the actor MLP
-$[512 \to 256 \to 128 \to 12]$ with ELU activations.  A parallel
-critic network estimates $V(s)$ for GAE.
-
-\paragraph{PD control.}
-The 12-dim actor output specifies target joint position offsets,
-scaled by 0.25\,rad.  A PD controller converts these to torques
-at 250\,Hz (decimation ratio~5, yielding 50\,Hz policy frequency):
-$\tau = K_p (a_t^{\text{scaled}} - q) + K_d (-\dot{q})$,
-with $K_p = 35$ and $K_d = 0.5$ per joint.
+The teacher processes observations through three parallel MLP
+encoders---scandot ($\R^{132} \to \R^{32}$), privileged environment
+parameters ($\to \R^{32}$), and a 1D convolution over proprioceptive
+history---whose outputs are concatenated with proprioception and
+fed into the actor MLP ($\to \R^{12}$ joint targets).
 
 \subsection{Student Network}
 
-The student (ActorCriticParkourStudent) replaces the scandot encoder
-with a recurrent depth encoder (Figure~\ref{fig:student_arch}):
-
-\paragraph{Depth backbone.}
+The student replaces the scandot encoder with a recurrent depth
+encoder (Figure~\ref{fig:student_arch}).
 \label{sec:depth_norm}
-DA2's metric depth output is normalized to $[-0.5, 0.5]$ via online
-EMA percentile statistics to standardize the input range.
-A CNN then processes the single-channel depth images $(1 \times 58 \times 87)$:
-\begin{center}
-  \small
-  Conv2d(1,32,5) $\to$ MaxPool(2) $\to$ ELU \\
-  $\to$ Conv2d(32,64,3) $\to$ ELU \\
-  $\to$ Flatten $\to$ Linear($64{\times}25{\times}39$, 128) \\
-  $\to$ ELU $\to$ Linear(128, 32)
-\end{center}
+DA2's metric depth output is first normalized to $[-0.5, 0.5]$
+via online EMA percentile statistics.
+A CNN backbone reduces the depth image to a 32-dim feature vector,
+which is concatenated with proprioception (heading commands masked
+to zero), passed through a combination MLP, and fed into a
+single-layer GRU (hidden dim 512) that provides temporal context.
 
-\paragraph{Combination MLP.}
-The 32-dim backbone output is concatenated with the 53-dim
-proprioceptive observation (with heading commands masked to zero) and
-processed by a two-layer MLP: $[85 \to 128 \to 32]$.
-
-\paragraph{GRU temporal encoder.}
-A single-layer GRU with hidden dim 512 processes the 32-dim
-combination features.  The GRU provides temporal context critical for
-handling the DA2 update interval (every 5 steps) and accumulating
-geometric information over time.
-
-\paragraph{Output heads.}
-The GRU output feeds a linear layer with Tanh activation producing
-a 34-dim vector: 32-dim terrain latent $z$ and 2-dim heading
-prediction $\hat{y}$ (scaled by 1.5).
-
-\paragraph{Actor MLP.}
-The actor MLP takes $[o_\text{prop}; z] \in \R^{85}$ and outputs
-12 joint targets via the same architecture as the teacher actor:
-$[512 \to 256 \to 128 \to 12]$ with ELU and Hardtanh($\pm$100)
-output clipping.
+The GRU output produces a 32-dim terrain latent $z$ and a 2-dim
+heading prediction $\hat{y}$.  The actor MLP takes
+$[o_\text{prop}; z]$ and outputs 12 joint targets, sharing the same
+architecture as the teacher actor.
 
 \begin{figure}[t]
   \centering
@@ -104,21 +54,16 @@ output clipping.
 \subsection{ResNet-18 RGB Baseline}
 \label{sec:resnet}
 
-To compare DA2-mediated depth with direct RGB processing, we train a
-student variant that replaces the depth CNN backbone with a frozen
-ResNet-18 \cite{he2016deep} truncated at \texttt{layer2}.  The
-ResNet processes 3-channel RGB images $(3 \times 58 \times 87)$ and
-produces a 32-dim feature vector via adaptive average pooling and a
-trainable linear projection.  The frozen backbone contributes
-$\sim$683K parameters (no gradients), while only the 4K-parameter
-projection layer and the GRU/actor are trained.  This provides a
-direct RGB baseline with minimal training overhead: 3.2\,s/iter and
-16\,GB VRAM vs.\ 10.8\,s/iter and 28\,GB for the DA2 pipeline.
+To compare DA2-mediated depth with direct RGB, we train a student
+variant that replaces the depth CNN with a frozen
+ResNet-18~\cite{he2016deep} truncated at \texttt{layer2}, producing
+a 32-dim feature via adaptive pooling and a trainable projection.
+The rest of the architecture (GRU, actor) is identical.
 
 \subsection{Terrain and Curriculum}
 
-The Genesis simulator generates parkour terrains with three obstacle
-families (stairs, hurdles, gaps) at four difficulty levels per family.
+The simulator generates parkour terrains with three obstacle
+families (stairs, hurdles, gaps) at four difficulty levels.
 Gap widths range from 0.24\,m (Row~0) to 0.50\,m (Row~3).  During
 teacher training, a curriculum advances robots to harder rows upon
 success.
