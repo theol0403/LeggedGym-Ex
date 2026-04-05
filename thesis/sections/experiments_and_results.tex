@@ -44,19 +44,18 @@ rather than exploiting proprioceptive heuristics.
 \end{table}
 
 
-Figure~\ref{fig:teacher_training} shows the teacher's training
-dynamics.  Reward rises steeply as the policy masters flat
-terrain, then continues climbing as the adaptive curriculum
-exposes progressively harder obstacles.  By iteration~400 the
-curriculum has reached maximum difficulty and success saturates
-near~100\%.
+Figure~\ref{fig:teacher_training} shows training dynamics for both
+baseline stages. Reward rises steeply as the policy masters flat terrain, then continues
+climbing as the adaptive curriculum exposes progressively harder
+obstacles. The teacher converges as the
+curriculum reaches maximum difficulty. The GT-depth student's
+distillation loss drops quickly but success climbs gradually, reflecting the difficulty of recovering the
+teacher's behavior from a single depth viewpoint.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/teacher_training.pdf}
-  \caption{Teacher training curves.  (a)~Mean episode reward
-  (solid) and success rate (dashed).  (b)~Mean terrain difficulty
-  level assigned by the adaptive curriculum.}
+  \caption{Baseline training curves.}
   \label{fig:teacher_training}
 \end{figure}
 
