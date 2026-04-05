@@ -41,22 +41,20 @@ MLPs encode each observation group into 32-dim latent vectors, which
 are concatenated with proprioception and fed through the actor MLP
 $\R^{n} \to \R^{12}$ to produce joint position offsets. 
 
-\subsection{Student Network}
+\subsection{Student}
+\label{sec:student}
 
-The student replaces the scandot encoder with a recurrent depth
-encoder (Figure~\ref{fig:student_arch}).
-\label{sec:depth_norm}
-DA2's metric depth output is first normalized to $[-0.5, 0.5]$
-via online EMA percentile statistics.
-A CNN backbone reduces the depth image to a 32-dim feature vector,
-which is concatenated with proprioception (heading commands masked
-to zero), passed through a combination MLP, and fed into a
-single-layer GRU (hidden dim 512) that provides temporal context.
-
-The GRU output produces a 32-dim terrain latent $z$ and a 2-dim
-heading prediction $\hat{y}$.  The actor MLP takes
-$[o_\text{prop}; z]$ and outputs 12 joint targets, sharing the same
-architecture as the teacher actor.
+The student replaces the scandot encoder with a visual encoder that
+must recover the terrain latent $z \in \R^{32}$ from a depth image (Figure~\ref{fig:student_arch}).
+A CNN maps the depth image $d \in \R^{58 \times 87}$ to a 32-dim
+feature, which is concatenated with proprioception and compressed by
+an MLP.  A GRU integrates these fused features
+across timesteps, producing $z$ and a heading estimate
+$\hat{y} \in \R^{2}$.  The teacher's actor MLP is reused, taking
+$[o_\text{prop};\, z]$ to output 12 joint targets.  During
+DAgger distillation, the student minimizes the loss in
+Eq.~\ref{eq:dagger_loss} while the teacher's actions are executed
+in the environment.
 
 \begin{figure}[t]
   \centering
