@@ -64,38 +64,45 @@ COLORS = {
 def fig_teacher():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.5, 2.5))
 
-    # Trim last iteration to avoid artifact
-    trim = -20
+    # Trim last iterations to avoid artifacts
+    t_trim = -20   # teacher
+    s_trim = -50   # GT-depth student
+    # Scale factor to map GT-depth student iterations onto teacher axis
+    student_scale = 1 / 5
 
+    # --- (a) Reward & Success Rate ---
     steps, reward = load_scalar(TEACHER, 'Train/mean_reward')
-    ax1.plot(steps[:trim], smooth(reward, 31)[:trim],
-             color=COLORS['teacher'], label='Reward')
+    reward_smooth = smooth(reward, 31)
+    ax1.plot(steps[:t_trim], reward_smooth[:t_trim],
+             color=COLORS['teacher'], label='Teacher reward')
     ax1.set_xlabel('Iteration')
     ax1.set_ylabel('Mean Episode Reward')
     ax1.set_title('(a) Reward')
     ax1.grid(True, alpha=0.3)
 
-    steps_s, success = load_scalar(TEACHER, 'Episode/success')
-    ax1b = ax1.twinx()
-    ax1b.plot(steps_s[:trim], smooth(success, 31)[:trim],
-              color=COLORS['teacher'], linestyle='--', alpha=0.6,
-              label='Success Rate')
-    ax1b.set_ylabel('Success Rate')
-    ax1b.set_ylim(-0.05, 1.05)
+    # GT-depth student reward (scaled x-axis, normalized to teacher range)
+    s_steps, s_reward = load_scalar(GT_SCANDOT, 'Train/mean_reward')
+    s_smooth = smooth(s_reward, 51)
+    s_norm = (s_smooth - s_smooth[0]) / (s_smooth.max() - s_smooth[0]) * reward_smooth[:t_trim].max()
+    ax1.plot(s_steps[:s_trim] * student_scale, s_norm[:s_trim],
+             color=COLORS['gt_scandot'], label='GT-depth student')
 
-    # Combined legend from both axes
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax1b.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2,
-               loc='center right', framealpha=0.9)
+    ax1.legend(loc='lower right', fontsize=7, framealpha=0.9)
 
+    # --- (b) Terrain Level ---
     steps_t, tlevel = load_scalar(TEACHER, 'Episode/terrain_level')
-    ax2.plot(steps_t[:trim], smooth(tlevel, 31)[:trim],
-             color=COLORS['teacher'], label='Terrain Level')
+    ax2.plot(steps_t[:t_trim], smooth(tlevel, 31)[:t_trim],
+             color=COLORS['teacher'], label='Teacher')
+
+    s_steps_t, s_tlevel = load_scalar(GT_SCANDOT, 'Episode/terrain_level')
+    s_tlevel_smooth = smooth(s_tlevel, 51)
+    ax2.plot(s_steps_t[:s_trim] * student_scale, s_tlevel_smooth[:s_trim],
+             color=COLORS['gt_scandot'], label='GT-depth student')
+
     ax2.set_xlabel('Iteration')
     ax2.set_ylabel('Mean Terrain Level')
     ax2.set_title('(b) Curriculum Progression')
-    ax2.legend(loc='center right', framealpha=0.9)
+    ax2.legend(loc='lower right', fontsize=7, framealpha=0.9)
     ax2.grid(True, alpha=0.3)
 
     fig.tight_layout()
