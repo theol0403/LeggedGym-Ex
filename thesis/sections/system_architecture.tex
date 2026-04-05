@@ -23,10 +23,7 @@ via DAgger (Figure~\ref{fig:pipeline}).
 
 \begin{figure}[t]
   \centering
-  % \includegraphics[width=\columnwidth]{figures/pipeline.pdf}
-  \fbox{\parbox[c][4.5em][c]{0.9\columnwidth}{\centering
-      \textbf{[Pipeline diagram]}\\
-      Teacher (scandots) $\to$ Student (depth/RGB)}}
+  \input{figures/pipeline}
   \caption{Two-stage training pipeline.  The teacher uses privileged
     scandot observations; the student replaces these with either GT depth,
   DA2-inferred depth.}
@@ -58,10 +55,7 @@ in the environment.
 
 \begin{figure}[t]
   \centering
-  \fbox{\parbox[c][5.5em][c]{0.9\columnwidth}{\centering
-      \textbf{[Student architecture diagram]}\\
-      Depth CNN $\to$ Fusion MLP $\to$ GRU $\to$ [latent + yaw]\\
-      {}\![proprio; latent] $\to$ Actor MLP $\to$ actions}}
+  \input{figures/student_arch}
   \caption{Student visual encoder.  The depth CNN and proprioception
     are fused and processed by a GRU that produces the terrain latent
   and heading estimate used by the teacher's actor MLP.}

@@ -1,0 +1,84 @@
+% Pipeline diagram: two-stage teacher-student distillation
+\begin{tikzpicture}[
+  >=Stealth,
+  % --- shared block base ---
+  blkbase/.style={
+    rounded corners=1.5pt, minimum height=6.5mm,
+    inner xsep=3pt, inner ysep=1.5pt,
+    line width=0.3pt, align=center, font=\scriptsize\sffamily
+  },
+  % --- block types ---
+  inp/.style={blkbase, draw=black!30, fill=gray!8, minimum width=11mm},
+  da2/.style={blkbase, draw=orange!50, fill=orange!10, minimum width=10mm},
+  tenc/.style={blkbase, draw=blue!40, fill=blue!5, minimum width=15mm, minimum height=13mm},
+  senc/.style={blkbase, draw=orange!45, fill=orange!5, minimum width=15mm, minimum height=10mm},
+  act/.style={blkbase, draw=green!40!black, fill=green!5, minimum width=12mm},
+  % --- labels ---
+  outlbl/.style={font=\scriptsize\sffamily},
+  stglbl/.style={font=\scriptsize\sffamily\bfseries, text=black!55, anchor=north west},
+  annot/.style={font=\tiny\sffamily},
+  % --- arrows ---
+  arr/.style={-{Stealth[length=3.5pt, width=2.5pt]}, line width=0.35pt, draw=black!50},
+  darr/.style={-{Stealth[length=3.5pt, width=2.5pt]}, line width=0.4pt, dashed, draw=red!50!black},
+]
+
+% ===================== STAGE 1: TEACHER =====================
+
+\node[inp] (scan) at (0, 0) {Scandots};
+\node[inp, below=2mm of scan] (prop1) {Proprio};
+\node[inp, below=2mm of prop1] (priv) {Privileged};
+
+\node[tenc, right=10mm of prop1] (te) {Teacher\\[-1pt]Encoder};
+\node[act] (ta) at ([xshift=11mm]te.east) {Actor\\[-1pt]MLP};
+\node[outlbl, right=5mm of ta] (tout) {$a_t$};
+
+\draw[arr] (scan.east) -- ++(1.5mm,0) |- ([yshift=2.5mm]te.west);
+\draw[arr] (prop1) -- (te);
+\draw[arr] (priv.east) -- ++(1.5mm,0) |- ([yshift=-2.5mm]te.west);
+\draw[arr] (te) -- (ta);
+\draw[arr] (ta) -- (tout);
+
+% Stage 1 background
+\begin{scope}[on background layer]
+  \node[draw=none, fill=blue!2, rounded corners=4pt,
+    fit=(scan)(priv)(tout), inner xsep=4mm, inner ysep=5mm] (s1) {};
+  \node[stglbl] at ([xshift=1mm, yshift=-1mm]s1.north west)
+    {Stage 1\enspace Teacher (PPO)};
+\end{scope}
+
+% ===================== STAGE 2: STUDENT =====================
+
+\node[inp] (rgb) at (0, -3.2) {RGB};
+\node[da2, right=5mm of rgb] (d2) {DA2};
+\node[inp, below=3mm of d2] (prop2) {Proprio};
+
+\node[senc] (se) at ([xshift=10mm]d2.east |- {$(d2)!0.5!(prop2)$}) {Student\\[-1pt]Encoder};
+\node[act] (sa) at ([xshift=11mm]se.east) {Actor\\[-1pt]MLP};
+\node[outlbl, right=5mm of sa] (sout) {$a_t$};
+
+\draw[arr] (rgb) -- (d2);
+\draw[arr] (d2.east) -- ++(1.5mm,0) |- ([yshift=1.5mm]se.west);
+\draw[arr] (prop2.east) -- ++(1.5mm,0) |- ([yshift=-1.5mm]se.west);
+\draw[arr] (se) -- (sa);
+\draw[arr] (sa) -- (sout);
+
+% Stage 2 background
+\begin{scope}[on background layer]
+  \node[draw=none, fill=orange!2, rounded corners=4pt,
+    fit=(rgb)(prop2)(sout), inner xsep=4mm, inner ysep=5mm] (s2) {};
+  \node[stglbl] at ([xshift=1mm, yshift=-1mm]s2.north west)
+    {Stage 2\enspace Student (DAgger)};
+\end{scope}
+
+% ===================== CONNECTIONS =====================
+
+% DAgger supervision arrow
+\draw[darr]
+  (ta.south) -- ++(0,-3.5mm)
+  -| node[pos=0.25, right=0.5mm, annot, text=red!50!black] {action labels}
+  ([yshift=2mm]se.north);
+
+% Shared actor annotation
+\node[annot, text=green!40!black, below=0.5mm of sa] {(shared)};
+
+\end{tikzpicture}

@@ -1,0 +1,85 @@
+% Student visual encoder architecture
+\begin{tikzpicture}[
+  >=Stealth,
+  % --- shared block base ---
+  blkbase/.style={
+    rounded corners=1.5pt, minimum height=6.5mm,
+    inner xsep=2.5pt, inner ysep=1.5pt,
+    line width=0.3pt, align=center, font=\scriptsize\sffamily
+  },
+  % --- block types ---
+  cnn/.style={blkbase, draw=blue!40, fill=blue!5, minimum width=9mm},
+  fuse/.style={blkbase, draw=orange!45, fill=orange!5, minimum width=10mm},
+  gru/.style={blkbase, draw=purple!40, fill=purple!5, minimum width=9mm},
+  act/.style={blkbase, draw=green!40!black, fill=green!5, minimum width=10mm},
+  % --- labels ---
+  io/.style={font=\scriptsize\sffamily},
+  dim/.style={font=\tiny\sffamily, text=black!40, inner sep=0.5pt},
+  % --- arrows ---
+  arr/.style={-{Stealth[length=3pt, width=2pt]}, line width=0.35pt, draw=black!50},
+]
+
+% ===================== INPUTS =====================
+
+\node[io] (depth) at (0, 0.4) {Depth};
+\node[dim, below=0mm of depth] {$58{\times}87$};
+
+\node[io] (prop) at (0, -0.5) {Proprio};
+\node[dim, below=0mm of prop] {$53$};
+
+% ===================== PROCESSING =====================
+
+\node[cnn, right=5mm of depth] (cnn) {CNN};
+
+% Concat point 1
+\coordinate (cat1) at ([xshift=5mm]cnn.east);
+\node[circle, fill=black!40, inner sep=0.7pt] at (cat1) {};
+
+\node[fuse, right=3mm of cat1] (fmlp) {Fusion\\[-1pt]MLP};
+
+\node[gru, right=4mm of fmlp] (gru) {GRU};
+
+% GRU recurrence
+\draw[arr, rounded corners=2pt, draw=purple!35]
+  ([xshift=0.8mm]gru.south) -- ++(0,-2mm) -- ++(-4mm,0) -- ++(0,2mm)
+  -- ([xshift=-0.8mm]gru.south);
+
+% ===================== GRU OUTPUTS =====================
+
+\node[io, right=4mm of gru, yshift=1.5mm] (z) {$z$};
+\node[dim, above=0mm of z] {$32$};
+\node[io, right=4mm of gru, yshift=-3mm] (yhat) {$\hat{y}$};
+\node[dim, below=0mm of yhat] {$2$};
+
+% Concat point 2
+\coordinate (cat2) at ([xshift=4mm]z.east);
+\node[circle, fill=black!40, inner sep=0.7pt] at (cat2) {};
+
+\node[act, right=3mm of cat2] (actor) {Actor\\[-1pt]MLP};
+
+\node[io, right=3mm of actor] (out) {$a_t$};
+\node[dim, below=0mm of out] {$12$};
+
+% ===================== ARROWS =====================
+
+\draw[arr] (depth) -- (cnn);
+\draw[arr] (cnn) -- node[dim, above] {32} (cat1);
+\draw[arr] (cat1) -- (fmlp);
+\draw[arr] (fmlp) -- node[dim, above] {32} (gru);
+\draw[arr] ([yshift=0.8mm]gru.east) -- (z);
+\draw[arr] ([yshift=-1.2mm]gru.east) -- (yhat);
+\draw[arr] (z) -- (cat2);
+\draw[arr] (cat2) -- (actor);
+\draw[arr] (actor) -- (out);
+
+% Proprio branch point
+\node[circle, fill=black!40, inner sep=0.7pt] (pbr) at ([xshift=2mm]prop.east) {};
+
+% Branch 1: to fusion
+\draw[arr] (prop.east) -- (pbr) |- (cat1);
+
+% Branch 2: to actor (route below)
+\draw[arr, rounded corners=2.5pt, draw=black!40]
+  (pbr) -- ++(0,-4.5mm) -| (cat2);
+
+\end{tikzpicture}
