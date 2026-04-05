@@ -113,16 +113,6 @@ alternative normalizations (calibrated linear, fixed range, mean-std)
 performed comparably to EMA percentile.  This reinforces the finding
 that depth \emph{signal quality} dominates architectural choices.
 
-\subsection{ResNet-18 RGB Baseline}
-
-The frozen-ResNet-18 student (Section~\ref{sec:resnet}) achieves
-98\% overall parkour success (stairs + hurdles) but only 69\% on
-gaps.  It converges in $\sim$4500 iterations with 3.2\,s/iter, making
-it computationally efficient.  However, its gap performance
-(69\% vs.\ 87\% for DA2-base+texture) suggests that direct RGB
-features, while sufficient for stair and hurdle geometry, lack the
-precision needed for narrow gap detection.
-
 \subsection{Key Finding: Signal Quality Over Architecture}
 
 Across all experiments, the dominant factor in student performance

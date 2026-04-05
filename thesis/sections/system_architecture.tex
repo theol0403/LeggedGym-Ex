@@ -29,7 +29,7 @@ via DAgger (Figure~\ref{fig:pipeline}).
       Teacher (scandots) $\to$ Student (depth/RGB)}}
   \caption{Two-stage training pipeline.  The teacher uses privileged
     scandot observations; the student replaces these with either GT depth,
-  DA2-inferred depth, or direct RGB through a frozen ResNet-18.}
+  DA2-inferred depth.}
   \label{fig:pipeline}
 \end{figure}
 
@@ -67,14 +67,6 @@ in the environment.
   a terrain latent and heading estimate.}
   \label{fig:student_arch}
 \end{figure}
-
-\paragraph{RGB baseline.}
-\label{sec:resnet}
-To compare DA2 depth with direct RGB, we train a student that
-replaces the depth CNN with a frozen
-ResNet-18~\cite{he2016deep} truncated at \texttt{layer2}, producing
-a 32-dim feature via adaptive pooling and a trainable projection.
-The rest of the architecture (GRU, actor) is identical.
 
 \subsection{Terrain and Curriculum}
 
