@@ -123,17 +123,15 @@ improved from 0.8\% to 80.5\%---a +80~pp gain from texture alone.
 
 Figure~\ref{fig:student_success} shows training dynamics across
 all student pipelines.  DA2-base + texture converges to near-100\%
-overall success by iteration~5000, matching the scandot student
+overall success by iteration~5000, matching the GT-depth student
 upper bound.  DA2-base (no texture) plateaus around~82\%, while
-DA2-small saturates at~56\%.  The ResNet-18 RGB student trains
-faster per iteration (no DA2 inference overhead) but plateaus
-at a lower level.
+DA2-small saturates at~56\%.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
   \caption{Overall success rate during student training.
-  DA2-base + texture matches the GT-scandot upper bound, while
+  DA2-base + texture matches the GT-depth upper bound, while
   DA2-base (no texture) and DA2-small plateau at lower levels.}
   \label{fig:student_success}
 \end{figure}
