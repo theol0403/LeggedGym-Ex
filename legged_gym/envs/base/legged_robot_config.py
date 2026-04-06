@@ -37,6 +37,12 @@ class LeggedRobotCfg(BaseConfig):
         # Visual texture for terrain (helps monocular depth estimation)
         add_texture = False  # apply a tiling texture to terrain surface
         texture_uv_scale = 10.0  # how many times the texture tiles across the terrain
+        texture_mode = "checkerboard"  # checkerboard, solid_red/green/blue/yellow/white/dark, random_color, noise, bricks, concrete, wood, grass, stone_tiles, gravel
+        # Lighting configuration for domain invariance experiments
+        ambient_light = (0.1, 0.1, 0.1)
+        light_direction = (-1, -1, -1)
+        light_intensity = 5.0
+        background_color = (0.04, 0.08, 0.12)
         # rough terrain only:
         # obtain terrain height information around feet (default: 9 points around feet), measure_
         # x  x   x

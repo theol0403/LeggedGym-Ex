@@ -188,6 +188,7 @@ def fig_per_obstacle():
     print('Saved per_obstacle_success'); plt.close(fig)
 
 
+
 if __name__ == '__main__':
     fig_teacher()
     fig_student_reward()

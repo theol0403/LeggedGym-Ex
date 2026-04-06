@@ -23,6 +23,7 @@ import time
 from types import SimpleNamespace
 
 import torch
+import torch.nn.functional as F
 
 from legged_gym import SIMULATOR
 from legged_gym.envs import *
@@ -80,21 +81,42 @@ PERTURBATIONS = {
         "env_overrides": {"terrain.add_texture": True, "terrain.texture_mode": "bricks"},
         "experiment_flags": {},
     },
-    # Lighting perturbations
-    "light_dim": {
-        "env_overrides": {"terrain.light_intensity": 1.5, "terrain.ambient_light": [0.03, 0.03, 0.03]},
+    # Realistic surface textures
+    "tex_concrete": {
+        "env_overrides": {"terrain.add_texture": True, "terrain.texture_mode": "concrete"},
         "experiment_flags": {},
-        "description": "Dim lighting (30% of default)",
+    },
+    "tex_wood": {
+        "env_overrides": {"terrain.add_texture": True, "terrain.texture_mode": "wood"},
+        "experiment_flags": {},
+    },
+    "tex_grass": {
+        "env_overrides": {"terrain.add_texture": True, "terrain.texture_mode": "grass"},
+        "experiment_flags": {},
+    },
+    "tex_stone_tiles": {
+        "env_overrides": {"terrain.add_texture": True, "terrain.texture_mode": "stone_tiles"},
+        "experiment_flags": {},
+    },
+    "tex_gravel": {
+        "env_overrides": {"terrain.add_texture": True, "terrain.texture_mode": "gravel"},
+        "experiment_flags": {},
+    },
+    # Lighting perturbations (image-space transforms applied before DA2)
+    "light_dim": {
+        "env_overrides": {},
+        "experiment_flags": {"brightness_scale": 0.3},
+        "description": "Dim lighting (30% brightness)",
     },
     "light_bright": {
-        "env_overrides": {"terrain.light_intensity": 12.0, "terrain.ambient_light": [0.3, 0.3, 0.3]},
-        "experiment_flags": {},
-        "description": "Very bright lighting (240% of default)",
+        "env_overrides": {},
+        "experiment_flags": {"brightness_scale": 2.0},
+        "description": "Bright lighting (200% brightness)",
     },
-    "light_side": {
-        "env_overrides": {"terrain.light_direction": [0, -1, -0.5]},
-        "experiment_flags": {},
-        "description": "Side lighting (from left)",
+    "light_low_gamma": {
+        "env_overrides": {},
+        "experiment_flags": {"gamma": 2.2},
+        "description": "Low-contrast / washed out (gamma 2.2)",
     },
     # Color jitter (image-space)
     "jitter_brightness_mild": {
@@ -116,18 +138,15 @@ PERTURBATIONS = {
     # Combined perturbations
     "combined_mild": {
         "env_overrides": {
-            "terrain.add_texture": True, "terrain.texture_mode": "solid_red",
-            "terrain.light_intensity": 3.0,
+            "terrain.add_texture": True, "terrain.texture_mode": "concrete",
         },
-        "experiment_flags": {"brightness_jitter": 0.2},
+        "experiment_flags": {"brightness_scale": 0.6, "brightness_jitter": 0.2},
     },
     "combined_extreme": {
         "env_overrides": {
             "terrain.add_texture": True, "terrain.texture_mode": "noise",
-            "terrain.light_intensity": 2.0, "terrain.light_direction": [0, -1, -0.5],
-            "terrain.ambient_light": [0.05, 0.05, 0.05],
         },
-        "experiment_flags": {"brightness_jitter": 0.5, "color_jitter": 0.2},
+        "experiment_flags": {"brightness_scale": 0.4, "gamma": 1.8, "color_jitter": 0.2},
     },
 }
 
@@ -149,6 +168,7 @@ def _evaluate_single(
     headless: bool,
     force_family: str | None,
     force_row: int,
+    compute_depth_metric: bool = False,
 ):
     """Run one evaluation and return metrics dict."""
     args = SimpleNamespace(
@@ -191,6 +211,11 @@ def _evaluate_single(
             env_cfg.experiment_flags = {}
         env_cfg.experiment_flags.update(experiment_flags)
 
+    is_da2_student = (
+        getattr(getattr(env_cfg, "sensor", None), "depth_estimation", None) is not None
+        and getattr(env_cfg.sensor.depth_estimation, "enabled", False)
+    )
+
     env, _ = task_registry.make_env(name=task, args=args, env_cfg=env_cfg)
     try:
         ppo_runner, train_cfg = task_registry.make_alg_runner(
@@ -202,6 +227,8 @@ def _evaluate_single(
         completed_episodes = 0
         success_sum = 0.0
         progress_sum = 0.0
+        frame_correlations = []
+        track_dsq = compute_depth_metric and is_da2_student
 
         max_steps = int(math.ceil(episodes / env.num_envs) * env.max_episode_length * 2)
 
@@ -210,6 +237,39 @@ def _evaluate_single(
             with torch.inference_mode():
                 actions = policy(obs, depth_in)
             obs, _teacher_obs, student_depth, _depth_updated, _rews, dones, infos = env.step(actions.detach())
+
+            # Depth signal quality: Pearson correlation between GT and DA2 depth
+            if track_dsq and _depth_updated[0]:
+                da2_raw = env.simulator._inferred_depth_images  # (N, H_raw, W_raw)
+                if da2_raw is not None:
+                    # Render GT depth from the RGB camera (no add_depth needed)
+                    sim = env.simulator
+                    rgb_cam_idx = sim._scene_camera_output_indices.get("rgb")
+                    if rgb_cam_idx is not None:
+                        _, depth_out, _, _ = sim._scene.render_all_cameras(
+                            rgb=False, depth=True, segmentation=False, normal=False,
+                        )
+                        gt_raw = sim._as_torch_frame(depth_out[rgb_cam_idx])
+                        if gt_raw.ndim == 2:
+                            gt_raw = gt_raw.unsqueeze(0)
+                        gt_depth = sim._process_depth_frames(gt_raw)  # (N, H, W) normalized
+                        # Resize DA2 to match GT
+                        if da2_raw.shape[-2:] != gt_depth.shape[-2:]:
+                            da2_resized = F.interpolate(
+                                da2_raw.unsqueeze(1), size=gt_depth.shape[-2:],
+                                mode="bilinear", align_corners=False,
+                            ).squeeze(1)
+                        else:
+                            da2_resized = da2_raw
+                        gt_flat = gt_depth.reshape(gt_depth.shape[0], -1).float()
+                        da2_flat = da2_resized.reshape(da2_resized.shape[0], -1).float()
+                        gt_c = gt_flat - gt_flat.mean(dim=1, keepdim=True)
+                        da2_c = da2_flat - da2_flat.mean(dim=1, keepdim=True)
+                        numer = (gt_c * da2_c).sum(dim=1)
+                        denom = gt_c.norm(dim=1) * da2_c.norm(dim=1) + 1e-8
+                        pearson = (numer / denom).mean().item()
+                        if not math.isnan(pearson):
+                            frame_correlations.append(pearson)
 
             num_resets = int(torch.sum(dones).item())
             if num_resets <= 0 or "episode" not in infos:
@@ -226,11 +286,14 @@ def _evaluate_single(
     if completed_episodes == 0:
         return {"success_rate": 0.0, "progress_ratio": 0.0, "episodes": 0}
 
-    return {
+    result = {
         "success_rate": success_sum / completed_episodes,
         "progress_ratio": progress_sum / completed_episodes,
         "episodes": completed_episodes,
     }
+    if frame_correlations:
+        result["depth_signal_quality"] = sum(frame_correlations) / len(frame_correlations)
+    return result
 
 
 def main():
@@ -247,6 +310,8 @@ def main():
                    help=f"Perturbations to test (default: all). Choices: {list(PERTURBATIONS.keys())}")
     p.add_argument("--output", type=str, default=None,
                    help="Save results to JSON file")
+    p.add_argument("--compute_depth_metric", action="store_true", default=False,
+                   help="Compute depth signal quality (Pearson r between GT and DA2 depth)")
     cli = p.parse_args()
 
     student_names = cli.students or list(STUDENTS.keys())
@@ -282,6 +347,7 @@ def main():
                     headless=cli.headless,
                     force_family=cli.force_family,
                     force_row=cli.force_row,
+                    compute_depth_metric=cli.compute_depth_metric,
                 )
             except Exception as e:
                 print(f"  ERROR: {e}")
@@ -295,37 +361,52 @@ def main():
 
             print(f"  success_rate = {metrics['success_rate']:.4f}")
             print(f"  progress_ratio = {metrics.get('progress_ratio', -1):.4f}")
+            if "depth_signal_quality" in metrics:
+                print(f"  depth_signal_quality = {metrics['depth_signal_quality']:.4f}")
             print(f"  episodes = {metrics['episodes']}")
             print(f"  elapsed = {elapsed:.1f}s")
 
+    # Check if any result has DSQ
+    has_dsq = any("depth_signal_quality" in r for r in results)
+
     # Print summary table
-    print(f"\n{'='*90}")
+    print(f"\n{'='*100}")
     print("DOMAIN INVARIANCE RESULTS SUMMARY")
     print(f"Family: {cli.force_family}  Row: {cli.force_row}  Episodes: {cli.episodes}")
-    print(f"{'='*90}")
+    print(f"{'='*100}")
     header = f"{'Perturbation':<25}"
     for sn in student_names:
         header += f" | {sn:>15}"
+    if has_dsq:
+        header += f" | {'DSQ':>8}"
     print(header)
     print("-" * len(header))
 
     for pn in perturbation_names:
         row = f"{pn:<25}"
+        dsq_val = None
         for sn in student_names:
             match = [r for r in results if r["student"] == sn and r["perturbation"] == pn]
             if match:
                 sr = match[0]["success_rate"]
                 row += f" | {sr:>14.1%}" if sr >= 0 else f" | {'ERROR':>15}"
+                if dsq_val is None and "depth_signal_quality" in match[0]:
+                    dsq_val = match[0]["depth_signal_quality"]
             else:
                 row += f" | {'N/A':>15}"
+        if has_dsq:
+            row += f" | {dsq_val:>8.3f}" if dsq_val is not None else f" | {'---':>8}"
         print(row)
 
     # Compute deltas from baseline
-    print(f"\n{'='*90}")
+    print(f"\n{'='*100}")
     print("DELTA FROM BASELINE (pp)")
-    print(f"{'='*90}")
-    print(header)
-    print("-" * len(header))
+    print(f"{'='*100}")
+    delta_header = f"{'Perturbation':<25}"
+    for sn in student_names:
+        delta_header += f" | {sn:>15}"
+    print(delta_header)
+    print("-" * len(delta_header))
 
     baseline_rates = {}
     for sn in student_names:

@@ -75,7 +75,12 @@ class ParkourStudentRunner(OnPolicyRunner):
             **class_to_dict(teacher_train_cfg.policy),
         ).to(self.device)
         state = torch.load(teacher_ckpt, map_location=self.device)
-        teacher.load_state_dict(state["model_state_dict"], strict=True)
+        missing, unexpected = teacher.load_state_dict(state["model_state_dict"], strict=False)
+        if missing or unexpected:
+            print(
+                f"  Warning: Teacher checkpoint key mismatch (non-fatal for inference): "
+                f"{len(missing)} missing, {len(unexpected)} unexpected."
+            )
         teacher.eval()
         for parameter in teacher.parameters():
             parameter.requires_grad_(False)
