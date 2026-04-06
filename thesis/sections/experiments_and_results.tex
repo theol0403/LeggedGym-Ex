@@ -99,20 +99,22 @@ raises success across all rows and brings the estimated-depth policy within 7\% 
   \end{tabular}
 \end{table}
 
-Figure~\ref{fig:student_success} shows mean episode reward during
-training, with the teacher's converged reward as a reference.
-The GT-depth student converges fastest and reaches the highest
-reward, closely approaching the teacher.  DA2-base + texture
-steadily closes the gap, while DA2-base (no texture) plateaus
-at a lower level---directly reflecting the weaker depth signal
-on untextured terrain.
+Figure~\ref{fig:student_success} shows training dynamics for all
+student pipelines.  (a)~The GT-depth student converges fastest
+and reaches the highest reward, closely approaching the teacher.
+DA2-base + texture steadily closes the gap, while DA2-base
+(no texture) plateaus at a lower level.
+(b)~Distillation loss mirrors the same ordering: better depth
+signals produce lower imitation error, confirming that depth
+quality is the primary bottleneck.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
-  \caption{Overall success rate during student training.  The
-    untextured models plateau early, while DA2-base + texture
-  approaches the GT-depth upper bound.}
+  \caption{Student training curves.  (a)~Mean episode reward.
+  (b)~Distillation action loss.  Both metrics show a clear
+  ordering that reflects depth signal quality: GT-depth
+  $>$ DA2-base + texture $>$ DA2-base (no texture).}
   \label{fig:student_success}
 \end{figure}
 
