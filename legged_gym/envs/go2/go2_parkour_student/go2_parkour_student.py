@@ -14,12 +14,6 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._use_inferred_depth = bool(
             getattr(self.cfg.sensor.depth_estimation, "enabled", False)
         )
-        # RGB backbone mode: raw RGB -> frozen ResNet (no DA2, no GT depth)
-        self._use_rgb_backbone = (
-            getattr(self.cfg.sensor, "add_rgb", False)
-            and not self._use_inferred_depth
-            and not getattr(self.cfg.sensor, "add_depth", False)
-        )
         self._depth_buffer_len = int(self.cfg.sensor.depth_camera_config.num_history)
 
         # Experiment flags (set via cfg.experiment_flags dict by train_experiment.py)
@@ -38,22 +32,11 @@ class Go2ParkourStudent(LeggedRobotParkour):
         self._experiment_fixed_range_hi = float(flags.get("fixed_range_hi", 12.0))
         self._experiment_depth_gradient = bool(flags.get("depth_gradient", False))
         self._experiment_depth_temporal_smooth = float(flags.get("depth_temporal_smooth", 0.0))
-        # Color jitter for domain invariance experiments (applied to RGB before DA2 or ResNet)
-        self._experiment_color_jitter = float(flags.get("color_jitter", 0.0))
-        self._experiment_brightness_jitter = float(flags.get("brightness_jitter", 0.0))
-        self._experiment_hue_jitter = float(flags.get("hue_jitter", 0.0))
 
     def _init_buffers(self):
         super()._init_buffers()
-        _, h, w = self.student_depth_shape  # (C, H, W) for the network
-        if self._use_rgb_backbone:
-            # RGB backbone: store float RGB in (num_envs, buffer_len, 3, H, W)
-            self._rgb_float_buffer = torch.zeros(
-                self.num_envs, self._depth_buffer_len, 3, h, w,
-                device=self.device, dtype=torch.float,
-            )
-            self._depth_buffer = self._rgb_float_buffer  # alias for reset_idx zeroing
-        elif self._use_inferred_depth:
+        _, h, w = self.student_depth_shape  # always (1, H, W) for the network
+        if self._use_inferred_depth:
             # Manual 2-frame buffer for inferred depth
             self._depth_buffer = torch.zeros(
                 self.num_envs, self._depth_buffer_len, h, w,
@@ -81,10 +64,7 @@ class Go2ParkourStudent(LeggedRobotParkour):
         # matching extreme-parkour which passes depth_buffer[:, -2].
         # Simulator buffer layout: index 0 = newest, index 1 = previous.
         self._prev_frame_idx = min(1, self._depth_buffer_len - 1)
-        if self._use_rgb_backbone:
-            # RGB: (B, buf_len, 3, H, W) -> index gives (B, 3, H, W)
-            self.student_depth = self._rgb_float_buffer[:, self._prev_frame_idx]
-        elif self._experiment_depth_gradient:
+        if self._experiment_depth_gradient:
             # 2-channel output: depth + Sobel gradient magnitude
             self._student_depth_buf = torch.zeros(
                 self.num_envs, 2, h, w, device=self.device, dtype=torch.float,
@@ -125,119 +105,81 @@ class Go2ParkourStudent(LeggedRobotParkour):
 
     def _update_terrain_curriculum(self, env_ids):
         if self._experiment_curriculum_freeze_until > 0:
+            # Flag value is in env steps (common_step_counter units)
             if self.common_step_counter < self._experiment_curriculum_freeze_until:
                 return
         super()._update_terrain_curriculum(env_ids)
 
     def _init_ema_buffers(self):
+        """Initialize EMA normalization state for inferred or force-EMA depth."""
         self._depth_ema_lo = torch.zeros(1, device=self.device)
         self._depth_ema_hi = torch.ones(1, device=self.device)
         self._depth_ema_initialized = False
+        # For meanstd normalization mode
         self._depth_ema_mean = torch.zeros(1, device=self.device)
         self._depth_ema_std = torch.ones(1, device=self.device)
 
     def _refresh_student_depth(self):
-        if self._use_rgb_backbone:
-            self._refresh_student_rgb()
-            return
-
+        """Populate depth buffer from the configured source after update_sensors."""
         if self._experiment_force_ema_norm:
+            # O1-gt-ema: simulator updated buffer in-place with linear norm.
+            # Convert back to meters and re-normalize via EMA.
             near = self.cfg.sensor.depth_camera_config.near_clip
             far = self.cfg.sensor.depth_camera_config.far_clip
             linear_depth = self._depth_buffer.clone()
+            # Undo linear norm: linear = (meters - near) / (far - near) - 0.5
             meters = (linear_depth + 0.5) * (far - near) + near
-            newest = meters[:, 0]
-            processed = self._process_inferred_depth(newest)
+            # Re-normalize the newest frame through the EMA pipeline
+            newest = meters[:, 0]  # (N, H, W)
+            processed = self._process_inferred_depth(newest)  # (N, 1, H, W)
             self._depth_buffer[:, 0:1] = processed
             if self._depth_buffer_len > 1:
+                # Also re-normalize the previous frame
                 prev = meters[:, 1]
                 processed_prev = self._process_inferred_depth(prev)
                 self._depth_buffer[:, 1:2] = processed_prev
             return
 
         if self._experiment_random_affine_depth:
-            eps_s = 0.3 * (2 * torch.rand(1, device=self.device) - 1)
-            eps_b = 0.2 * (2 * torch.rand(1, device=self.device) - 1)
+            # O2-gt-affine: simulator updated buffer in-place with linear norm.
+            # Apply random per-batch affine perturbation.
+            eps_s = 0.3 * (2 * torch.rand(1, device=self.device) - 1)  # scale noise
+            eps_b = 0.2 * (2 * torch.rand(1, device=self.device) - 1)  # bias noise
             self._depth_buffer[:] = ((1 + eps_s) * self._depth_buffer + eps_b).clamp(-0.5, 0.5)
             return
 
         if not self._use_inferred_depth:
+            # Direct depth: simulator already updated self._depth_buffer in-place
             return
         inferred = self.simulator.get_inferred_depth_images()
         if inferred is not None:
             if self._experiment_invert_relative_depth:
                 inferred = inferred.max() - inferred
             processed = self._process_inferred_depth(inferred)
+            # Temporal smoothing: EMA on the depth map to reduce frame-to-frame flicker
             smooth_alpha = self._experiment_depth_temporal_smooth
             if smooth_alpha > 0 and self._depth_buffer[:, 0:1].abs().sum() > 0:
                 processed = smooth_alpha * self._depth_buffer[:, 0:1] + (1 - smooth_alpha) * processed
+            # Shift buffer: copy current (index 0) to previous (index 1), insert new at 0
             if self._depth_buffer_len > 1:
                 self._depth_buffer[:, 1:] = self._depth_buffer[:, :-1].clone()
             self._depth_buffer[:, 0:1] = processed
 
-    def _refresh_student_rgb(self):
-        """Fetch RGB from simulator, crop, resize, normalize to [0,1], store in buffer."""
-        rgb = self.simulator.get_rgb_images()  # (B, H, W, 3) uint8
-        if rgb is None:
-            return
-        _, h, w = self.student_depth_shape  # target (H, W)
-
-        # Convert to float [0, 1] and transpose to (B, 3, H, W)
-        rgb_float = rgb.float().div_(255.0).permute(0, 3, 1, 2)
-
-        # Apply color jitter for domain invariance testing
-        if self._experiment_brightness_jitter > 0:
-            factor = 1.0 + self._experiment_brightness_jitter * (2 * torch.rand(1, device=rgb_float.device) - 1)
-            rgb_float = (rgb_float * factor).clamp_(0, 1)
-        if self._experiment_color_jitter > 0:
-            j = self._experiment_color_jitter
-            # Per-channel color shift
-            shifts = j * (2 * torch.rand(3, 1, 1, device=rgb_float.device) - 1)
-            rgb_float = (rgb_float + shifts.unsqueeze(0)).clamp_(0, 1)
-        if self._experiment_hue_jitter > 0:
-            # Simple hue rotation via channel permutation blend
-            shift = self._experiment_hue_jitter * (2 * torch.rand(1, device=rgb_float.device).item() - 1)
-            # Convert to approximate HSV hue shift using rotation matrix
-            cos_h = torch.cos(torch.tensor(shift * 3.14159))
-            sin_h = torch.sin(torch.tensor(shift * 3.14159))
-            # Rotation in RGB space around (1,1,1) axis
-            one_third = 1.0 / 3.0
-            sqrt_third = 0.57735
-            rot = torch.tensor([
-                [cos_h + (1 - cos_h) * one_third, one_third * (1 - cos_h) - sqrt_third * sin_h, one_third * (1 - cos_h) + sqrt_third * sin_h],
-                [one_third * (1 - cos_h) + sqrt_third * sin_h, cos_h + (1 - cos_h) * one_third, one_third * (1 - cos_h) - sqrt_third * sin_h],
-                [one_third * (1 - cos_h) - sqrt_third * sin_h, one_third * (1 - cos_h) + sqrt_third * sin_h, cos_h + (1 - cos_h) * one_third],
-            ], device=rgb_float.device, dtype=rgb_float.dtype)
-            B = rgb_float.shape[0]
-            rgb_flat = rgb_float.reshape(B, 3, -1)  # (B, 3, H*W)
-            rgb_flat = torch.einsum("ij,bjk->bik", rot, rgb_flat)
-            rgb_float = rgb_flat.reshape(B, 3, rgb_float.shape[2], rgb_float.shape[3]).clamp_(0, 1)
-
-        # Crop (same offsets as depth camera)
-        depth_cfg = self.cfg.sensor.depth_camera_config
-        top = int(getattr(depth_cfg, "crop_top", 0))
-        bottom = int(getattr(depth_cfg, "crop_bottom", 0))
-        left = int(getattr(depth_cfg, "crop_left", 0))
-        right = int(getattr(depth_cfg, "crop_right", 0))
-        h_raw, w_raw = rgb_float.shape[2], rgb_float.shape[3]
-        end_h = h_raw - bottom if bottom > 0 else h_raw
-        end_w = w_raw - right if right > 0 else w_raw
-        if top > 0 or bottom > 0 or left > 0 or right > 0:
-            rgb_float = rgb_float[:, :, top:end_h, left:end_w]
-
-        # Resize to target resolution if needed
-        if rgb_float.shape[2:] != (h, w):
-            rgb_float = F.interpolate(rgb_float, size=(h, w), mode="bilinear", align_corners=False)
-
-        # Shift history buffer and store
-        if self._depth_buffer_len > 1:
-            self._rgb_float_buffer[:, 1:] = self._rgb_float_buffer[:, :-1].clone()
-        self._rgb_float_buffer[:, 0] = rgb_float
-
     def _process_inferred_depth(self, inferred_depth):
+        """Crop, resize, and normalize inferred depth to (N, 1, H, W) in [-0.5, 0.5].
+
+        Monocular depth estimators output arbitrary absolute scale (even "metric"
+        models are miscalibrated on synthetic renders).  We use EMA-smoothed p2/p98
+        percentiles across batches to give a stable, consistent normalization that
+        preserves spatial structure without per-frame jitter.
+
+        Supports experiment flag overrides for normalization mode, EMA alpha, and
+        quantile bounds.
+        """
         depth_cfg = self.cfg.sensor.depth_camera_config
         _, h, w = self.student_depth_shape
 
+        # Crop to match GT depth FOV (skip if already correct size, e.g. O1-gt-ema)
         height, width = inferred_depth.shape[-2:]
         top = int(getattr(depth_cfg, "crop_top", 0))
         bottom = int(getattr(depth_cfg, "crop_bottom", 0))
@@ -250,23 +192,29 @@ class Go2ParkourStudent(LeggedRobotParkour):
         else:
             depth = inferred_depth
 
+        # Select normalization mode
         norm_mode = self._experiment_norm_mode or "ema"
         alpha = self._experiment_ema_alpha or 0.02
         if self._experiment_ema_warmup_iters > 0:
+            # Decay alpha from 0.1 to base alpha over warmup period
             progress = min(1.0, self.common_step_counter / self._experiment_ema_warmup_iters)
             alpha = max(alpha, 0.1 * (1.0 - progress))
 
         if norm_mode == "calibrated_linear":
+            # Affine calibration to meters, then GT-style linear norm
             depth = self._experiment_affine_scale * depth + self._experiment_affine_offset
             depth = depth.clamp(0.0, 2.0) / 2.0 - 0.5
         elif norm_mode == "fixed_range":
+            # Fixed linear mapping of DA2 raw range — deterministic + good signal
             lo = self._experiment_fixed_range_lo
             hi = self._experiment_fixed_range_hi
             depth = ((depth - lo) / max(hi - lo, 1e-3)).clamp(0.0, 1.0) - 0.5
         elif norm_mode == "affine_fit":
+            # N1-affine-fit: pre-computed affine alignment from metric outdoor
             depth = 0.088 * depth + 0.858
             depth = depth.clamp(0, 2.0) / 2.0 - 0.5
         elif norm_mode == "meanstd":
+            # N5-meanstd: running mean/std normalization
             batch_mean = depth.mean()
             batch_std = depth.std().clamp(min=1e-3)
             if not self._depth_ema_initialized:
@@ -278,6 +226,7 @@ class Go2ParkourStudent(LeggedRobotParkour):
                 self._depth_ema_std.lerp_(batch_std, alpha)
             depth = torch.tanh((depth - self._depth_ema_mean) / (2 * self._depth_ema_std)) * 0.5
         else:
+            # Default EMA percentile normalization
             q_lo, q_hi = self._experiment_ema_quantiles or (0.02, 0.98)
             batch_lo = torch.quantile(depth, q_lo)
             batch_hi = torch.quantile(depth, q_hi)
@@ -297,7 +246,9 @@ class Go2ParkourStudent(LeggedRobotParkour):
         return depth
 
     def _update_gradient_channel(self):
+        """Compute Sobel gradient and write 2-channel student_depth."""
         depth_1ch = self._depth_buffer[:, self._prev_frame_idx : self._prev_frame_idx + 1]
+        # Sobel kernels
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
                                device=self.device, dtype=torch.float).view(1, 1, 3, 3)
         sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
@@ -316,45 +267,19 @@ class Go2ParkourStudent(LeggedRobotParkour):
             )
 
     def compute_observations(self):
-        """Build student observations: prop_obs for student input, full obs for teacher."""
-        # CAI23sbP updates yaw and scandots only every 5 env steps
-        if self.common_step_counter % 5 == 0:
-            self._stale_delta_yaw[:] = self.commands[:, 4:5]
-            self._stale_delta_next_yaw[:] = self.commands[:, 5:6]
-            self._stale_scandots[:] = self._compute_scandots()
-
-        prop_obs = self._compute_prop_obs()
-        scandots = self._stale_scandots
-        priv_explicit = self._compute_priv_explicit()
-        priv_latent = self._compute_priv_latent()
-        # Read history BEFORE pushing current obs (CAI23sbP updates buffer after reading)
-        history = self._get_history_flat()
-        self._update_obs_history(prop_obs)
-
-        # Student sees only prop obs (53 dims)
-        self.obs_buf = prop_obs
-
-        # Teacher sees full 753-dim observation
-        self.teacher_actor_obs_buf = torch.cat(
-            [prop_obs, scandots, priv_explicit, priv_latent, history], dim=1
-        )
+        prop_obs, scandot_obs = self._compute_proprioception_and_scandots()
 
         if self.add_noise:
-            noise_scales = self.cfg.noise.noise_scales
-            noise_level = self.cfg.noise.noise_level
-            # Prop noise
-            prop_noise = torch.zeros_like(prop_obs)
-            prop_noise[:, self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * 0.25
-            prop_noise[:, self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level
-            prop_noise[:, self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * 0.05
-            prop_noise = (2 * torch.rand_like(prop_obs) - 1) * prop_noise
+            prop_noise = (2 * torch.rand_like(prop_obs) - 1) * self.noise_scale_vec
+            scandot_noise_scale = self.cfg.noise.noise_scales.scandots * self.cfg.noise.noise_level
+            scandot_noise = (2 * torch.rand_like(scandot_obs) - 1) * scandot_noise_scale
             self.obs_buf = prop_obs + prop_noise
-
-            # Teacher obs with scandot noise
-            scandot_noise = (2 * torch.rand_like(scandots) - 1) * noise_scales.scandots * noise_level
             self.teacher_actor_obs_buf = torch.cat(
-                [prop_obs + prop_noise, scandots + scandot_noise, priv_explicit, priv_latent, history], dim=1
+                (prop_obs + prop_noise, scandot_obs + scandot_noise), dim=-1
             )
+        else:
+            self.obs_buf = prop_obs
+            self.teacher_actor_obs_buf = torch.cat((prop_obs, scandot_obs), dim=-1)
 
     def step(self, actions):
         actions = self._pre_sim_step(actions)
@@ -402,8 +327,6 @@ class Go2ParkourStudent(LeggedRobotParkour):
         super().reset_idx(env_ids)
         if len(env_ids) > 0:
             self._depth_buffer[env_ids] = 0.0
-            if self._use_rgb_backbone:
-                self._rgb_float_buffer[env_ids] = 0.0
             if self._experiment_depth_gradient:
                 self._student_depth_buf[env_ids] = 0.0
 
@@ -413,18 +336,22 @@ class Go2ParkourStudent(LeggedRobotParkour):
                 f"Configured student actor obs dim {self.num_obs} does not match "
                 f"parkour prop spec {self.obs_spec.prop_dim}."
             )
-        if self.num_teacher_actor_obs != self.obs_spec.full_obs_dim:
+        if self.num_teacher_actor_obs != self.obs_spec.teacher_actor_dim:
             raise RuntimeError(
                 f"Configured teacher actor obs dim {self.num_teacher_actor_obs} does not match "
-                f"parkour full obs spec {self.obs_spec.full_obs_dim}."
+                f"parkour actor spec {self.obs_spec.teacher_actor_dim}."
             )
 
     def _get_noise_scale_vec(self):
-        noise_vec = torch.zeros(self.obs_spec.prop_dim, device=self.device)
+        noise_vec = torch.zeros_like(self.obs_buf[0])
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
-        noise_vec[self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * 0.25
-        noise_vec[self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level
-        noise_vec[self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * 0.05
+        noise_vec[self.obs_spec.command_slice] = 0.0
+        noise_vec[self.obs_spec.gravity_slice] = noise_scales.gravity * noise_level
+        noise_vec[self.obs_spec.ang_vel_slice] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[self.obs_spec.dof_pos_slice] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[self.obs_spec.dof_vel_slice] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        noise_vec[self.obs_spec.actions_slice] = 0.0
+        noise_vec[self.obs_spec.foot_contacts_slice] = 0.0
         return noise_vec

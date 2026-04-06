@@ -34,62 +34,6 @@ class DepthBackbone58x87(nn.Module):
         return self.net(depth_bchw)
 
 
-class ResNetBackbone58x87(nn.Module):
-    """Frozen ResNet-18 (conv1 -> layer2) + trainable projection for RGB input.
-
-    Produces the same output_dim as DepthBackbone58x87, so it is a drop-in
-    replacement inside RecurrentDepthEncoder.
-
-    For input (B, 3, 58, 87):
-      conv1(s2) -> (64, 29, 44)
-      maxpool(s2) -> (64, 15, 22)
-      layer1 -> (64, 15, 22)
-      layer2(s2) -> (128, 8, 11)
-      AdaptiveAvgPool2d(1) -> (128,)
-      Linear(128, output_dim)
-
-    ~683K frozen params (conv1-layer2), ~4K trainable (projection).
-    """
-
-    def __init__(self, output_dim: int = 32):
-        super().__init__()
-        from torchvision.models import resnet18, ResNet18_Weights
-
-        full = resnet18(weights=ResNet18_Weights.DEFAULT)
-        self.features = nn.Sequential(
-            full.conv1, full.bn1, full.relu, full.maxpool,
-            full.layer1, full.layer2,
-        )
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.project = nn.Linear(128, output_dim)
-
-        # Freeze backbone
-        for p in self.features.parameters():
-            p.requires_grad = False
-        self.features.eval()
-
-        # ImageNet normalization constants (input expected in [0, 1])
-        self.register_buffer(
-            "_mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-        )
-        self.register_buffer(
-            "_std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-        )
-
-    def train(self, mode: bool = True):
-        super().train(mode)
-        self.features.eval()  # Keep frozen layers in eval mode always
-        return self
-
-    def forward(self, rgb_bchw: torch.Tensor) -> torch.Tensor:
-        """rgb_bchw: (B, 3, H, W) with values in [0, 1]."""
-        x = (rgb_bchw - self._mean) / self._std
-        with torch.no_grad():
-            feat = self.features(x)  # (B, 128, 8, 11)
-        pooled = self.pool(feat).flatten(1)  # (B, 128)
-        return self.project(pooled)  # (B, output_dim)
-
-
 class RecurrentDepthEncoder(nn.Module):
     """CNN + proprio fusion + GRU + Tanh output (latent + yaw), matching the paper."""
 
@@ -102,23 +46,16 @@ class RecurrentDepthEncoder(nn.Module):
         yaw_dim: int = 2,
         activation=nn.ELU,
         depth_in_channels: int = 1,
-        backbone_type: str = "cnn",
     ):
         super().__init__()
         act = activation()
         self.latent_dim = latent_dim
         self.yaw_dim = yaw_dim
         self.gru_hidden_dim = gru_hidden_dim
-        if backbone_type == "resnet18":
-            self.depth_backbone = ResNetBackbone58x87(
-                output_dim=depth_backbone_output_dim,
-            )
-        else:
-            self.depth_backbone = DepthBackbone58x87(
-                output_dim=depth_backbone_output_dim,
-                activation=activation,
-                in_channels=depth_in_channels,
-            )
+        self.depth_backbone = DepthBackbone58x87(
+            output_dim=depth_backbone_output_dim, activation=activation,
+            in_channels=depth_in_channels,
+        )
         self.combination_mlp = nn.Sequential(
             nn.Linear(depth_backbone_output_dim + num_proprio_for_combo, 128),
             act,
@@ -300,11 +237,7 @@ class ActorCriticParkourStudent(nn.Module):
         }
         missing, unexpected = self.actor.load_state_dict(actor_state, strict=False)
         if missing or unexpected:
-            # Teacher (ActorCriticRMA.Actor) and student (Sequential MLP) have different
-            # key layouts. The student checkpoint will overwrite these weights during
-            # resume, so this mismatch is non-fatal.
-            print(
-                f"  Warning: Teacher actor key mismatch (non-fatal): "
-                f"{len(missing)} missing, {len(unexpected)} unexpected. "
-                f"Student actor will be initialized from checkpoint instead."
+            raise RuntimeError(
+                "Teacher actor initialization mismatch. "
+                f"Missing keys: {missing}. Unexpected keys: {unexpected}."
             )

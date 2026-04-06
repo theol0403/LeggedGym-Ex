@@ -37,12 +37,6 @@ class LeggedRobotCfg(BaseConfig):
         # Visual texture for terrain (helps monocular depth estimation)
         add_texture = False  # apply a tiling texture to terrain surface
         texture_uv_scale = 10.0  # how many times the texture tiles across the terrain
-        texture_mode = "checkerboard"  # checkerboard, solid_red, solid_green, solid_blue, random_color, noise, bricks
-        # Lighting configuration for domain invariance experiments
-        ambient_light = (0.1, 0.1, 0.1)
-        light_direction = (-1, -1, -1)
-        light_intensity = 5.0
-        background_color = (0.04, 0.08, 0.12)
         # rough terrain only:
         # obtain terrain height information around feet (default: 9 points around feet), measure_
         # x  x   x
@@ -113,13 +107,6 @@ class LeggedRobotCfg(BaseConfig):
         dt =  0.02 # control frequency 50Hz
         # decimation: Number of control action updates @ sim DT per policy DT
         decimation = 4
-        # DC motor saturation (optional, None = no saturation):
-        # effort_limit: max torque per joint type [N*m]
-        # saturation_effort: motor saturation effort for velocity-dependent clipping [N*m]
-        # velocity_limit: max joint velocity for saturation curve [rad/s]
-        effort_limit = None      # e.g. {"hip": 35.0, "thigh": 40.0, "calf": 40.0}
-        saturation_effort = None # e.g. {"hip": 35.0, "thigh": 45.0, "calf": 45.0}
-        velocity_limit = None    # e.g. {"hip": 52.4, "thigh": 30.1, "calf": 30.1}
     
     class asset:
         # Common

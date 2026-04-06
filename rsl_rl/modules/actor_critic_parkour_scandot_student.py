@@ -16,8 +16,7 @@ class ActorCriticParkourScandotStudent(nn.Module):
 
     The depth encoder (CNN + GRU) predicts 132 scandot heights + 2 yaw values
     from depth images and proprioception.  A *frozen* teacher actor (held as a
-    non-owned reference) then maps full obs (with predicted scandots inserted)
-    -> actions.
+    non-owned reference) then maps [proprio + predicted_scandots] -> actions.
 
     Key differences from ActorCriticParkourStudent:
       - latent_dim = num_scandots (132) instead of 32
@@ -41,10 +40,9 @@ class ActorCriticParkourScandotStudent(nn.Module):
         num_scandots=132,
         yaw_output_dim=2,
         yaw_scale=1.5,
-        heading_command_indices=(6, 7),
+        heading_command_indices=(4, 5),
         activation="elu",
         clip_actions=100.0,
-        backbone_type="cnn",
         **kwargs,
     ):
         if kwargs:
@@ -55,8 +53,8 @@ class ActorCriticParkourScandotStudent(nn.Module):
         super().__init__()
 
         activation_layer = get_activation(activation)
-        self.num_obs = int(num_actor_obs)          # prop_dim (53)
-        self.num_teacher_actor_obs = int(num_teacher_actor_obs)  # 753
+        self.num_obs = int(num_actor_obs)          # prop_dim (43)
+        self.num_teacher_actor_obs = int(num_teacher_actor_obs)  # 175
         self.num_scandots = int(num_scandots)      # 132
         self.num_actions = int(num_actions)         # 12
         self.student_depth_shape = tuple(student_depth_shape)
@@ -81,7 +79,6 @@ class ActorCriticParkourScandotStudent(nn.Module):
             yaw_dim=self.yaw_output_dim,
             activation=type(activation_layer),
             depth_in_channels=c,
-            backbone_type=backbone_type,
         )
 
         # Teacher reference (set via set_teacher). We use object.__setattr__
@@ -96,20 +93,20 @@ class ActorCriticParkourScandotStudent(nn.Module):
     # ------------------------------------------------------------------
 
     def set_teacher(self, teacher_model):
-        """Store a reference to the frozen teacher (ActorCriticRMA).
+        """Store a reference to the frozen teacher (ActorCriticParkour).
 
         The teacher is NOT registered as a submodule, so its parameters
         stay out of this module's state_dict / optimizer.
         """
         object.__setattr__(self, "_teacher_ref", teacher_model)
 
-    def _teacher_act(self, teacher_obs: torch.Tensor) -> torch.Tensor:
-        """Call the frozen teacher's forward with hist_encoding=True."""
+    def _teacher_actor_mean(self, teacher_obs: torch.Tensor) -> torch.Tensor:
+        """Call the frozen teacher's actor forward: obs -> actions."""
         if self._teacher_ref is None:
             raise RuntimeError(
                 "Teacher not set. Call set_teacher() before forward."
             )
-        return self._teacher_ref.act_inference(teacher_obs, hist_encoding=True)
+        return self._teacher_ref._actor_mean(teacher_obs)
 
     # Alias kept for compatibility with the runner's load path
     def load_teacher_actor_weights(self, teacher_state_dict):
@@ -145,7 +142,7 @@ class ActorCriticParkourScandotStudent(nn.Module):
     # ------------------------------------------------------------------
 
     def proprio_for_depth_encoder(self, observations: torch.Tensor) -> torch.Tensor:
-        """Mask heading errors so depth must predict yaw."""
+        """Mask heading errors (indices 4:6) so depth must predict yaw."""
         out = observations.clone()
         out[:, self.heading_command_indices[0] : self.heading_command_indices[1] + 1] = 0.0
         return out
@@ -203,20 +200,14 @@ class ActorCriticParkourScandotStudent(nn.Module):
     def construct_teacher_obs(
         self, prop_obs: torch.Tensor, predicted_scandots: torch.Tensor
     ) -> torch.Tensor:
-        """Build the full observation for the teacher actor by concatenating prop + scandots.
-
-        Note: this only provides prop(53) + scandots(132) = 185 dims.
-        The teacher's act_inference with hist_encoding=True will slice
-        the appropriate portions. The runner is responsible for providing
-        the full 753-dim teacher_actor_obs when calling _teacher_act directly.
-        """
+        """Build the full (B, 175) observation for the teacher actor."""
         return torch.cat((prop_obs, predicted_scandots), dim=-1)
 
     def act(self, observations: torch.Tensor, student_depth: torch.Tensor) -> torch.Tensor:
         """Full forward: depth -> predicted scandots -> teacher actor -> actions."""
         predicted_scandots, _, _ = self.forward_depth(student_depth, observations)
         teacher_obs = self.construct_teacher_obs(observations, predicted_scandots)
-        return self._teacher_act(teacher_obs)
+        return self._teacher_actor_mean(teacher_obs)
 
     def act_inference(self, observations: torch.Tensor, student_depth: torch.Tensor) -> torch.Tensor:
         return self.act(observations, student_depth)
