@@ -12,14 +12,13 @@ student performance, not network architecture.  The best DA2-based
 student achieves 87\% gap success, within 7~pp of the ground-truth
 depth upper bound.
 
-The domain invariance experiment (Section~\ref{sec:domain}) revealed
-a nuanced picture: the DA2 pipeline provides strong invariance to
-color and brightness perturbations ($\leq$5.5~pp drop at moderate
-severity), which are the dominant sources of sim-to-real visual
-discrepancy.  DA2 also generalizes across different structured textures
-(bricks: $-$7.1~pp).  However, completely featureless surfaces cause
-catastrophic failure, reflecting a fundamental input requirement of
-monocular depth estimation rather than a domain invariance failure.
+The domain invariance experiment (Section~\ref{sec:domain}) showed
+that DA2 generalizes to unseen textures and lighting conditions
+with graceful degradation, failing only on featureless surfaces
+that lack the visual features monocular depth estimation requires.
+The depth signal quality (DSQ) metric provides a practical
+deployment diagnostic, cleanly separating functional conditions
+from this failure mode.
 
 \subsection{Implications}
 
