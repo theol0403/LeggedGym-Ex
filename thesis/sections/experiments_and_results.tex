@@ -148,28 +148,13 @@ more geometric structure. }
 \subsection{Domain Invariance}
 \label{sec:domain}
 
-We now test whether DA2 provides invariance to the visual domain
-shifts encountered in sim-to-real transfer.  We apply perturbations
-at \emph{test time only} to the trained student,
-spanning texture replacement and lighting/color shifts, with results shown in Table~\ref{tab:domain_inv}.
-Alongside success and progress, we report DSQ (Eq.~\ref{eq:dsq}) to measure how well DA2
-preserves terrain geometry under each perturbation. We show the relationship between DSQ and policy success in Figure~\ref{fig:dsq_scatter}.
+We now test whether DA2 provides invariance to the visual domain shifts encountered in sim-to-real transfer by
+perturbing the trained student only at \emph{test time}.  
+Table~\ref{tab:domain_inv}
+reports success, progress, and depth signal quality for texture replacement and lighting/color changes, while
+Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 
-The results show a clear two-tier structure.  All conditions with surface
-texture---whether seen during training or not---maintain
-DSQ $> 0.85$ and degrade gracefully, with realistic textures like
-stone tiles and gravel within 5~pp of baseline.
-Brightness and color jitter preserve DSQ  $> 0.91$ and cause moderate 8~pp performance drops.
-
-Featureless surfaces have a DSQ $< 0.77$.
-Predictably, without visual features, DA2 cannot recover depth, and succeed at a rate $< 23\%$.
-Since real-world surfaces
-universally carry natural texture, this failure mode is an
-artifact of simulation. DSQ thus serves as a
-pre-deployment check that rules out
-environments where the pipeline cannot function.
-
-\begin{table}[h]
+\begin{table}[b!]
   \centering
   \caption{Domain invariance: DA2 student on gap Row~0.  $\Delta$ = change in success vs.\ baseline (pp). }
   \label{tab:domain_inv}
@@ -219,8 +204,17 @@ environments where the pipeline cannot function.
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.95\linewidth]{figures/dsq_scatter.pdf}
-  \caption{DSQ vs.\ success rate.  Featureless surfaces (red) cluster
+  \caption{Success rate vs. DSQ. Featureless surfaces (red) cluster
   below DSQ = 0.85 with catastrophic failure; all textured conditions
   maintain DSQ $> 0.85$.}
   \label{fig:dsq_scatter}
 \end{figure}
+
+Lighting and color shifts cause only modest degradation, indicating
+that DA2 is largely robust to photometric variation.  Texture shifts
+are more mixed: concrete, stone tiles, gravel, and noise remain
+strong, while wood and bricks reduce success substantially despite
+high DSQ.  Featureless surfaces are the only catastrophic failure
+mode, collapsing both DSQ and success.  DSQ is therefore a useful
+failure indicator for missing geometric signal, but high DSQ alone
+does not guarantee full robustness across all unseen textures.
