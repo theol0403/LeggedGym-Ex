@@ -13,7 +13,7 @@ the recovered depth signal rather than the policy architecture.
 Increasing model capacity and adding structured terrain texture closes
 most of the gap to the GT-depth baseline on the gap curriculum.
 
-The domain-shift experiments further refine this result.  The
+The visual robustness experiments refine this result.  The
 DA2-based student is robust to lighting and color changes and
 transfers well to several unseen textured surfaces without
 photorealistic rendering or explicit domain randomization.  But the
@@ -31,8 +31,8 @@ Several limitations constrain this conclusion.  First, all experiments
 are in simulation, so the central sim-to-real claim is still
 unverified on hardware.  Second, the task scope is modest: the
 obstacles are simpler than those in recent real-world parkour systems,
-and the visual robustness study covers only two gap rows and
-one stair row rather than the full curriculum.  Third, the method depends on a
+and the visual robustness study covers only two gap rows and one stair
+row rather than the full curriculum.  Third, the method depends on a
 single off-the-shelf depth estimator.  DA2 degrades on weak-texture
 terrain, and high DSQ does not explain all failures on unseen
 textures.  Finally, the perception stack is still heavy for onboard

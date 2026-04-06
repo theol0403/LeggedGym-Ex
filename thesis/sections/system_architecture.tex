@@ -9,13 +9,15 @@ simulator~\citep{genesis2024} with the
 legged\_gym framework~\citep{rudin2022learning} and
 rsl\_rl~\citep{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
 The robot is a Unitree Go2 quadruped with 12 actuated joints.
-Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and converted to torques via a PD controller $\tau = K_p (a_t - q) - K_d \dot{q}$.
+Actions $a_t \in \R^{12}$ are target joint positions, updated at 50\,Hz
+and converted to torques by a PD controller
+$\tau = K_p (a_t - q) - K_d \dot{q}$.
 
 The system follows the two-stage privileged distillation pipeline
 described in Section~\ref{sec:intro}: a teacher trains with
 ground-truth scandot heightmaps~\citep{agarwal2023legged}, then a
-student reproduces the teacher's behavior from depth or RGB images
-via DAgger (Figure~\ref{fig:pipeline}).
+student reproduces the teacher's behavior from GT depth or
+DA2-estimated depth via DAgger (Figure~\ref{fig:pipeline}).
 
 \begin{figure}[t]
   \centering
@@ -29,15 +31,16 @@ via DAgger (Figure~\ref{fig:pipeline}).
 
 The teacher policy $\pi_T$ maps proprioception, privileged physics
 parameters, and scandot heightmaps to joint targets.  Three parallel
-MLPs encode each observation group into 32-dim latent vectors, which
+MLPs encode the observation groups into 32-dim latent vectors, which
 are concatenated with proprioception and fed through the actor MLP
-$\R^{n} \to \R^{12}$ to produce joint position offsets. 
+$\R^{n} \to \R^{12}$ to produce joint position offsets.
 
 \subsection{Student}
 \label{sec:student}
 
 The student replaces the scandot encoder with a visual encoder that
-must recover the terrain latent $z \in \R^{32}$ from a depth image (Figure~\ref{fig:student_arch}).
+recovers the terrain latent $z \in \R^{32}$ from a depth image
+(Figure~\ref{fig:student_arch}).
 A CNN maps the depth image $d \in \R^{58 \times 87}$ to a 32-dim
 feature, which is concatenated with proprioception and compressed by
 an MLP.  A GRU integrates these fused features
@@ -63,9 +66,9 @@ The simulator generates parkour terrains with three obstacle families
 (stairs, hurdles, gaps) at four difficulty levels per family
 (Figure~\ref{fig:terrain_curriculum})
 with gap widths from 0.24\,m to 0.50\,m.
-While these obstacles are simpler than those in
+These obstacles are simpler than those in
 prior work~\citep{cheng2023parkour, zhuang2023robot,
-chane2025soloparkour}, our goal is to establish a baseline for
+chane2025soloparkour}; our goal is to establish a baseline for
 evaluating the DA2 depth pipeline rather than to push the limits of
 agile locomotion.  During teacher training, a curriculum advances
 robots to harder rows upon reaching a success threshold.

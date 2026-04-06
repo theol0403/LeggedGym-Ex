@@ -33,14 +33,13 @@ skill-selection policy.
 All five systems assume access to a depth camera at deployment.
 
 \citet{jenkins2024learning} is the closest work to ours,
-training an RGB parkour policy using visual domain
-randomization with a fine-tuned MobileNetV2 backbone.
-In real-world trials, Jenkins achieved success on hurdles
-but failed on gap crossing, suggesting that domain randomization alone does not fully close
-the sim-to-real gap.
-We pursue a complementary strategy: rather than learning invariance
+training an RGB parkour policy using visual domain randomization with a
+fine-tuned MobileNetV2 backbone. In real-world trials, Jenkins
+succeeded on hurdles but failed on gaps, suggesting that domain
+randomization alone may not fully close the visual sim-to-real gap.
+We pursue a complementary strategy: instead of learning invariance
 through randomized exposure, we project RGB into a canonical depth
-space via a pre-trained estimator.
+space using a pre-trained estimator.
 
 \paragraph{Sim-to-real for vision.}
 Domain randomization~\citep{tobin2017domain} perturbs visual properties
@@ -51,9 +50,9 @@ generative models that produce photorealistic training images.
 \citet{xue2025opening} combine photorealistic simulation
 with a teacher--student--bootstrap framework for humanoid
 loco-manipulation from RGB.
-All three approaches require significant rendering or generation
-overhead; we sidestep this by projecting RGB into a canonical depth
-space via a pre-trained estimator.
+All three approaches require substantial rendering or generation
+overhead. We instead project RGB into a canonical depth space using a
+pre-trained estimator.
 
 \paragraph{Monocular depth estimation.}
 MiDaS~\citep{ranftl2020towards} pioneered monocular
@@ -62,8 +61,8 @@ estimation using a vision transformer encoder trained on 142M images.
 DA2 offers both relative and metric variants;
 we use the metric model, which predicts absolute depth in meters.
 Figure~\ref{fig:da2_qualitative} illustrates the qualitative behavior
-of DA2 across diverse scenes, which is the motivation for using it
-here as a canonical visual representation.
+of DA2 across diverse scenes and motivates its use here as a canonical
+visual representation.
 
 \begin{figure}[htbp]
   \centering

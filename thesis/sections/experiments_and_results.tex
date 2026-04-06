@@ -12,7 +12,7 @@ full course) and \emph{progress ratio} (mean fractional distance
 along the course before termination), both averaged over 256
 episodes.  
 
-When analyzing visual robustness, we also report
+For visual robustness, we also report
 \emph{depth signal quality} (DSQ), defined as the scale- and
 offset-invariant Pearson correlation
 between ground-truth and DA2-estimated depth images, averaged over
@@ -35,7 +35,8 @@ environments and time steps.
 \subsection{Baselines}
 \label{sec:baselines}
 
-We start by establishing upper bounds for the privileged teacher and the ground-truth depth sensing student (GT-depth).
+We first establish upper bounds for the privileged teacher and the
+ground-truth depth sensing student (GT-depth).
 The privileged teacher achieves near-perfect success across all gap difficulties, shown in Table~\ref{tab:baselines}.
 
 The GT-depth student, receiving simulator depth images,
@@ -66,13 +67,12 @@ rather than exploiting proprioceptive heuristics.
 \subsection{Parkour from Estimated Depth}
 \label{sec:da2_results}
 
-We now determine whether parkour can be achieved from estimated
-depth. Starting from the GT-depth setup, we replace simulator
-depth with DA2-small. 
-As shown in Table~\ref{tab:da2_main}, 
-DA2-small achieves success on early rows, but fails completely on Rows~2 and 3.
-Switching to DA2-base results in promotion to Row 3, but it still falls well short of
-GT-depth on the hardest rows.
+We next test whether parkour is possible from estimated depth.
+Starting from the GT-depth setup, we replace simulator depth with
+DA2-small.  As shown in Table~\ref{tab:da2_main}, DA2-small succeeds
+on the early rows but fails completely on Rows~2 and 3.  Switching to
+DA2-base reaches Row~3, but still falls well short of GT-depth on the
+hardest rows.
 
 The remaining limitation is the visual input. On untextured terrain,
 the gap boundary provides weak cues, so the depth estimate is
@@ -80,11 +80,11 @@ ambiguous. As shown in Table~\ref{tab:da2_main},
 adding a checkerboard terrain texture makes the gap geometry
 visible and closes most of the remaining gap to GT-depth.
 Figure~\ref{fig:da2_texture_comparison} shows examples of depth estimation
-directly across representative surface conditions. 
+across representative surface conditions.
 
 \begin{table}[htbp]
   \centering
-  \caption{Policy success rates (\%) during training as model scale and terrain texture are modified. }
+  \caption{Policy success rate (\%) as model scale and terrain texture vary.}
   \label{tab:da2_main}
   \small
   \begin{tabular}{@{}lcccc@{}}
@@ -101,10 +101,10 @@ directly across representative surface conditions.
 \end{table}
 
 
-Figure~\ref{fig:student_success}
-shows training dynamics, where reward rises steeply as the policies master flat terrain, then plateau
-as the curriculum exposes progressively harder obstacles. 
-The textured model is able to surpass the untextured models and approach the GT-depth's performance. 
+Figure~\ref{fig:student_success} shows the training dynamics. Reward
+rises steeply as the policies master flat terrain, then plateaus as
+the curriculum exposes harder obstacles. The textured model surpasses
+the untextured models and approaches the GT-depth baseline.
 
 % TODO: maybe progress ratio isn't right, why is depth lower?
 
@@ -112,9 +112,10 @@ The textured model is able to surpass the untextured models and approach the GT-
   \centering
   \includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
   \includegraphics[width=\linewidth]{figures/per_obstacle_success.pdf}
-  \caption{Success rate during student training. Breaking success down by obstacle shows most of the gain comes from gap traversal; stairs and hurdles are
-less sensitive to texture because their geometry remains visible.
-}
+  \caption{Success rate during student training. Breaking success down by
+  obstacle type shows that most of the gain comes from gap traversal;
+  stairs and hurdles are less sensitive to texture because their
+  geometry remains visible.}
   \label{fig:student_success}
 \end{figure}
 
@@ -127,7 +128,7 @@ less sensitive to texture because their geometry remains visible.
     corresponding DA2 depth estimate (right). Featureless terrain
 produces the weakest obstacle localization and the lowest DSQ, while
 checkerboard, grass, and wood all preserve substantially
-more geometric structure. }
+more geometric structure.}
   \label{fig:da2_texture_comparison}
 \end{figure*}
 
@@ -135,13 +136,12 @@ more geometric structure. }
 \subsection{Visual Robustness}
 \label{sec:domain}
 
-We now test whether DA2 provides robustness to the visual appearance
-shifts that would be encountered in sim-to-real transfer by perturbing
-the trained student only at \emph{test time}.
-Table~\ref{tab:domain_inv} reports success across three terrain
-configurations for texture replacement, lighting/color changes,
-and combinations thereof, while Figure~\ref{fig:dsq_scatter}
-plots DSQ against policy success.
+We next test robustness to the appearance shifts that would arise in
+sim-to-real transfer by perturbing the trained student only at
+\emph{test time}.  Table~\ref{tab:domain_inv} reports success across
+three terrain settings under texture replacement, lighting/color
+changes, and combined perturbations, while
+Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 
 \begin{figure}[htbp]
   \centering
@@ -182,8 +182,8 @@ plots DSQ against policy success.
     \quad Mild\textsuperscript{a}    & 76.6 &  8.2 & 100.0 \\
     \quad Extreme\textsuperscript{b} & 34.0 &  0.4 &  99.6 \\
     \bottomrule
-    \multicolumn{4}{@{}l}{\footnotesize\textsuperscript{a} Concrete texture + dim lighting (0.6$\times$) + brightness jitter $\pm$20\%.} \\
-    \multicolumn{4}{@{}l}{\footnotesize\textsuperscript{b} Noise texture + dim lighting (0.4$\times$) + low contrast ($\gamma{=}1.8$) + color jitter $\pm$20\%.} \\
+    \multicolumn{4}{@{}p{6.3cm}@{}}{\footnotesize\textsuperscript{a} Concrete texture + dim lighting (0.6$\times$) + brightness jitter $\pm$20\%.} \\
+    \multicolumn{4}{@{}p{6.3cm}@{}}{\footnotesize\textsuperscript{b} Noise texture + dim lighting (0.4$\times$) + low contrast ($\gamma{=}1.8$) + color jitter $\pm$20\%.} \\
   \end{tabular}
 \end{table}
 
@@ -201,6 +201,5 @@ degradation.  Lighting and color shifts cause modest degradation,
 confirming DA2 is largely robust to photometric variation.
 As Figure~\ref{fig:dsq_scatter} shows, DSQ is a useful failure
 indicator: featureless surfaces collapse both DSQ and success,
-but high DSQ alone does not guarantee full robustness---some
-unseen textures (e.g.\ wood, bricks) reduce success substantially
-despite preserving global depth structure.
+but high DSQ alone does not guarantee full robustness on harder rows
+or under all unseen textures.
