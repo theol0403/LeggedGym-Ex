@@ -154,7 +154,16 @@ Table~\ref{tab:domain_inv}
 reports success, progress, and depth signal quality for texture replacement and lighting/color changes, while
 Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 
-\begin{table}[b!]
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/dsq_scatter.pdf}
+  \caption{Success rate vs. DSQ. Featureless surfaces (red) cluster
+  below DSQ = 0.85 with catastrophic failure; all textured conditions
+  maintain DSQ $> 0.85$.}
+  \label{fig:dsq_scatter}
+\end{figure}
+
+\begin{table}[h!]
   \centering
   \caption{Domain invariance: DA2 student on gap Row~0.  $\Delta$ = change in success vs.\ baseline (pp). }
   \label{tab:domain_inv}
@@ -200,15 +209,6 @@ Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 \end{table}
 
 % TODO: renders need to be improved
-
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=0.95\linewidth]{figures/dsq_scatter.pdf}
-  \caption{Success rate vs. DSQ. Featureless surfaces (red) cluster
-  below DSQ = 0.85 with catastrophic failure; all textured conditions
-  maintain DSQ $> 0.85$.}
-  \label{fig:dsq_scatter}
-\end{figure}
 
 Lighting and color shifts cause only modest degradation, indicating
 that DA2 is largely robust to photometric variation.  Texture shifts
