@@ -4,37 +4,49 @@
 
 \subsection{Summary}
 
-We presented a pipeline for vision-based quadruped parkour that uses
-monocular depth estimation as an intermediate representation.  Our
-systematic experiments revealed that depth signal quality---governed
-by model scale and terrain texture---is the primary bottleneck for
-student performance, not network architecture.  The best DA2-based
-student achieves 87\% gap success, within 7~pp of the ground-truth
-depth upper bound.
+We presented a teacher--student pipeline for vision-based quadruped
+parkour that uses monocular depth estimation as an intermediate
+representation.  The GT-depth baseline shows that the student
+architecture can solve the task when accurate geometry is available.
+The DA2 experiments show that the main bottleneck is the quality of
+the recovered depth signal rather than the policy architecture.
+Increasing model capacity and adding structured terrain texture closes
+most of the gap to the GT-depth baseline on the gap curriculum.
 
-The domain-shift experiments in Section~\ref{sec:domain} support a
-more specific claim.  DA2 is robust to lighting and color variation,
-and some unseen textured surfaces transfer well, but not all texture
-changes are equally benign.  The clearest failure case is loss of
-visible surface structure.  Taken together, these results support
-monocular depth as a useful interface between vision and locomotion,
-while showing that deployment still depends on the quality of the
-recovered geometry.
+The domain-shift experiments further refine this result.  The
+DA2-based student is robust to lighting and color changes and
+transfers well to several unseen textured surfaces without
+photorealistic rendering or explicit domain randomization.  But the
+method is not appearance-invariant in general: some unseen textures
+still reduce success, and featureless surfaces fail because monocular
+depth cannot recover reliable geometry there.  DSQ is a useful
+indicator of whether the visual pipeline preserves terrain structure,
+but it does not fully determine policy success.  Overall, the results
+support monocular depth as a viable bridge from RGB to locomotion, but
+not yet as a complete sim-to-real solution.
 
 \subsection{Limitations}
 
-This study is still limited to simulation, so the central open
-question is whether the observed robustness transfers to a real
-robot.  The current pipeline is also sensitive to weak visual
-structure and relies on a relatively large depth model, which may be
-costly for onboard deployment.  These constraints make the results a
-proof of concept rather than a complete sim-to-real solution.
+Several limitations constrain this conclusion.  First, all experiments
+are in simulation, so the central sim-to-real claim is still
+unverified on hardware.  Second, the task scope is modest: the
+obstacles are simpler than those in recent real-world parkour systems,
+and the domain-invariance study is measured on a single gap row rather
+than across the full curriculum.  Third, the method depends on a
+single off-the-shelf depth estimator.  DA2 degrades on weak-texture
+terrain, and high DSQ does not explain all failures on unseen
+textures.  Finally, the perception stack is still heavy for onboard
+deployment.  The current system is therefore best viewed as a proof of
+concept rather than a deployable parkour pipeline.
 
 \subsection{Future Work}
 
-The most important next step is real-world evaluation on the Unitree
-Go2.  A second priority is reducing perception cost through smaller
-or distilled depth models, or through temporal models that stabilize
-predictions across frames.  Longer term, jointly adapting the
-perception stack and student policy may further close the remaining
-gap to the GT-depth baseline.
+The next step is real-world evaluation on the Unitree Go2.  This will
+test robustness under real camera noise, motion blur, exposure shifts,
+and outdoor lighting, and determine whether DSQ remains useful as a
+deployment diagnostic.  A second direction is broader evaluation
+across stairs, hurdles, and more difficult compound courses.  On the
+modeling side, smaller or temporally consistent depth estimators could
+reduce compute cost and stabilize predictions, while joint adaptation
+of the depth estimator and student policy may improve robustness on
+harder textures and further close the gap to the GT-depth baseline.
