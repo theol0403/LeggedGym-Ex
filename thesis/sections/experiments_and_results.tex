@@ -16,16 +16,8 @@ episodes.
 \subsection{Baselines}
 \label{sec:baselines}
 
-Table~\ref{tab:baselines} 
-establishes upper bounds for the privileged teacher and the ground-truth depth sensing student (GT-depth).
-The privileged teacher achieves near-perfect success across all gap difficulties.
-
-The GT-depth student, receiving simulator depth images,
-achieves $\geq$87\% success on all rows, confirming the CNN--GRU
-architecture extracts sufficient geometry from a single depth viewpoint.
-A zero-depth ablation (all depth pixels set to zero)
-drops success to 8\%, verifying the policy relies on depth
-rather than exploiting proprioceptive heuristics.
+We start by establishing upper bounds for the privileged teacher and the ground-truth depth sensing student (GT-depth).
+The privileged teacher achieves near-perfect success across all gap difficulties, shown in Table~\ref{tab:baselines}.
 
 \begin{table}[h]
   \centering
@@ -43,14 +35,21 @@ rather than exploiting proprioceptive heuristics.
   \end{tabular}
 \end{table}
 
+The GT-depth student, receiving simulator depth images,
+achieves $\geq$87\% success on all rows, confirming the CNN--GRU
+architecture extracts sufficient geometry from a single depth viewpoint.
+A zero-depth ablation (all depth pixels set to zero)
+drops success to 8\%, verifying the policy relies on depth
+rather than exploiting proprioceptive heuristics.
 
 Figure~\ref{fig:teacher_training} shows training dynamics for both
 baseline stages. Reward rises steeply as the policy masters flat terrain, then continues
 climbing as the adaptive curriculum exposes progressively harder
-obstacles. The teacher converges as the
-curriculum reaches maximum difficulty. The GT-depth student's
+obstacles. The GT-depth student's
 distillation loss drops quickly but success climbs gradually, reflecting the difficulty of recovering the
 teacher's behavior from a single depth viewpoint.
+
+% TODO: add distillation loss to graph
 
 \begin{figure}[h]
   \centering
@@ -64,28 +63,26 @@ teacher's behavior from a single depth viewpoint.
 \subsection{Parkour from Estimated Depth}
 \label{sec:da2_results}
 
-We progressively close the gap between DA2-estimated depth and
-the GT-depth upper bound by improving two factors that govern
-depth signal quality: model scale and terrain texture.
+We then test whether parkour can be achieved from estimated
+depth. We start with a simple setup, then add the
+two changes that matter most: a larger DA2 model and terrain texture.
 
-\paragraph{Model scale.}
-DA2-small ($\sim$25M params) plateaued at $\sim$56\% on Row~0.
-DA2-base ($\sim$100M params) improved Row~0 to 68\% and Row~1
-to 83\%, but Row~3 remained near zero.
-On untextured terrain, DA2-small produces nearly flat depth
-estimates (terrain--depth correlation $r = -0.10$), making gaps
-invisible to the CNN.
+The DA2-small baseline uses untextured terrain.  It trains, but it does
+not converge to reliable gap crossing.  DA2-base improves the easier
+rows, but the harder gaps still fail.  Model scale helps, but it does
+not solve the core problem.
 
-\paragraph{Terrain texture.}
-Monocular depth estimation relies on visual features (texture
-gradients, edges, perspective cues).  Adding a checkerboard
-texture to the simulated terrain provides these features, and
-combined with DA2-base produced a step-change in performance:
+The remaining limitation is the visual input.  On untextured terrain,
+the gap boundary provides weak monocular cues, so the depth estimate is
+ambiguous.  Adding terrain texture makes the gap geometry visible.  With
+DA2-base, this raises success to 80--93\% across all rows and brings
+the estimated-depth policy within 7~pp of the GT-depth upper bound.
 
 \begin{table}[h]
   \centering
-  \caption{Effect of model scale and terrain texture on gap
-  success (\%).  GT-depth shown as upper bound.}
+  \caption{Gap success (\%) as model scale and terrain texture are added
+  to the estimated-depth pipeline.  GT-depth is shown as an upper
+  bound.}
   \label{tab:da2_main}
   \small
   \begin{tabular}{@{}lcccc@{}}
@@ -105,6 +102,14 @@ DA2-base + texture reaches 80--93\% across all rows, within 7~pp
 of the GT-depth upper bound.  Row~3 improved from 0.8\% to
 80.5\%---a +80~pp gain from texture alone.
 
+Table~\ref{tab:da2_main} summarizes this progression.
+Figure~\ref{fig:student_success} shows the same pattern during
+training: the untextured models plateau early, while DA2-base +
+texture continues improving.  Figure~\ref{fig:per_obstacle} shows that
+most of the gain comes from gaps; stairs and hurdles remain strong
+without ground texture because their vertical structure is already
+visible.
+
 Figure~\ref{fig:student_reward} shows mean episode reward during
 training, with the teacher's converged reward as a reference.
 The GT-depth student converges fastest and reaches the highest
@@ -116,11 +121,10 @@ on untextured terrain.
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
-  \caption{Mean episode reward during student training.  The dashed
-  line shows the teacher's converged reward.  DA2-base + texture
-  approaches the GT-depth student, while DA2-base (no texture)
-  plateaus lower due to weaker depth signals.}
-  \label{fig:student_reward}
+  \caption{Overall success rate during student training.  The
+    untextured models plateau early, while DA2-base + texture
+  approaches the GT-depth upper bound.}
+  \label{fig:student_success}
 \end{figure}
 
 Figure~\ref{fig:per_obstacle} breaks down per-obstacle progress

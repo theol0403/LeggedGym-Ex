@@ -22,7 +22,7 @@ plt.rcParams.update({
 
 FIGURES_DIR = Path('thesis/figures')
 ARCHIVE = Path('logs_archive')
-MAX_ITER = 8000
+MAX_ITER = 5000
 SMOOTH_W = 101   # smoothing window for student plots
 SMOOTH_PAD = 200  # extra padding past MAX_ITER for smoothing support
 
@@ -85,7 +85,7 @@ DA2_SMALL_CHAIN = [
 STUDENT_RUNS = [
     ('GT-depth student',      None,               GT_DEPTH,           '#333333'),
     ('DA2-base + texture',    DA2_BASE_TEX_CHAIN,  None,              '#d95f02'),
-    ('DA2-base (no texture)', DA2_BASE_CHAIN,      None,              '#7570b3'),
+    ('DA2-base', DA2_BASE_CHAIN,      None,              '#7570b3'),
 ]
 
 def _load_run(tag, chain, single):
@@ -155,9 +155,9 @@ def fig_student_reward():
 
 def fig_per_obstacle():
     fig, axes = plt.subplots(1, 3, figsize=(6.5, 2.5), sharey=True)
-    tags = [('Episode/progress_gap', 'Gap'),
+    tags = [
             ('Episode/progress_stairs', 'Stairs'),
-            ('Episode/progress_hurdle_block', 'Hurdle/Block')]
+            ('Episode/progress_hurdle_block', 'Hurdle/Block'),('Episode/progress_gap', 'Gap')]
     runs = STUDENT_RUNS
     for ax, (tag, title) in zip(axes, tags):
         for label, chain, single, color in runs:
@@ -170,7 +170,7 @@ def fig_per_obstacle():
         ax.set_title(title); ax.set_xlabel('Iteration')
         ax.set_xlim(0, MAX_ITER); ax.set_ylim(-0.05, 1.05); ax.grid(True, alpha=0.3)
     axes[0].set_ylabel('Progress Ratio')
-    axes[0].legend(loc='lower right', fontsize=7, framealpha=0.9)
+    axes[1].legend(loc='lower right', fontsize=7, framealpha=0.9)
     fig.tight_layout()
     fig.savefig(FIGURES_DIR / 'per_obstacle_success.pdf')
     fig.savefig(FIGURES_DIR / 'per_obstacle_success.png')
