@@ -86,7 +86,6 @@ STUDENT_RUNS = [
     ('GT-depth student',      None,               GT_DEPTH,           '#333333'),
     ('DA2-base + texture',    DA2_BASE_TEX_CHAIN,  None,              '#d95f02'),
     ('DA2-base (no texture)', DA2_BASE_CHAIN,      None,              '#7570b3'),
-    ('DA2-small',             DA2_SMALL_CHAIN,     None,              '#e7298a'),
 ]
 
 def _load_run(tag, chain, single):
@@ -136,16 +135,18 @@ def fig_teacher():
     plt.close(fig)
 
 
-def fig_student_success():
+def fig_student_reward():
     fig, ax = plt.subplots(figsize=(5, 3))
+
     for label, chain, single, color in STUDENT_RUNS:
-        steps, vals = _load_run('Episode/success', chain, single)
+        steps, vals = _load_run('Train/mean_reward', chain, single)
         steps, vals = prepare(steps, vals)
         ax.plot(steps, vals, label=label, color=color)
-    ax.set_xlabel('Iteration'); ax.set_ylabel('Success Rate')
-    ax.set_xlim(0, MAX_ITER); ax.set_ylim(-0.05, 1.05)
+
+    ax.set_xlabel('Iteration'); ax.set_ylabel('Mean Episode Reward')
+    ax.set_xlim(0, MAX_ITER)
     ax.legend(loc='lower right', framealpha=0.9); ax.grid(True, alpha=0.3)
-    ax.set_title('Overall Success Rate During Training')
+    ax.set_title('Student Reward During Training')
     fig.tight_layout()
     fig.savefig(FIGURES_DIR / 'student_success_comparison.pdf')
     fig.savefig(FIGURES_DIR / 'student_success_comparison.png')
@@ -154,9 +155,9 @@ def fig_student_success():
 
 def fig_per_obstacle():
     fig, axes = plt.subplots(1, 3, figsize=(6.5, 2.5), sharey=True)
-    tags = [('Episode/success_gap', 'Gap'),
-            ('Episode/success_stairs', 'Stairs'),
-            ('Episode/success_hurdle_block', 'Hurdle/Block')]
+    tags = [('Episode/progress_gap', 'Gap'),
+            ('Episode/progress_stairs', 'Stairs'),
+            ('Episode/progress_hurdle_block', 'Hurdle/Block')]
     runs = STUDENT_RUNS
     for ax, (tag, title) in zip(axes, tags):
         for label, chain, single, color in runs:
@@ -168,7 +169,7 @@ def fig_per_obstacle():
                 pass
         ax.set_title(title); ax.set_xlabel('Iteration')
         ax.set_xlim(0, MAX_ITER); ax.set_ylim(-0.05, 1.05); ax.grid(True, alpha=0.3)
-    axes[0].set_ylabel('Success Rate')
+    axes[0].set_ylabel('Progress Ratio')
     axes[0].legend(loc='lower right', fontsize=7, framealpha=0.9)
     fig.tight_layout()
     fig.savefig(FIGURES_DIR / 'per_obstacle_success.pdf')
@@ -194,7 +195,7 @@ def fig_loss():
 
 if __name__ == '__main__':
     fig_teacher()
-    fig_student_success()
+    fig_student_reward()
     fig_per_obstacle()
     fig_loss()
     print('Done — all figures saved to', FIGURES_DIR)
