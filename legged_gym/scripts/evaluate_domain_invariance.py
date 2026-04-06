@@ -228,6 +228,7 @@ def _evaluate_single(
         success_sum = 0.0
         progress_sum = 0.0
         frame_correlations = []
+        edge_correlations = []
         track_dsq = compute_depth_metric and is_da2_student
 
         max_steps = int(math.ceil(episodes / env.num_envs) * env.max_episode_length * 2)
@@ -261,8 +262,12 @@ def _evaluate_single(
                             ).squeeze(1)
                         else:
                             da2_resized = da2_raw
-                        gt_flat = gt_depth.reshape(gt_depth.shape[0], -1).float()
-                        da2_flat = da2_resized.reshape(da2_resized.shape[0], -1).float()
+                        gt_f = gt_depth.float()
+                        da2_f = da2_resized.float()
+
+                        # Global DSQ (Pearson correlation)
+                        gt_flat = gt_f.reshape(gt_f.shape[0], -1)
+                        da2_flat = da2_f.reshape(da2_f.shape[0], -1)
                         gt_c = gt_flat - gt_flat.mean(dim=1, keepdim=True)
                         da2_c = da2_flat - da2_flat.mean(dim=1, keepdim=True)
                         numer = (gt_c * da2_c).sum(dim=1)
@@ -270,6 +275,30 @@ def _evaluate_single(
                         pearson = (numer / denom).mean().item()
                         if not math.isnan(pearson):
                             frame_correlations.append(pearson)
+
+                        # Edge-weighted DSQ: Sobel edges on GT, weighted Pearson
+                        # Sobel kernels (3x3)
+                        sobel_x = torch.tensor([[-1,0,1],[-2,0,2],[-1,0,1]], device=gt_f.device, dtype=gt_f.dtype).view(1,1,3,3)
+                        sobel_y = torch.tensor([[-1,-2,-1],[0,0,0],[1,2,1]], device=gt_f.device, dtype=gt_f.dtype).view(1,1,3,3)
+                        gt_4d = gt_f.unsqueeze(1)  # (N,1,H,W)
+                        gx = F.conv2d(gt_4d, sobel_x, padding=1)
+                        gy = F.conv2d(gt_4d, sobel_y, padding=1)
+                        edge_mag = (gx**2 + gy**2).sqrt().squeeze(1)  # (N,H,W)
+                        # Normalize to [0,1] per env, add small floor so non-edge pixels still contribute
+                        emax = edge_mag.flatten(1).max(dim=1).values.view(-1,1,1).clamp(min=1e-6)
+                        weights = (edge_mag / emax).clamp(min=0.05)  # floor=0.05
+                        w_flat = weights.reshape(weights.shape[0], -1)
+                        # Weighted Pearson: subtract weighted mean, then correlation
+                        w_sum = w_flat.sum(dim=1, keepdim=True)
+                        gt_wm = (w_flat * gt_flat).sum(dim=1, keepdim=True) / w_sum
+                        da2_wm = (w_flat * da2_flat).sum(dim=1, keepdim=True) / w_sum
+                        gt_wc = gt_flat - gt_wm
+                        da2_wc = da2_flat - da2_wm
+                        w_numer = (w_flat * gt_wc * da2_wc).sum(dim=1)
+                        w_denom = ((w_flat * gt_wc**2).sum(dim=1) * (w_flat * da2_wc**2).sum(dim=1)).sqrt() + 1e-8
+                        edge_pearson = (w_numer / w_denom).mean().item()
+                        if not math.isnan(edge_pearson):
+                            edge_correlations.append(edge_pearson)
 
             num_resets = int(torch.sum(dones).item())
             if num_resets <= 0 or "episode" not in infos:
@@ -293,6 +322,8 @@ def _evaluate_single(
     }
     if frame_correlations:
         result["depth_signal_quality"] = sum(frame_correlations) / len(frame_correlations)
+    if edge_correlations:
+        result["edge_dsq"] = sum(edge_correlations) / len(edge_correlations)
     return result
 
 
@@ -363,11 +394,14 @@ def main():
             print(f"  progress_ratio = {metrics.get('progress_ratio', -1):.4f}")
             if "depth_signal_quality" in metrics:
                 print(f"  depth_signal_quality = {metrics['depth_signal_quality']:.4f}")
+            if "edge_dsq" in metrics:
+                print(f"  edge_dsq = {metrics['edge_dsq']:.4f}")
             print(f"  episodes = {metrics['episodes']}")
             print(f"  elapsed = {elapsed:.1f}s")
 
     # Check if any result has DSQ
     has_dsq = any("depth_signal_quality" in r for r in results)
+    has_edge_dsq = any("edge_dsq" in r for r in results)
 
     # Print summary table
     print(f"\n{'='*100}")
@@ -379,12 +413,15 @@ def main():
         header += f" | {sn:>15}"
     if has_dsq:
         header += f" | {'DSQ':>8}"
+    if has_edge_dsq:
+        header += f" | {'eDSQ':>8}"
     print(header)
     print("-" * len(header))
 
     for pn in perturbation_names:
         row = f"{pn:<25}"
         dsq_val = None
+        edsq_val = None
         for sn in student_names:
             match = [r for r in results if r["student"] == sn and r["perturbation"] == pn]
             if match:
@@ -392,10 +429,14 @@ def main():
                 row += f" | {sr:>14.1%}" if sr >= 0 else f" | {'ERROR':>15}"
                 if dsq_val is None and "depth_signal_quality" in match[0]:
                     dsq_val = match[0]["depth_signal_quality"]
+                if edsq_val is None and "edge_dsq" in match[0]:
+                    edsq_val = match[0]["edge_dsq"]
             else:
                 row += f" | {'N/A':>15}"
         if has_dsq:
             row += f" | {dsq_val:>8.3f}" if dsq_val is not None else f" | {'---':>8}"
+        if has_edge_dsq:
+            row += f" | {edsq_val:>8.3f}" if edsq_val is not None else f" | {'---':>8}"
         print(row)
 
     # Compute deltas from baseline
