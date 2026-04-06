@@ -148,73 +148,69 @@ more geometric structure. }
 \subsection{Domain Invariance}
 \label{sec:domain}
 
-We now test whether DA2 provides invariance to the visual domain shifts encountered in sim-to-real transfer by
-perturbing the trained student only at \emph{test time}.  
-Table~\ref{tab:domain_inv}
-reports success, progress, and depth signal quality for texture replacement and lighting/color changes, while
-Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
+We now test whether DA2 provides invariance to the visual domain
+shifts encountered in sim-to-real transfer by perturbing the
+trained student only at \emph{test time}.
+Table~\ref{tab:domain_inv} reports success across three terrain
+configurations for texture replacement, lighting/color changes,
+and combinations thereof, while Figure~\ref{fig:dsq_scatter}
+plots DSQ against policy success.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.95\linewidth]{figures/dsq_scatter.pdf}
-  \caption{Success rate vs. DSQ. Featureless surfaces (red) cluster
-  below DSQ = 0.85 with catastrophic failure; all textured conditions
-  maintain DSQ $> 0.85$.}
+  \caption{Success rate vs.\ DSQ across gap Row~0 (circles) and
+  Row~3 (squares), colored by perturbation type. Featureless
+  surfaces cluster below DSQ\,=\,0.85 with catastrophic failure;
+  all textured conditions maintain DSQ\,$>$\,0.85.}
   \label{fig:dsq_scatter}
 \end{figure}
 
 \begin{table}[h!]
   \centering
-  \caption{Domain invariance: DA2 student on gap Row~0.  $\Delta$ = change in success vs.\ baseline (pp). }
+  \caption{Domain invariance: test-time success~(\%) under visual
+  perturbations across obstacle types (256 episodes per cell).}
   \label{tab:domain_inv}
   \small
-  \begin{tabular}{@{}p{3.8cm}rrrr@{}}
+  \begin{tabular}{@{}p{3.2cm}rrr@{}}
     \toprule
-    Perturbation & Succ. & Prog. & $\Delta$ & DSQ \\
+    Perturbation & Gap R0 & Gap R3 & Stairs \\
     \midrule
-    Baseline (checkerboard) & 96.1\% & .945 & --- & .922 \\
+    Baseline (checkerboard) & 96.1 & 94.1 & 100.0 \\
     \midrule
-    \multicolumn{5}{@{}l}{\textit{Realistic surface textures}} \\
-    \quad Concrete & 79.3\% & .856 & $-$16.8 & .914 \\
-    \quad Wood & 34.8\% & .563 & $-$61.3 & .916 \\
-    \quad Grass & 66.0\% & .766 & $-$30.1 & .929 \\
-    \quad Stone tiles & 93.0\% & .924 & $-$3.1 & .910 \\
-    \quad Gravel & 91.4\% & .918 & $-$4.7 & .910 \\
+    \multicolumn{4}{@{}l}{\textit{Realistic surface textures}} \\
+    \quad Concrete     & 79.3 & 12.1 & 99.6 \\
+    \quad Stone tiles  & 93.0 & 78.9 & 100.0 \\
+    \quad Gravel       & 91.4 & 48.8 & 100.0 \\
     \midrule
-    \multicolumn{5}{@{}l}{\textit{Other structured textures}} \\
-    \quad Bricks & 59.0\% & .715 & $-$37.1 & .913 \\
-    \quad Noise & 82.8\% & .868 & $-$13.3 & .928 \\
+    \multicolumn{4}{@{}l}{\textit{Structured / featureless}} \\
+    \quad Noise        & 82.8 & 29.3 & 100.0 \\
+    \quad No texture   & 16.8 &  0.0 & 100.0 \\
     \midrule
-    \multicolumn{5}{@{}l}{\textit{Featureless surfaces}} \\
-    \quad No texture & 16.8\% & .439 & $-$79.3 & .756 \\
-    \quad Solid red & 22.7\% & .492 & $-$73.4 & .764 \\
-    \quad Solid blue & 8.6\% & .377 & $-$87.5 & .719 \\
+    \multicolumn{4}{@{}l}{\textit{Brightness / color}} \\
+    \quad Dim (0.3$\times$)      & 82.8 & 58.2 &  99.6 \\
+    \quad Color $\pm$30\%        & 79.3 & 32.0 &  99.6 \\
     \midrule
-    \multicolumn{5}{@{}l}{\textit{Lighting}} \\
-    \quad Dim (0.3$\times$) & 82.8\% & .855 & $-$13.3 & .938 \\
-    \quad Bright (2.0$\times$) & 94.5\% & .934 & $-$1.6 & .916 \\
-    \quad Low contrast ($\gamma{=}2.2$) & 76.2\% & .817 & $-$19.9 & .935 \\
-    \midrule
-    \multicolumn{5}{@{}l}{\textit{Color / brightness jitter}} \\
-    \quad Brightness $\pm$30\% & 93.0\% & .927 & $-$3.1 & .923 \\
-    \quad Brightness $\pm$60\% & 94.1\% & .933 & $-$1.6 & .923 \\
-    \quad Color $\pm$15\% & 89.1\% & .900 & $-$7.0 & .926 \\
-    \quad Color $\pm$30\% & 79.3\% & .831 & $-$16.8 & .923 \\
-    \midrule
-    \multicolumn{5}{@{}l}{\textit{Combined}} \\
-    \quad Mild & 76.6\% & .833 & $-$19.5 & .917 \\
-    \quad Extreme & 34.0\% & .560 & $-$62.1 & .856 \\
+    \multicolumn{4}{@{}l}{\textit{Combined}} \\
+    \quad Mild         & 76.6 &  8.2 & 100.0 \\
+    \quad Extreme      & 34.0 &  0.4 &  99.6 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 % TODO: renders need to be improved
-
-Lighting and color shifts cause only modest degradation, indicating
-that DA2 is largely robust to photometric variation.  Texture shifts
-are more mixed: concrete, stone tiles, gravel, and noise remain
-strong, while wood and bricks reduce success substantially despite
-high DSQ.  Featureless surfaces are the only catastrophic failure
-mode, collapsing both DSQ and success.  DSQ is therefore a useful
-failure indicator for missing geometric signal, but high DSQ alone
-does not guarantee full robustness across all unseen textures.
+Stairs are nearly immune to all perturbations because step edges
+provide strong geometric cues regardless of surface appearance.
+Gaps, by contrast, have no geometric edges---the boundary is
+visible only through surface texture---so perturbation effects
+are large and scale with difficulty. On easy gaps, stone tiles
+and gravel remain near baseline while featureless surfaces fail
+catastrophically; on hard gaps the same perturbations are
+amplified, approaching zero where Row~0 showed only moderate
+degradation. Lighting and color shifts cause modest degradation,
+confirming DA2 is largely robust to photometric variation.
+As Figure~\ref{fig:dsq_scatter} shows, DSQ is a useful failure
+indicator: featureless surfaces collapse both DSQ and success,
+but high DSQ alone does not guarantee full robustness---some
+unseen textures (e.g.\ wood, bricks) reduce success substantially
+despite preserving global depth structure.

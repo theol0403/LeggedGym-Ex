@@ -3,13 +3,13 @@
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import numpy as np
+from matplotlib.lines import Line2D
 
 plt.rcParams.update({
     'font.size': 9,
     'axes.labelsize': 10,
     'axes.titlesize': 10,
-    'legend.fontsize': 7,
+    'legend.fontsize': 6.5,
     'xtick.labelsize': 8,
     'ytick.labelsize': 8,
     'figure.dpi': 300,
@@ -18,10 +18,9 @@ plt.rcParams.update({
     'lines.linewidth': 1.2,
 })
 
-# Results from full domain invariance evaluation (256 episodes, gap Row 0)
-data = {
-    # (label, DSQ, success_rate, category)
-    "Baseline (checkerboard)": (0.922, 0.961, "baseline"),
+# Data: (DSQ, success_rate, category)
+# Category determines color; terrain determines marker shape.
+gap0 = {
     # Realistic textures
     "Concrete":     (0.914, 0.793, "realistic"),
     "Wood":         (0.916, 0.348, "realistic"),
@@ -36,77 +35,106 @@ data = {
     "Solid red":    (0.764, 0.227, "featureless"),
     "Solid blue":   (0.719, 0.086, "featureless"),
     # Lighting
-    "Dim (0.3x)":        (0.938, 0.828, "lighting"),
-    "Bright (2x)":       (0.916, 0.945, "lighting"),
-    "Low contrast":      (0.935, 0.762, "lighting"),
+    "Dim":          (0.938, 0.828, "lighting"),
+    "Bright":       (0.916, 0.945, "lighting"),
+    "Low contrast": (0.935, 0.762, "lighting"),
     # Jitter
-    "Brightness ±30%":   (0.923, 0.930, "jitter"),
-    "Brightness ±60%":   (0.923, 0.941, "jitter"),
-    "Color ±15%":        (0.926, 0.891, "jitter"),
-    "Color ±30%":        (0.923, 0.793, "jitter"),
+    "B. ±30%":      (0.923, 0.930, "jitter"),
+    "B. ±60%":      (0.923, 0.941, "jitter"),
+    "C. ±15%":      (0.926, 0.891, "jitter"),
+    "C. ±30%":      (0.923, 0.793, "jitter"),
     # Combined
-    "Combined mild":     (0.917, 0.766, "combined"),
-    "Combined extreme":  (0.856, 0.340, "combined"),
+    "Comb. mild":   (0.917, 0.766, "combined"),
+    "Comb. extreme":(0.856, 0.340, "combined"),
+    # Baseline
+    "Baseline":     (0.922, 0.961, "baseline"),
 }
 
-cat_styles = {
-    "baseline":    {"color": "black",   "marker": "*", "s": 120, "zorder": 10},
-    "realistic":   {"color": "#2ca02c", "marker": "o", "s": 50,  "zorder": 5},
-    "structured":  {"color": "#1f77b4", "marker": "s", "s": 50,  "zorder": 5},
-    "featureless": {"color": "#d62728", "marker": "X", "s": 60,  "zorder": 5},
-    "lighting":    {"color": "#ff7f0e", "marker": "D", "s": 50,  "zorder": 5},
-    "jitter":      {"color": "#9467bd", "marker": "^", "s": 50,  "zorder": 5},
-    "combined":    {"color": "#8c564b", "marker": "P", "s": 60,  "zorder": 5},
+gap3 = {
+    "Baseline":     (0.924, 0.941, "baseline"),
+    "No texture":   (0.703, 0.000, "featureless"),
+    "Concrete":     (0.818, 0.121, "realistic"),
+    "Stone tiles":  (0.905, 0.789, "realistic"),
+    "Gravel":       (0.863, 0.488, "realistic"),
+    "Noise":        (0.862, 0.293, "structured"),
+    "Dim":          (0.910, 0.582, "lighting"),
+    "C. ±30%":      (0.873, 0.320, "jitter"),
+    "Comb. mild":   (0.803, 0.082, "combined"),
+    "Comb. extreme":(0.746, 0.004, "combined"),
 }
 
+# Color by perturbation category
+cat_colors = {
+    "baseline":    "black",
+    "realistic":   "#2ca02c",
+    "structured":  "#1f77b4",
+    "featureless": "#d62728",
+    "lighting":    "#ff7f0e",
+    "jitter":      "#9467bd",
+    "combined":    "#8c564b",
+}
 cat_labels = {
     "baseline":    "Baseline",
     "realistic":   "Realistic textures",
     "structured":  "Other structured",
-    "featureless": "Featureless surfaces",
+    "featureless": "Featureless",
     "lighting":    "Lighting",
     "jitter":      "Color/brightness jitter",
     "combined":    "Combined",
 }
 
-fig, ax = plt.subplots(figsize=(4.5, 3.5))
+# Shape by terrain
+terrain_markers = {"Gap R0": "o", "Gap R3": "s"}
+terrain_sizes   = {"Gap R0": 35,  "Gap R3": 40}
 
-# Plot each category
-for cat, style in cat_styles.items():
-    pts = [(name, dsq, sr) for name, (dsq, sr, c) in data.items() if c == cat]
-    if not pts:
-        continue
-    dsqs = [p[1] for p in pts]
-    srs = [p[2] for p in pts]
-    ax.scatter(dsqs, [s * 100 for s in srs], label=cat_labels[cat],
-               **style, edgecolors="white", linewidths=0.3)
+fig, ax = plt.subplots(figsize=(4.8, 3.8))
 
-# Add a few select labels
-labels_to_show = {"Wood", "Stone tiles", "No texture", "Combined extreme", "Baseline (checkerboard)"}
-for name, (dsq, sr, cat) in data.items():
-    if name in labels_to_show:
-        offset = (5, 5)
-        if name == "Wood":
-            offset = (5, -10)
-        elif name == "Baseline (checkerboard)":
-            offset = (-60, 5)
-            name = "Baseline"
-        elif name == "Combined extreme":
-            offset = (5, 5)
-            name = "Comb. extreme"
-        ax.annotate(name, (dsq, sr * 100), textcoords="offset points",
-                    xytext=offset, fontsize=6.5, color="grey")
+# Plot each terrain × category combination
+for terrain_label, data in [("Gap R0", gap0), ("Gap R3", gap3)]:
+    mk = terrain_markers[terrain_label]
+    sz = terrain_sizes[terrain_label]
+    for name, (dsq, sr, cat) in data.items():
+        ax.scatter(dsq, sr * 100, color=cat_colors[cat],
+                   marker=mk, s=sz, alpha=0.85,
+                   edgecolors="white", linewidths=0.3, zorder=5)
+
+# Annotate select points
+annotations = {
+    "Baseline (R0)":      (0.922, 96.1, (-55, 6)),
+    "Stone tiles (R0)":   (0.910, 93.0, (-78, -3)),
+    "No tex (R0)":        (0.756, 16.8, (5, -10)),
+    "Wood (R0)":          (0.916, 34.8, (5, -8)),
+    "Baseline (R3)":      (0.924, 94.1, (5, -12)),
+    "Stone tiles (R3)":   (0.905, 78.9, (5, 4)),
+    "No tex (R3)":        (0.703, 0.0, (5, 4)),
+    "Comb. ext (R3)":     (0.746, 0.4, (-15, 8)),
+}
+for label, (x, y, offset) in annotations.items():
+    ax.annotate(label, (x, y), textcoords="offset points",
+                xytext=offset, fontsize=6, color="grey")
 
 ax.set_xlabel("Depth Signal Quality (DSQ)")
 ax.set_ylabel("Success Rate (%)")
-ax.set_xlim(0.68, 0.96)
-ax.set_ylim(-2, 102)
-ax.legend(loc="upper left", framealpha=0.9, ncol=1)
+ax.set_xlim(0.67, 0.96)
+ax.set_ylim(-3, 103)
 ax.grid(True, alpha=0.3)
 
-# Add vertical threshold line
+# Threshold line
 ax.axvline(x=0.85, color="grey", linestyle="--", linewidth=0.8, alpha=0.5)
-ax.text(0.855, 5, "DSQ = 0.85", fontsize=6.5, color="grey", alpha=0.7)
+ax.text(0.855, 3, "DSQ = 0.85", fontsize=6.5, color="grey", alpha=0.7)
+
+# Build two-part legend: colors (category) + shapes (terrain)
+color_handles = [Line2D([0], [0], marker="o", color="w", markerfacecolor=c,
+                        markersize=6, label=cat_labels[cat])
+                 for cat, c in cat_colors.items()]
+shape_handles = [Line2D([0], [0], marker=mk, color="w", markerfacecolor="grey",
+                        markersize=6, label=terrain)
+                 for terrain, mk in terrain_markers.items()]
+leg1 = ax.legend(handles=color_handles, loc="upper left", framealpha=0.9,
+                 title="Perturbation type", title_fontsize=6.5)
+ax.add_artist(leg1)
+ax.legend(handles=shape_handles, loc="center left", framealpha=0.9,
+          title="Terrain", title_fontsize=6.5)
 
 fig.tight_layout()
 fig.savefig("thesis/figures/dsq_scatter.pdf")
