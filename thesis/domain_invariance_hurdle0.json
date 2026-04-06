@@ -1,0 +1,110 @@
+{
+  "config": {
+    "force_family": "hurdle_block",
+    "force_row": 0,
+    "episodes": 256,
+    "num_envs": 48
+  },
+  "results": [
+    {
+      "success_rate": 0.96875,
+      "progress_ratio": 0.9547327182954177,
+      "episodes": 256,
+      "depth_signal_quality": 0.9109801299739302,
+      "edge_dsq": 0.891463598835538,
+      "student": "DA2-base+tex",
+      "perturbation": "baseline",
+      "elapsed_s": 431.39832854270935
+    },
+    {
+      "success_rate": 0.9140625,
+      "progress_ratio": 0.926392630499322,
+      "episodes": 256,
+      "depth_signal_quality": 0.8046534725861956,
+      "edge_dsq": 0.7561418224674786,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_none",
+      "elapsed_s": 199.94504308700562
+    },
+    {
+      "success_rate": 0.95703125,
+      "progress_ratio": 0.9385670847259462,
+      "episodes": 256,
+      "depth_signal_quality": 0.9411885114789187,
+      "edge_dsq": 0.9271763373949133,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_concrete",
+      "elapsed_s": 416.69001841545105
+    },
+    {
+      "success_rate": 0.953125,
+      "progress_ratio": 0.9454016834497452,
+      "episodes": 256,
+      "depth_signal_quality": 0.9041137594795792,
+      "edge_dsq": 0.8841277744466737,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_stone_tiles",
+      "elapsed_s": 416.0275614261627
+    },
+    {
+      "success_rate": 0.93359375,
+      "progress_ratio": 0.9283950677490793,
+      "episodes": 256,
+      "depth_signal_quality": 0.9166845297849485,
+      "edge_dsq": 0.8963914250281503,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_gravel",
+      "elapsed_s": 395.20527148246765
+    },
+    {
+      "success_rate": 0.97265625,
+      "progress_ratio": 0.9520043173106387,
+      "episodes": 256,
+      "depth_signal_quality": 0.928637923138634,
+      "edge_dsq": 0.9073363818881416,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_noise",
+      "elapsed_s": 396.61011123657227
+    },
+    {
+      "success_rate": 0.99609375,
+      "progress_ratio": 0.9679896191228181,
+      "episodes": 256,
+      "depth_signal_quality": 0.9443379377539409,
+      "edge_dsq": 0.9282614910230594,
+      "student": "DA2-base+tex",
+      "perturbation": "light_dim",
+      "elapsed_s": 400.48408460617065
+    },
+    {
+      "success_rate": 0.9727626459143969,
+      "progress_ratio": 0.9571186977253814,
+      "episodes": 257,
+      "depth_signal_quality": 0.9246573111209225,
+      "edge_dsq": 0.9061777693234526,
+      "student": "DA2-base+tex",
+      "perturbation": "jitter_color_strong",
+      "elapsed_s": 414.75098419189453
+    },
+    {
+      "success_rate": 0.97265625,
+      "progress_ratio": 0.951128113665618,
+      "episodes": 256,
+      "depth_signal_quality": 0.9487519433115912,
+      "edge_dsq": 0.935557733322012,
+      "student": "DA2-base+tex",
+      "perturbation": "combined_mild",
+      "elapsed_s": 410.84235644340515
+    },
+    {
+      "success_rate": 0.8949416342412452,
+      "progress_ratio": 0.9154861121210143,
+      "episodes": 257,
+      "depth_signal_quality": 0.8940027326631089,
+      "edge_dsq": 0.866773852620262,
+      "student": "DA2-base+tex",
+      "perturbation": "combined_extreme",
+      "elapsed_s": 401.688684463501
+    }
+  ]
+}
