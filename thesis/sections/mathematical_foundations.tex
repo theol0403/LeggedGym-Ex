@@ -43,38 +43,13 @@ GAE~\cite{schulman2016high} advantage estimate.
 
 \subsection{Reward Function}
 
-Table~\ref{tab:rewards} lists the shaped reward terms.
-
-\begin{table}[h]
-  \centering
-  \caption{Reward function terms and scales.}
-  \label{tab:rewards}
-  \small
-  \begin{tabular}{@{}p{3.2cm}rl@{}}
-    \toprule
-    Term & Scale & Description \\
-    \midrule
-    tracking\_goal\_vel & 3.0 & Track goal velocity \\
-    tracking\_goal\_heading & 1.5 & Track heading \\
-    progress\_along\_course & 2.0 & Forward progress \\
-    waypoint\_bonus & 20.0 & Sparse bonus \\
-    success\_bonus & 40.0 & Course completion \\
-    termination & $-50.0$ & Early termination \\
-    collision & $-2.0$ & Body contact \\
-    feet\_stumble & $-1.0$ & Foot stumble \\
-    feet\_edge & $-2.0$ & Foot on edge \\
-    torques & $-2{\times}10^{-4}$ & Torque penalty \\
-    dof\_acc & $-2{\times}10^{-7}$ & Joint accel. \\
-    action\_rate & $-0.01$ & Action smooth. \\
-    dof\_pos\_limits & $-2.0$ & Joint limit \\
-    torque\_limits & $-0.2$ & Torque limit \\
-    lin\_vel\_z & $-0.5$ & Vertical vel. \\
-    ang\_vel\_xy & $-0.05$ & Roll/pitch rate \\
-    orientation & $-0.5$ & Non-upright \\
-    flat\_back & $-3.0$ & Torso orient. \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+The teacher uses a standard shaped reward that combines task progress
+with regularization for stable locomotion.  Positive terms encourage
+tracking the commanded velocity and heading, making forward progress,
+and reaching waypoints and course completion.  Penalty terms discourage
+early termination, collisions, unstable body motion, large torques and
+joint accelerations, abrupt action changes, and violations of joint or
+torque limits.
 
 \subsection{DAgger Distillation}
 \label{sec:dagger}
@@ -92,4 +67,3 @@ minimizes:
 \end{equation}
 where $\hat{y} \in \R^2$ is the student's predicted heading and
 $y_\text{oracle}$ is the ground-truth heading.
-

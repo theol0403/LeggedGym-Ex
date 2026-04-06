@@ -21,8 +21,7 @@ via DAgger (Figure~\ref{fig:pipeline}).
   \centering
   \input{figures/pipeline}
   \caption{Two-stage training pipeline.  The teacher uses privileged
-    scandot observations; the student replaces these with either GT depth,
-  DA2-inferred depth.}
+    scandot observations; the student replaces these with either GT depth or DA2-inferred depth.}
   \label{fig:pipeline}
 \end{figure}
 
@@ -44,7 +43,7 @@ feature, which is concatenated with proprioception and compressed by
 an MLP.  A GRU integrates these fused features
 across timesteps, producing $z$ and a heading estimate
 $\hat{y} \in \R^{2}$.  The teacher's actor MLP is reused, taking
-$[o_\text{prop};\, z]$ to output 12 joint targets.  During
+$[o_\text{prop};\, z]$ to output joint targets.  During
 DAgger distillation, the student minimizes the loss in
 Eq.~\ref{eq:dagger_loss} while the teacher's actions are executed
 in the environment.
@@ -62,7 +61,7 @@ in the environment.
 
 The simulator generates parkour terrains with three obstacle families
 (stairs, hurdles, gaps) at four difficulty levels per family
-(Figure~\ref{fig:terrains})
+(Figure~\ref{fig:terrain_curriculum})
 with gap widths from 0.24\,m to 0.50\,m.
 While these obstacles are simpler than those in
 prior work~\citep{cheng2023parkour, zhuang2023robot,
@@ -73,12 +72,9 @@ robots to harder rows upon reaching a success threshold.
 
 \begin{figure}[t]
   \centering
-  % \includegraphics[width=\columnwidth]{figures/terrains.pdf}
-  \fbox{\parbox[c][5em][c]{0.9\columnwidth}{\centering
-      \textbf{[Terrain screenshots]}\\
-      Stairs \quad Hurdles \quad Gaps}}
-  \caption{Simulated parkour terrains at increasing difficulty
-    (left to right within each family).}
-  \label{fig:terrains}
+  \includegraphics[width=\linewidth]{figures/terrain_curriculum.png}
+  \caption{Parkour curriculum progression across obstacle families.
+    Difficulty increases from left to right by increasing step
+    count/height, hurdle size, and gap width.}
+  \label{fig:terrain_curriculum}
 \end{figure}
-
