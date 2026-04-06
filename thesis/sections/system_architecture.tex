@@ -5,15 +5,15 @@
 \subsection{Overview}
 
 All experiments use the Genesis GPU
-simulator~\cite{genesis2024} with the
-legged\_gym framework~\cite{rudin2022learning} and
-rsl\_rl~\cite{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
+simulator~\citep{genesis2024} with the
+legged\_gym framework~\citep{rudin2022learning} and
+rsl\_rl~\citep{schwarke2025rslrl} on 4$\times$ NVIDIA L40S GPUs.
 The robot is a Unitree Go2 quadruped with 12 actuated joints.
 Actions $a_t \in \R^{12}$ are target joint positions, updated at 50Hz and converted to torques via a PD controller $\tau = K_p (a_t - q) - K_d \dot{q}$.
 
 The system follows the two-stage privileged distillation pipeline
 described in Section~\ref{sec:intro}: a teacher trains with
-ground-truth scandot heightmaps~\cite{agarwal2023legged}, then a
+ground-truth scandot heightmaps~\citep{agarwal2023legged}, then a
 student reproduces the teacher's behavior from depth or RGB images
 via DAgger (Figure~\ref{fig:pipeline}).
 

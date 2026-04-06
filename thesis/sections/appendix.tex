@@ -1,0 +1,199 @@
+\appendix
+\section{Hyperparameters}
+\label{sec:hyperparameters}
+
+This appendix lists all training hyperparameters used in the
+experiments.  Unless otherwise noted, values are shared across all
+runs.
+
+\subsection{Reward Function}
+
+Table~\ref{tab:reward} lists the reward terms and scale factors used
+for teacher training.  The reward at each step is
+$r_t = \sum_i w_i \, r_i(s_t, a_t)$, where $w_i$ is the scale and
+$r_i$ is the per-term reward signal.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Teacher reward terms and scales.}
+  \label{tab:reward}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Term & Scale \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Task progress}} \\
+    \quad Tracking goal velocity & 3.0 \\
+    \quad Tracking goal heading & 1.5 \\
+    \quad Progress along course & 2.0 \\
+    \quad Waypoint reached bonus & 20.0 \\
+    \quad Success bonus & 40.0 \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Termination \& collision}} \\
+    \quad Termination & $-$50.0 \\
+    \quad Collision & $-$2.0 \\
+    \quad Feet stumble & $-$1.0 \\
+    \quad Feet edge & $-$2.0 \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Locomotion regularization}} \\
+    \quad Torques & $-$2.0$\times 10^{-4}$ \\
+    \quad Joint power & $-$2.0$\times 10^{-4}$ \\
+    \quad Joint acceleration & $-$2.0$\times 10^{-7}$ \\
+    \quad Action rate & $-$0.01 \\
+    \quad Action smoothness & $-$0.01 \\
+    \quad Joint position limits & $-$2.0 \\
+    \quad Torque limits & $-$0.2 \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Body stability}} \\
+    \quad Linear velocity $z$ & $-$0.5 \\
+    \quad Angular velocity $xy$ & $-$0.05 \\
+    \quad Orientation & $-$0.5 \\
+    \quad Flat back & $-$3.0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{PPO (Teacher)}
+
+\begin{table}[htbp]
+  \centering
+  \caption{PPO hyperparameters for teacher training.}
+  \label{tab:ppo_params}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Environments & 4096 \\
+    Steps per env per update & 48 \\
+    Mini-batches & 4 \\
+    Learning epochs per update & 5 \\
+    Learning rate & $1 \times 10^{-3}$ \\
+    LR schedule & adaptive (target KL) \\
+    Desired KL & 0.01 \\
+    Discount $\gamma$ & 0.99 \\
+    GAE $\lambda$ & 0.95 \\
+    Clip $\epsilon$ & 0.2 \\
+    Entropy coefficient & 0.01 \\
+    Value loss coefficient & 1.0 \\
+    Max gradient norm & 1.0 \\
+    Max iterations & 2500 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{DAgger Distillation (Student)}
+
+\begin{table}[htbp]
+  \centering
+  \caption{DAgger hyperparameters for student distillation.}
+  \label{tab:dagger_params}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Environments & 48 \\
+    Steps per env per update & 120 \\
+    BPTT window & 24 \\
+    Learning rate & $2 \times 10^{-3}$ \\
+    Actor LR scale (DA2 student) & 0.1 \\
+    LR schedule (DA2 student) & cosine \\
+    Action loss coefficient & 1.0 \\
+    Yaw loss coefficient & 1.0 \\
+    Yaw threshold (MTS) & 0.6 \\
+    Max gradient norm & 1.0 \\
+    Max iterations & 5000 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Network Architecture}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Network architecture details.}
+  \label{tab:arch}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Component & Specification \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Teacher}} \\
+    \quad Scandot encoder & [128, 64, 32] MLP \\
+    \quad Actor MLP & [512, 256, 128] $\to$ 12 \\
+    \quad Critic MLP & [1024, 512, 256] $\to$ 1 \\
+    \quad Activation & ELU \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Student depth encoder}} \\
+    \quad CNN & Conv2d(1,32,5) $\to$ MaxPool(2) $\to$ \\
+    & Conv2d(32,64,3) $\to$ FC(62400,128) \\
+    & $\to$ FC(128,32) \\
+    \quad Input resolution & $58 \times 87$ (H $\times$ W) \\
+    \quad Combination MLP & [$d_\text{cnn}{+}d_\text{prop}$, 128, 32] \\
+    \quad GRU & hidden dim = 512, 1 layer \\
+    \quad Output & [512, 34] $\to$ Tanh \\
+    & (32 latent + 2 yaw) \\
+    \quad Actor MLP (reused) & [512, 256, 128] $\to$ 12 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Control and Domain Randomization}
+
+\begin{table}[htbp]
+  \centering
+  \caption{PD control and domain randomization parameters.}
+  \label{tab:control_dr}
+  \small
+  \begin{tabular}{@{}lr@{}}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{PD controller}} \\
+    \quad $K_p$ & 30.0 \\
+    \quad $K_d$ & 0.75 \\
+    \quad Action scale & 0.25 \\
+    \quad Control dt & 0.02\,s (50\,Hz) \\
+    \quad Decimation & 4 \\
+    \midrule
+    \multicolumn{2}{@{}l}{\textit{Domain randomization}} \\
+    \quad Friction range & [0.2, 1.7] \\
+    \quad Added base mass & [$-$1.0, 1.0]\,kg \\
+    \quad CoM displacement $xyz$ & $\pm$0.03\,m \\
+    \quad $K_p$ / $K_d$ scale & [0.8, 1.2] \\
+    \quad Push interval & 15\,s \\
+    \quad Max push velocity & 1.0\,m/s \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Terrain and Curriculum}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Obstacle dimensions per curriculum row.}
+  \label{tab:terrain}
+  \small
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    & Row~0 & Row~1 & Row~2 & Row~3 \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textit{Stairs}} \\
+    \quad Step height (m) & 0.06 & 0.08 & 0.10 & 0.12 \\
+    \quad Step count & 2 & 3 & 4 & 4 \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textit{Hurdles}} \\
+    \quad Height (m) & 0.10 & 0.14 & 0.20 & 0.26 \\
+    \quad Length (m) & 0.20 & 0.22 & 0.25 & 0.28 \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textit{Gaps}} \\
+    \quad Width (m) & 0.24 & 0.32 & 0.42 & 0.50 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Terrain sections are 12.0\,m long and 3.6\,m wide. The curriculum
+grid has 4 rows (difficulty levels) $\times$ 12 columns (3 families
+$\times$ 4 variants). Robots advance to harder rows when their success
+rate exceeds 85\% and regress when it drops below 40\%.

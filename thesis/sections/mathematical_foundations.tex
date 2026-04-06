@@ -18,8 +18,11 @@ position offsets).  Observations decompose into three groups:
     commands, joint positions, joint velocities, previous
     actions, and foot contacts.
   \item \textbf{Exteroception} $o_\text{ext}$: scandot
-    heightmaps ($\R^{132}$) for the teacher, or depth/RGB images
-    for the student.
+    heightmaps ($\R^{132}$) for the teacher, or depth images
+    for the student.  Scandots~\citep{agarwal2023legged} are terrain
+    height samples on a $12 \times 11$ grid in the robot's body frame.
+    Each value records the height difference
+    between the base and the terrain surface, clipped to $[-1, 1]$.
   \item \textbf{Privileged} $o_\text{priv}$: friction and other physics parameters available only during teacher
     training.
 \end{itemize}
@@ -28,7 +31,7 @@ position offsets).  Observations decompose into three groups:
 \label{sec:ppo}
 
 The teacher policy $\pi_\theta$ is trained with Proximal Policy
-Optimization (PPO)~\cite{schulman2017proximal}, which maximizes a
+Optimization (PPO)~\citep{schulman2017proximal}, which maximizes a
 clipped surrogate objective:
 \begin{equation}
   L^{\text{CLIP}} = \E_t\!\left[\min\!\left(
@@ -39,7 +42,7 @@ clipped surrogate objective:
 \end{equation}
 where $r_t = \pi_\theta(a_t|o_t) / \pi_{\theta_{\text{old}}}(a_t|o_t)$
 is the probability ratio and $\hat{A}_t$ is the
-GAE~\cite{schulman2016high} advantage estimate.
+GAE~\citep{schulman2016high} advantage estimate.
 
 \subsection{Reward Function}
 
@@ -55,7 +58,7 @@ torque limits.
 \label{sec:dagger}
 
 The student policy is trained via Dataset Aggregation
-(DAgger)~\cite{ross2011reduction}.  At each step the student observes
+(DAgger)~\citep{ross2011reduction}.  At each step the student observes
 $o_\text{prop}$ and a depth image and produces $a_\text{student}$,
 but the teacher's action $a_\text{teacher}$ is executed.  The student
 minimizes:

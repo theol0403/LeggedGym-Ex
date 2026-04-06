@@ -6,40 +6,49 @@
 Modern quadruped controllers are typically learned via reinforcement
 learning in simulation and transferred to real
 hardware~\citep{hwangbo2019learning, rudin2022learning}.
-Chen~et~al.~\cite{chen2020learning} introduced the privileged
+\citet{chen2020learning} introduced the privileged
 teacher--student paradigm, where a teacher with access to ground-truth
 state is distilled into a sensorimotor student.
-Lee~et~al.~\cite{lee2020learning} applied this to locomotion,
+\citet{lee2020learning} applied this to locomotion,
 training a student from proprioceptive history alone and achieving
 zero-shot sim-to-real transfer on rough terrain.
-Miki~et~al.~\cite{miki2022learning} extended this framework to
+\citet{kumar2021rma} introduced rapid motor adaptation,
+using a learned adaptation module to estimate privileged parameters
+online.
+\citet{miki2022learning} extended this framework to
 perceptive locomotion, incorporating exteroceptive depth inputs.
 
 \paragraph{Vision-based parkour.}
-Agarwal~et~al.~\cite{agarwal2023legged} introduced the scandot
+\citet{agarwal2023legged} introduced the scandot
 representation for egocentric depth-based locomotion, distilling a
 privileged teacher into a visual student.
-Extreme Parkour~\cite{cheng2023parkour} and Robot Parkour
-Learning~\cite{zhuang2023robot} build on this with CNN--GRU students
+Extreme Parkour~\citep{cheng2023parkour} and Robot Parkour
+Learning~\citep{zhuang2023robot} build on this with CNN--GRU students
 that process depth images, demonstrating climbing, jumping, and
 crawling on real quadrupeds.
-SoloParkour~\cite{chane2025soloparkour} replaces distillation with
+SoloParkour~\citep{chane2025soloparkour} replaces distillation with
 off-policy RL warm-started from privileged experience, and
-ANYmal Parkour~\cite{hoeller2024anymal} uses a hierarchical
+ANYmal Parkour~\citep{hoeller2024anymal} uses a hierarchical
 skill-selection policy.
-All four systems assume access to a depth camera at deployment.
-Jenkins~\cite{jenkins2024learning} is the closest work to ours,
-training an RGB parkour policy via domain randomization;
-we instead use monocular depth estimation as a canonical
-intermediate representation.
+All five systems assume access to a depth camera at deployment.
+
+\citet{jenkins2024learning} is the closest work to ours,
+training an RGB parkour policy using visual domain
+randomization with a fine-tuned MobileNetV2 backbone.
+In real-world trials, Jenkins achieved success on hurdles
+but failed on gap crossing, suggesting that domain randomization alone does not fully close
+the sim-to-real gap.
+We pursue a complementary strategy: rather than learning invariance
+through randomized exposure, we project RGB into a canonical depth
+space via a pre-trained estimator.
 
 \paragraph{Sim-to-real for vision.}
-Domain randomization~\cite{tobin2017domain} perturbs visual properties
+Domain randomization~\citep{tobin2017domain} perturbs visual properties
 (textures, lighting, colors) so the policy learns invariance through
 exposure.
-LucidSim~\cite{yu2024lucidsim} replaces randomization with
+LucidSim~\citep{yu2024lucidsim} replaces randomization with
 generative models that produce photorealistic training images.
-Xue~et~al.~\cite{xue2025opening} combine photorealistic simulation
+\citet{xue2025opening} combine photorealistic simulation
 with a teacher--student--bootstrap framework for humanoid
 loco-manipulation from RGB.
 All three approaches require significant rendering or generation
@@ -47,17 +56,16 @@ overhead; we sidestep this by projecting RGB into a canonical depth
 space via a pre-trained estimator.
 
 \paragraph{Monocular depth estimation.}
-MiDaS \cite{ranftl2020towards} pioneered monocular
-depth estimation across diverse datasets. Depth~Anything~V2 (DA2)
-\cite{yang2024depth} achieves state-of-the-art zero-shot depth
-estimation using a vision transformer trained on 142M images.
+MiDaS~\citep{ranftl2020towards} pioneered monocular
+depth estimation across diverse datasets. Depth~Anything~V2 (DA2)~\citep{yang2024depth} achieves state-of-the-art zero-shot depth
+estimation using a vision transformer encoder trained on 142M images.
 DA2 offers both relative and metric variants;
 we use the metric model, which predicts absolute depth in meters.
 Figure~\ref{fig:da2_qualitative} illustrates the qualitative behavior
 of DA2 across diverse scenes, which is the motivation for using it
 here as a canonical visual representation.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{figures/depth_anything_v2_demo.png}
   \caption{Depth Anything V2 \cite{yang2024depth,depthanythingv2repo}.}
