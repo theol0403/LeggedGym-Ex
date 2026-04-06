@@ -63,25 +63,27 @@ teacher's behavior from a single depth viewpoint.
 \subsection{Parkour from Estimated Depth}
 \label{sec:da2_results}
 
-We then test whether parkour can be achieved from estimated
-depth. We start with a simple setup, then add the
-two changes that matter most: a larger DA2 model and terrain texture.
+We now determine whether parkour can be achieved from estimated
+depth. We start with a simple setup adapted from GT-depth. 
+To determine the appropriate DA2 model size, we start with the DA2-small model. 
+As shown in Table~\ref{tab:da2_main}, 
+DA2-small achieves success on Row~0 and 1, but fails completely on Rows~2 and 3.
+Switching to DA2-base results in promotion to Row 3, showing that a larger model is necessary to perceive obstacles despite a higher computational burden.
 
-The DA2-small baseline uses untextured terrain.  It trains, but it does
-not converge to reliable gap crossing.  DA2-base improves the easier
-rows, but the harder gaps still fail.  Model scale helps, but it does
-not solve the core problem.
+% TODO: visuals of row 1-4
+% TODO: visuals of with and without texture including DA2s perception of obstacles
+% TODO: depth quality metric?
 
-The remaining limitation is the visual input.  On untextured terrain,
-the gap boundary provides weak monocular cues, so the depth estimate is
-ambiguous.  Adding terrain texture makes the gap geometry visible.  With
-DA2-base, this raises success to 80--93\% across all rows and brings
-the estimated-depth policy within 7~pp of the GT-depth upper bound.
+The remaining limitation is the visual input. On untextured terrain,
+the gap boundary provides weak context cues, so the depth estimate is
+ambiguous.  Adding checkerboard terrain texture makes the gap geometry visible. As shown in 
+Table \ref{tab:da2_main}, this
+raises success across all rows and brings the estimated-depth policy within 7\% of the GT-depth upper bound.
 
 \begin{table}[h]
   \centering
-  \caption{Gap success (\%) as model scale and terrain texture are added
-  to the estimated-depth pipeline.  GT-depth is shown as an upper
+  \caption{Policy success (\%) as model scale and terrain texture are added
+  to the estimated-depth pipeline. GT-depth is shown as an upper
   bound.}
   \label{tab:da2_main}
   \small
@@ -89,28 +91,15 @@ the estimated-depth policy within 7~pp of the GT-depth upper bound.
     \toprule
     Configuration & Row~0 & Row~1 & Row~2 & Row~3 \\
     \midrule
+    GT-depth & 94.5 & 94.5 & 89.1 & 87.5 \\
     DA2-small & 56.3 & 33.6 & --- & --- \\
     DA2-base & 68.4 & 83.2 & 26.6 & 0.8 \\
-    \textbf{DA2-base + texture} & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
-    \midrule
-    GT-depth student & 94.5 & 94.5 & 89.1 & 87.5 \\
+    DA2-base + texture & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-DA2-base + texture reaches 80--93\% across all rows, within 7~pp
-of the GT-depth upper bound.  Row~3 improved from 0.8\% to
-80.5\%---a +80~pp gain from texture alone.
-
-Table~\ref{tab:da2_main} summarizes this progression.
-Figure~\ref{fig:student_success} shows the same pattern during
-training: the untextured models plateau early, while DA2-base +
-texture continues improving.  Figure~\ref{fig:per_obstacle} shows that
-most of the gain comes from gaps; stairs and hurdles remain strong
-without ground texture because their vertical structure is already
-visible.
-
-Figure~\ref{fig:student_reward} shows mean episode reward during
+Figure~\ref{fig:student_success} shows mean episode reward during
 training, with the teacher's converged reward as a reference.
 The GT-depth student converges fastest and reaches the highest
 reward, closely approaching the teacher.  DA2-base + texture

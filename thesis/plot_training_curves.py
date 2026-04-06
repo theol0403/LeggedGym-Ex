@@ -23,7 +23,7 @@ plt.rcParams.update({
 FIGURES_DIR = Path('thesis/figures')
 ARCHIVE = Path('logs_archive')
 MAX_ITER = 5000
-SMOOTH_W = 101   # smoothing window for student plots
+SMOOTH_W = 50   # smoothing window for student plots
 SMOOTH_PAD = 200  # extra padding past MAX_ITER for smoothing support
 
 # --- Helpers ---
@@ -98,14 +98,15 @@ def _load_run(tag, chain, single):
 def fig_teacher():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.5, 2.5))
     MT = 1000  # cut teacher/baseline plots at 1000 iters
+    WINDOW = 10
 
     # --- (a) Reward ---
     steps, reward = load_scalar(TEACHER, 'Train/mean_reward')
-    steps, reward = prepare(steps, reward, window=31, max_iter=MT)
+    steps, reward = prepare(steps, reward, window=WINDOW, max_iter=MT)
     ax1.plot(steps, reward, color='#1b9e77', label='Teacher')
 
     s_steps, s_reward = load_scalar(GT_DEPTH, 'Train/mean_reward')
-    s_steps, s_reward = prepare(s_steps, s_reward, window=51, max_iter=MT)
+    s_steps, s_reward = prepare(s_steps, s_reward, window=WINDOW, max_iter=MT)
     ax1.plot(s_steps, s_reward, color='#333333', label='GT-depth student')
 
     ax1.set_xlim(0, MT); ax1.set_xlabel('Iteration')
@@ -115,11 +116,11 @@ def fig_teacher():
 
     # --- (b) Terrain Level ---
     steps_t, tlevel = load_scalar(TEACHER, 'Episode/terrain_level')
-    steps_t, tlevel = prepare(steps_t, tlevel, window=31, max_iter=MT)
+    steps_t, tlevel = prepare(steps_t, tlevel, window=WINDOW, max_iter=MT)
     ax2.plot(steps_t, tlevel, color='#1b9e77', label='Teacher')
 
     s_steps_t, s_tlevel = load_scalar(GT_DEPTH, 'Episode/terrain_level')
-    s_steps_t, s_tlevel = prepare(s_steps_t, s_tlevel, window=51, max_iter=MT)
+    s_steps_t, s_tlevel = prepare(s_steps_t, s_tlevel, window=WINDOW, max_iter=MT)
     ax2.plot(s_steps_t, s_tlevel, color='#333333', label='GT-depth student')
 
     ax2.set_xlim(0, MT); ax2.set_xlabel('Iteration')
