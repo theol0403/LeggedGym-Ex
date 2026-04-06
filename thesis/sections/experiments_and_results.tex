@@ -49,7 +49,6 @@ obstacles. The GT-depth student's
 distillation loss drops quickly but success climbs gradually, reflecting the difficulty of recovering the
 teacher's behavior from a single depth viewpoint.
 
-% TODO: add distillation loss to graph
 
 \begin{figure}[h]
   \centering
@@ -64,73 +63,56 @@ teacher's behavior from a single depth viewpoint.
 \label{sec:da2_results}
 
 We now determine whether parkour can be achieved from estimated
-depth. We start with a simple setup adapted from GT-depth. 
-To determine the appropriate DA2 model size, we start with the DA2-small model. 
+depth. Starting from the GT-depth setup, we first replace simulator
+depth with DA2-small. 
 As shown in Table~\ref{tab:da2_main}, 
 DA2-small achieves success on Row~0 and 1, but fails completely on Rows~2 and 3.
-Switching to DA2-base results in promotion to Row 3, showing that a larger model is necessary to perceive obstacles despite a higher computational burden.
+Switching to DA2-base results in promotion to Row 3, but it still falls well short of
+GT-depth on the hardest rows.
 
 % TODO: visuals of row 1-4
 % TODO: visuals of with and without texture including DA2s perception of obstacles
 % TODO: depth quality metric?
 
 The remaining limitation is the visual input. On untextured terrain,
-the gap boundary provides weak context cues, so the depth estimate is
-ambiguous.  Adding checkerboard terrain texture makes the gap geometry visible. As shown in 
-Table \ref{tab:da2_main}, this
-raises success across all rows and brings the estimated-depth policy within 7\% of the GT-depth upper bound.
+the gap boundary provides weak monocular cues, so the depth estimate is
+ambiguous. As shown in 
+Table \ref{tab:da2_main},
+adding checkerboard terrain texture makes the gap geometry
+visible and closes most of the remaining gap to GT-depth.
+
+Figure~\ref{fig:student_success} shows the same pattern during
+training: the untextured models plateau early, while DA2-base +
+texture continues improving and approaches the GT-depth student.
+Breaking success down by obstacle type shows most of the gain comes from gap traversal; stairs and hurdles are much
+less sensitive to texture because their geometry remains visible
+without ground texture.
+
 
 \begin{table}[h]
   \centering
   \caption{Policy success (\%) as model scale and terrain texture are added
-  to the estimated-depth pipeline. GT-depth is shown as an upper
-  bound.}
+  to the estimated-depth pipeline }
   \label{tab:da2_main}
   \small
   \begin{tabular}{@{}lcccc@{}}
     \toprule
     Configuration & Row~0 & Row~1 & Row~2 & Row~3 \\
     \midrule
-    GT-depth & 94.5 & 94.5 & 89.1 & 87.5 \\
+    GT-depth baseline & 94.5 & 94.5 & 89.1 & 87.5 \\
     DA2-small & 56.3 & 33.6 & --- & --- \\
     DA2-base & 68.4 & 83.2 & 26.6 & 0.8 \\
-    DA2-base + texture & \textbf{87.5} & \textbf{93.0} & \textbf{87.1} & \textbf{80.5} \\
+    DA2-base + texture & 87.5 & 93.0 & 87.1 & 80.5 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Figure~\ref{fig:student_success} shows training dynamics for all
-student pipelines.  (a)~The GT-depth student converges fastest
-and reaches the highest reward, closely approaching the teacher.
-DA2-base + texture steadily closes the gap, while DA2-base
-(no texture) plateaus at a lower level.
-(b)~Distillation loss mirrors the same ordering: better depth
-signals produce lower imitation error, confirming that depth
-quality is the primary bottleneck.
-
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
-  \caption{Student training curves.  (a)~Mean episode reward.
-  (b)~Distillation action loss.  Both metrics show a clear
-  ordering that reflects depth signal quality: GT-depth
-  $>$ DA2-base + texture $>$ DA2-base (no texture).}
-  \label{fig:student_success}
-\end{figure}
-
-Figure~\ref{fig:per_obstacle} breaks down per-obstacle progress
-ratio.  The texture effect is concentrated on gap terrain, where
-ground-level geometry provides no vertical surfaces for DA2 to
-detect.  Stairs and hurdles are solved equally well with or without
-texture.
-
-\begin{figure}[h]
-  \centering
   \includegraphics[width=\linewidth]{figures/per_obstacle_success.pdf}
-  \caption{Per-obstacle progress ratio.  Terrain texture is critical
-  for gap detection but unnecessary for stairs and hurdles, which
-  present vertical surfaces visible without ground texture.}
-  \label{fig:per_obstacle}
+  \caption{Overall and per-obstacle success rate during student training.}
+  \label{fig:student_success}
 \end{figure}
 
 % ====================================================================
