@@ -119,34 +119,17 @@ without ground texture.
 \subsection{Domain Invariance}
 \label{sec:domain}
 
-The preceding results establish that DA2 enables strong parkour
-performance.  We now test the core hypothesis: does the DA2 pipeline
-provide invariance to visual domain shifts?
-
-\paragraph{Protocol.}
-We apply perturbations at \emph{test time only} to the trained
-DA2-base + texture student (Section~\ref{sec:da2_results}).
-Perturbations span two categories:
-\begin{itemize}
-  \item \textbf{Texture replacement}: the training checkerboard is
-    replaced with structured alternatives (bricks, perlin noise)
-    or featureless surfaces (no texture, solid colors, flat grey).
-  \item \textbf{Color jitter}: global brightness scaling
-    ($\pm$30\%, $\pm$60\%) and per-channel color shifts
-    ($\pm$15\%, $\pm$30\%) applied to rendered RGB before DA2
-    inference.
-\end{itemize}
-We also test combined perturbations at mild and extreme severity.
-Each condition uses 128 episodes on gap Row~0.
-
-\paragraph{Results.}
-Table~\ref{tab:domain_inv} shows a clean separation between two
-types of visual shift.
+Having established strong parkour performance from estimated depth,
+we now test whether DA2 provides invariance to the visual domain
+shifts encountered in sim-to-real transfer. We apply perturbations
+at test time only to the trained student,
+covering two categories of shift: replacing the training
+checkerboard with alternative surfaces, and applying brightness or per-channel color
+jitter to the rendered RGB before DA2 inference.
 
 \begin{table}[h]
   \centering
-  \caption{Domain invariance: DA2-base + texture student on gap
-  Row~0 under visual perturbations.}
+  \caption{Test-time success under visual perturbations.}
   \label{tab:domain_inv}
   \small
   \begin{tabular}{@{}p{3.6cm}rrr@{}}
@@ -178,21 +161,16 @@ types of visual shift.
   \end{tabular}
 \end{table}
 
-\paragraph{Analysis.}
-DA2 is robust to color and brightness changes---the perturbations
-most relevant to sim-to-real transfer.  Brightness jitter at
-$\pm$60\% causes only 2.4~pp drop; color jitter at $\pm$15\%
-causes 5.5~pp.  DA2 also generalizes across structured textures
-(bricks: $-$7.1~pp).
+Table~\ref{tab:domain_inv} shows a clean separation between the two
+shift types. The student is robust to the perturbations most
+relevant to deployment: brightness jitter costs at most 2.4~pp,
+moderate color jitter 5.5~pp, and switching to a brick texture only
+7.1~pp. Performance degrades gracefully under structured noise and
+combined mild perturbations, retaining 78--82\% success.
 
-Removing texture entirely causes catastrophic failure
-($-$73 to $-$82~pp).  This is not a domain invariance failure
-but an input quality requirement: monocular depth fundamentally
-needs visual features to infer geometry.  Real-world surfaces
-(concrete, wood, soil) universally have natural texture, so this
-failure mode is an artifact of the simulator's ability to create
-unrealistically featureless geometry.
-
-Combined perturbations compound but degrade gracefully: the
-mild condition (bricks + brightness~30\% + color~15\%) maintains
-82.0\% success, while the extreme condition drops to 63.3\%.
+Featureless surfaces, by contrast, cause catastrophic failure
+($-73$ to $-82$~pp). This is not a domain-invariance failure but a
+fundamental input requirement: monocular depth estimation needs
+visual features to infer geometry. Real-world surfaces (concrete,
+wood, soil) all carry natural texture, so this regime is an
+artifact of simulation rather than a deployment concern.
