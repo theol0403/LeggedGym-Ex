@@ -136,17 +136,27 @@ def fig_teacher():
 
 
 def fig_student_reward():
-    fig, ax = plt.subplots(figsize=(5, 3))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.5, 2.5))
 
+    # (a) Reward
     for label, chain, single, color in STUDENT_RUNS:
         steps, vals = _load_run('Train/mean_reward', chain, single)
         steps, vals = prepare(steps, vals)
-        ax.plot(steps, vals, label=label, color=color)
+        ax1.plot(steps, vals, label=label, color=color)
+    ax1.set_xlabel('Iteration'); ax1.set_ylabel('Mean Episode Reward')
+    ax1.set_xlim(0, MAX_ITER); ax1.grid(True, alpha=0.3)
+    ax1.set_title('(a) Reward')
+    ax1.legend(loc='lower right', fontsize=7, framealpha=0.9)
 
-    ax.set_xlabel('Iteration'); ax.set_ylabel('Mean Episode Reward')
-    ax.set_xlim(0, MAX_ITER)
-    ax.legend(loc='lower right', framealpha=0.9); ax.grid(True, alpha=0.3)
-    ax.set_title('Student Reward During Training')
+    # (b) Loss
+    for label, chain, single, color in STUDENT_RUNS:
+        steps, vals = _load_run('Loss/action', chain, single)
+        steps, vals = prepare(steps, vals)
+        ax2.plot(steps, vals, label=label, color=color)
+    ax2.set_xlabel('Iteration'); ax2.set_ylabel('Action Loss (MSE)')
+    ax2.set_xlim(0, MAX_ITER); ax2.grid(True, alpha=0.3)
+    ax2.set_title('(b) Distillation Loss')
+
     fig.tight_layout()
     fig.savefig(FIGURES_DIR / 'student_success_comparison.pdf')
     fig.savefig(FIGURES_DIR / 'student_success_comparison.png')
@@ -177,25 +187,8 @@ def fig_per_obstacle():
     print('Saved per_obstacle_success'); plt.close(fig)
 
 
-def fig_loss():
-    fig, ax = plt.subplots(figsize=(5, 3))
-    for label, chain, single, color in STUDENT_RUNS:
-        steps, vals = _load_run('Loss/action', chain, single)
-        steps, vals = prepare(steps, vals)
-        ax.plot(steps, vals, label=label, color=color)
-    ax.set_xlabel('Iteration'); ax.set_ylabel('Action Loss (MSE)')
-    ax.set_xlim(0, MAX_ITER)
-    ax.legend(loc='upper right', framealpha=0.9); ax.grid(True, alpha=0.3)
-    ax.set_title('Distillation Action Loss')
-    fig.tight_layout()
-    fig.savefig(FIGURES_DIR / 'distillation_loss.pdf')
-    fig.savefig(FIGURES_DIR / 'distillation_loss.png')
-    print('Saved distillation_loss'); plt.close(fig)
-
-
 if __name__ == '__main__':
     fig_teacher()
     fig_student_reward()
     fig_per_obstacle()
-    fig_loss()
     print('Done — all figures saved to', FIGURES_DIR)
