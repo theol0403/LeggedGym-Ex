@@ -1,15 +1,22 @@
-"""Generate DSQ vs success rate scatter plot for thesis domain invariance section."""
+"""Generate DSQ vs success rate scatter plot for thesis domain invariance section.
 
+Reads all domain_invariance_*.json files and plots DSQ vs success rate.
+Color = obstacle type + row, Shape = perturbation category.
+"""
+
+import json
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
+from pathlib import Path
 
 plt.rcParams.update({
     'font.size': 9,
     'axes.labelsize': 10,
     'axes.titlesize': 10,
-    'legend.fontsize': 6.5,
+    'legend.fontsize': 6,
     'xtick.labelsize': 8,
     'ytick.labelsize': 8,
     'figure.dpi': 300,
@@ -18,125 +25,151 @@ plt.rcParams.update({
     'lines.linewidth': 1.2,
 })
 
-# Data: (DSQ, success_rate, category)
-# Category determines color; terrain determines marker shape.
-gap0 = {
-    # Realistic textures
-    "Concrete":     (0.914, 0.793, "realistic"),
-    "Wood":         (0.916, 0.348, "realistic"),
-    "Grass":        (0.929, 0.660, "realistic"),
-    "Stone tiles":  (0.910, 0.930, "realistic"),
-    "Gravel":       (0.910, 0.914, "realistic"),
-    # Other structured
-    "Bricks":       (0.913, 0.590, "structured"),
-    "Noise":        (0.928, 0.828, "structured"),
-    # Featureless
-    "No texture":   (0.756, 0.168, "featureless"),
-    "Solid red":    (0.764, 0.227, "featureless"),
-    "Solid blue":   (0.719, 0.086, "featureless"),
-    # Lighting
-    "Dim":          (0.938, 0.828, "lighting"),
-    "Bright":       (0.916, 0.945, "lighting"),
-    "Low contrast": (0.935, 0.762, "lighting"),
-    # Jitter
-    "B. ±30%":      (0.923, 0.930, "jitter"),
-    "B. ±60%":      (0.923, 0.941, "jitter"),
-    "C. ±15%":      (0.926, 0.891, "jitter"),
-    "C. ±30%":      (0.923, 0.793, "jitter"),
-    # Combined
-    "Comb. mild":   (0.917, 0.766, "combined"),
-    "Comb. extreme":(0.856, 0.340, "combined"),
-    # Baseline
-    "Baseline":     (0.922, 0.961, "baseline"),
+# Load all results
+results_dir = Path("thesis")
+all_points = []
+
+PERT_CATEGORIES = {
+    "baseline": "baseline",
+    "tex_concrete": "realistic", "tex_stone_tiles": "realistic",
+    "tex_gravel": "realistic", "tex_wood": "realistic", "tex_grass": "realistic",
+    "tex_noise": "structured", "tex_bricks": "structured",
+    "tex_none": "featureless", "tex_solid_red": "featureless",
+    "tex_solid_blue": "featureless",
+    "light_dim": "lighting", "light_bright": "lighting",
+    "light_low_gamma": "lighting",
+    "jitter_brightness_mild": "jitter", "jitter_brightness_strong": "jitter",
+    "jitter_color_mild": "jitter", "jitter_color_strong": "jitter",
+    "combined_mild": "combined", "combined_extreme": "combined",
 }
 
-gap3 = {
-    "Baseline":     (0.924, 0.941, "baseline"),
-    "No texture":   (0.703, 0.000, "featureless"),
-    "Concrete":     (0.818, 0.121, "realistic"),
-    "Stone tiles":  (0.905, 0.789, "realistic"),
-    "Gravel":       (0.863, 0.488, "realistic"),
-    "Noise":        (0.862, 0.293, "structured"),
-    "Dim":          (0.910, 0.582, "lighting"),
-    "C. ±30%":      (0.873, 0.320, "jitter"),
-    "Comb. mild":   (0.803, 0.082, "combined"),
-    "Comb. extreme":(0.746, 0.004, "combined"),
+for jf in sorted(results_dir.glob("domain_invariance_*.json")):
+    if "edsq" in jf.name:
+        continue
+    data = json.load(open(jf))
+    cfg = data["config"]
+    family = cfg["force_family"]
+    row = cfg["force_row"]
+    for r in data["results"]:
+        dsq = r.get("depth_signal_quality")
+        edsq = r.get("edge_dsq")
+        sr = r["success_rate"]
+        if dsq is None or sr < 0:
+            continue
+        pert = r["perturbation"]
+        cat = PERT_CATEGORIES.get(pert, "other")
+        all_points.append({
+            "family": family, "row": row,
+            "perturbation": pert, "cat": cat,
+            "dsq": dsq, "edsq": edsq, "success": sr,
+        })
+
+# Color = obstacle + row
+terrain_colors = {
+    ("gap", 0):          "#1f77b4",  # blue
+    ("gap", 3):          "#08306b",  # dark blue
+    ("stairs", 0):       "#2ca02c",  # green
+    ("stairs", 3):       "#006d2c",  # dark green
+    ("hurdle_block", 0): "#ff7f0e",  # orange
+    ("hurdle_block", 3): "#d62728",  # red
+}
+terrain_labels = {
+    ("gap", 0): "Gap R0", ("gap", 3): "Gap R3",
+    ("stairs", 0): "Stairs R0", ("stairs", 3): "Stairs R3",
+    ("hurdle_block", 0): "Hurdle R0", ("hurdle_block", 3): "Hurdle R3",
 }
 
-# Color by perturbation category
-cat_colors = {
-    "baseline":    "black",
-    "realistic":   "#2ca02c",
-    "structured":  "#1f77b4",
-    "featureless": "#d62728",
-    "lighting":    "#ff7f0e",
-    "jitter":      "#9467bd",
-    "combined":    "#8c564b",
+# Shape = perturbation category
+cat_markers = {
+    "baseline":    "*",
+    "realistic":   "o",
+    "structured":  "s",
+    "featureless": "X",
+    "lighting":    "D",
+    "jitter":      "^",
+    "combined":    "P",
 }
 cat_labels = {
     "baseline":    "Baseline",
     "realistic":   "Realistic textures",
-    "structured":  "Other structured",
+    "structured":  "Structured textures",
     "featureless": "Featureless",
     "lighting":    "Lighting",
-    "jitter":      "Color/brightness jitter",
+    "jitter":      "Color/brightness",
     "combined":    "Combined",
 }
-
-# Shape by terrain
-terrain_markers = {"Gap R0": "o", "Gap R3": "s"}
-terrain_sizes   = {"Gap R0": 35,  "Gap R3": 40}
+cat_sizes = {
+    "baseline": 80, "realistic": 35, "structured": 35,
+    "featureless": 45, "lighting": 35, "jitter": 35, "combined": 45,
+}
 
 fig, ax = plt.subplots(figsize=(4.8, 3.8))
 
-# Plot each terrain × category combination
-for terrain_label, data in [("Gap R0", gap0), ("Gap R3", gap3)]:
-    mk = terrain_markers[terrain_label]
-    sz = terrain_sizes[terrain_label]
-    for name, (dsq, sr, cat) in data.items():
-        ax.scatter(dsq, sr * 100, color=cat_colors[cat],
-                   marker=mk, s=sz, alpha=0.85,
-                   edgecolors="white", linewidths=0.3, zorder=5)
-
-# Annotate select points
-annotations = {
-    "Baseline (R0)":      (0.922, 96.1, (-55, 6)),
-    "Stone tiles (R0)":   (0.910, 93.0, (-78, -3)),
-    "No tex (R0)":        (0.756, 16.8, (5, -10)),
-    "Wood (R0)":          (0.916, 34.8, (5, -8)),
-    "Baseline (R3)":      (0.924, 94.1, (5, -12)),
-    "Stone tiles (R3)":   (0.905, 78.9, (5, 4)),
-    "No tex (R3)":        (0.703, 0.0, (5, 4)),
-    "Comb. ext (R3)":     (0.746, 0.4, (-15, 8)),
-}
-for label, (x, y, offset) in annotations.items():
-    ax.annotate(label, (x, y), textcoords="offset points",
-                xytext=offset, fontsize=6, color="grey")
+for p in all_points:
+    color = terrain_colors[(p["family"], p["row"])]
+    marker = cat_markers[p["cat"]]
+    size = cat_sizes[p["cat"]]
+    ax.scatter(p["dsq"], p["success"] * 100,
+               c=color, marker=marker, s=size,
+               edgecolors="white", linewidths=0.3, alpha=0.85, zorder=5)
 
 ax.set_xlabel("Depth Signal Quality (DSQ)")
 ax.set_ylabel("Success Rate (%)")
-ax.set_xlim(0.67, 0.96)
+ax.set_xlim(0.68, 0.96)
 ax.set_ylim(-3, 103)
 ax.grid(True, alpha=0.3)
-
-# Threshold line
 ax.axvline(x=0.85, color="grey", linestyle="--", linewidth=0.8, alpha=0.5)
 ax.text(0.855, 3, "DSQ = 0.85", fontsize=6.5, color="grey", alpha=0.7)
 
-# Build two-part legend: colors (category) + shapes (terrain)
-color_handles = [Line2D([0], [0], marker="o", color="w", markerfacecolor=c,
-                        markersize=6, label=cat_labels[cat])
-                 for cat, c in cat_colors.items()]
-shape_handles = [Line2D([0], [0], marker=mk, color="w", markerfacecolor="grey",
-                        markersize=6, label=terrain)
-                 for terrain, mk in terrain_markers.items()]
+# Two-part legend: colors (terrain) + shapes (perturbation)
+color_handles = [Line2D([0], [0], marker="o", color="w",
+                        markerfacecolor=terrain_colors[k], markersize=6,
+                        label=terrain_labels[k])
+                 for k in terrain_colors]
+shape_handles = [Line2D([0], [0], marker=m, color="w",
+                        markerfacecolor="grey", markersize=6,
+                        label=cat_labels[cat])
+                 for cat, m in cat_markers.items()]
+
 leg1 = ax.legend(handles=color_handles, loc="upper left", framealpha=0.9,
-                 title="Perturbation type", title_fontsize=6.5)
+                 title="Terrain", title_fontsize=6.5, borderpad=0.4)
 ax.add_artist(leg1)
 ax.legend(handles=shape_handles, loc="center left", framealpha=0.9,
-          title="Terrain", title_fontsize=6.5)
+          title="Perturbation", title_fontsize=6.5, borderpad=0.4,
+          bbox_to_anchor=(0.0, 0.38))
 
 fig.tight_layout()
 fig.savefig("thesis/figures/dsq_scatter.pdf")
 fig.savefig("thesis/figures/dsq_scatter.png")
-print("Saved thesis/figures/dsq_scatter.pdf and .png")
+print("Saved dsq_scatter.pdf/png")
+
+# ── Figure 2: Edge-DSQ vs DSQ, colored by success ──
+pts_with_edsq = [p for p in all_points if p["edsq"] is not None]
+if pts_with_edsq:
+    fig2, ax2 = plt.subplots(figsize=(4.5, 3.5))
+    dsqs = np.array([p["dsq"] for p in pts_with_edsq])
+    edsqs = np.array([p["edsq"] for p in pts_with_edsq])
+    srs = np.array([p["success"] * 100 for p in pts_with_edsq])
+
+    sc = ax2.scatter(dsqs, edsqs, c=srs, cmap="RdYlGn", s=35,
+                     edgecolors="grey", linewidths=0.3, vmin=0, vmax=100)
+    fig2.colorbar(sc, ax=ax2, label="Success Rate (%)")
+    ax2.plot([0.65, 0.96], [0.65, 0.96], 'k--', linewidth=0.5, alpha=0.3)
+    ax2.set_xlabel("Global DSQ")
+    ax2.set_ylabel("Edge-weighted DSQ (eDSQ)")
+    ax2.set_xlim(0.68, 0.96)
+    ax2.set_ylim(0.68, 0.96)
+    ax2.grid(True, alpha=0.3)
+    fig2.tight_layout()
+    fig2.savefig("thesis/figures/edsq_vs_dsq.pdf")
+    fig2.savefig("thesis/figures/edsq_vs_dsq.png")
+    print("Saved edsq_vs_dsq.pdf/png")
+
+    from scipy import stats
+    r_dsq, p_dsq = stats.pearsonr(dsqs, srs)
+    r_edsq, p_edsq = stats.pearsonr(edsqs, srs)
+    print(f"\nCorrelation with success rate:")
+    print(f"  Global DSQ:  r={r_dsq:.3f}, p={p_dsq:.4f}")
+    print(f"  Edge DSQ:    r={r_edsq:.3f}, p={p_edsq:.4f}")
+
+plt.close("all")
