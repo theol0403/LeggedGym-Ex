@@ -120,6 +120,7 @@ the untextured models and approaches the GT-depth baseline.
 \end{figure}
 
 
+% TODO: renders need to be improved
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/da2_texture_comparison.png}
@@ -138,18 +139,22 @@ more geometric structure.}
 
 We next test robustness to the appearance shifts that would arise in
 sim-to-real transfer by perturbing the trained student only at
-\emph{test time}.  Table~\ref{tab:domain_inv} reports success across
-three terrain settings under texture replacement, lighting/color
-changes, and combined perturbations, while
-Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
+\emph{test time}.  All perturbations are applied within simulation;
+these results therefore measure within-sim robustness, not actual
+sim-to-real transfer.  Table~\ref{tab:domain_inv} reports success
+across six terrain configurations (three obstacle families $\times$
+two difficulty levels) for texture replacement, lighting/color changes,
+and combined perturbations, while Figure~\ref{fig:dsq_scatter} plots
+DSQ against policy success.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.95\linewidth]{figures/dsq_scatter.pdf}
-  \caption{Success rate vs.\ DSQ across gap Row~0 (circles) and
-  Row~3 (squares), colored by perturbation type. Featureless
-  surfaces cluster below DSQ\,=\,0.85 with catastrophic failure;
-  all textured conditions maintain DSQ\,$>$\,0.85.}
+  \caption{Success rate vs.\ DSQ across all six terrain configurations.
+  Color denotes obstacle type and difficulty; marker shape denotes
+  perturbation category.  Featureless surfaces cluster at
+  low DSQ with catastrophic failure; most textured conditions maintain
+  DSQ\,$>$\,0.85 but success varies by difficulty.}
   \label{fig:dsq_scatter}
 \end{figure}
 
@@ -159,47 +164,52 @@ Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
     under visual perturbations across obstacle types. }
   \label{tab:domain_inv}
   \small
-  \begin{tabular}{@{}p{3.2cm}rrr@{}}
+  \begin{tabular}{@{}p{2.6cm}rr|rr|rr@{}}
     \toprule
-    Perturbation & Gap R0 & Gap R3 & Stairs \\
+    & \multicolumn{2}{c|}{Gaps} & \multicolumn{2}{c|}{Stairs}
+    & \multicolumn{2}{c}{Hurdles} \\
+    Perturbation & R0 & R3 & R0 & R3 & R0 & R3 \\
     \midrule
-    Baseline (checker.) & 96.1 & 94.1 & 100.0 \\
+    Baseline & 96.1 & 94.1 & 100 & 92.2 & 96.9 & 94.9 \\
     \midrule
-    \multicolumn{4}{@{}l}{\textit{Realistic surface textures}} \\
-    \quad Concrete     & 79.3 & 12.1 & 99.6 \\
-    \quad Stone tiles  & 93.0 & 78.9 & 100.0 \\
-    \quad Gravel       & 91.4 & 48.8 & 100.0 \\
+    \multicolumn{7}{@{}l}{\textit{Realistic surface textures}} \\
+    \quad Concrete     & 79.3 & 12.1 & 99.6 & 25.8 & 95.7 & 73.0 \\
+    \quad Stone tiles  & 93.0 & 78.9 & 100  & 96.9 & 95.3 & 90.6 \\
+    \quad Gravel       & 91.4 & 48.8 & 100  & 93.4 & 93.4 & 34.8 \\
     \midrule
-    \multicolumn{4}{@{}l}{\textit{Structured / featureless}} \\
-    \quad Noise        & 82.8 & 29.3 & 100.0 \\
-    \quad No texture   & 16.8 &  0.0 & 100.0 \\
+    \multicolumn{7}{@{}l}{\textit{Structured / featureless}} \\
+    \quad Noise        & 82.8 & 29.3 & 100  & 95.3 & 97.3 & 47.7 \\
+    \quad No texture   & 16.8 &  0.0 & 100  & 21.9 & 91.4 & 18.2 \\
     \midrule
-    \multicolumn{4}{@{}l}{\textit{Brightness / color}} \\
-    \quad Dim (0.3$\times$)      & 82.8 & 58.2 &  99.6 \\
-    \quad Color $\pm$30\%        & 79.3 & 32.0 &  99.6 \\
+    \multicolumn{7}{@{}l}{\textit{Brightness / color}} \\
+    \quad Dim (0.3$\times$) & 82.8 & 58.2 & 99.6 & 94.1 & 99.6 & 95.7 \\
+    \quad Color $\pm$30\%   & 79.3 & 32.0 & 99.6 & 94.9 & 97.3 & 87.9 \\
     \midrule
-    \multicolumn{4}{@{}l}{\textit{Combined}} \\
-    \quad Mild\textsuperscript{a}    & 76.6 &  8.2 & 100.0 \\
-    \quad Extreme\textsuperscript{b} & 34.0 &  0.4 &  99.6 \\
+    \multicolumn{7}{@{}l}{\textit{Combined\textsuperscript{*}}} \\
+    \quad Mild         & 76.6 &  8.2 & 100  & 15.2 & 97.3 & 79.3 \\
+    \quad Extreme      & 34.0 &  0.4 & 99.6 & 66.8 & 89.5 & 19.1 \\
     \bottomrule
-    \multicolumn{4}{@{}p{6.3cm}@{}}{\footnotesize\textsuperscript{a} Concrete texture + dim lighting (0.6$\times$) + brightness jitter $\pm$20\%.} \\
-    \multicolumn{4}{@{}p{6.3cm}@{}}{\footnotesize\textsuperscript{b} Noise texture + dim lighting (0.4$\times$) + low contrast ($\gamma{=}1.8$) + color jitter $\pm$20\%.} \\
+    \multicolumn{7}{@{}p{8.5cm}}{\footnotesize\textsuperscript{*}
+      Mild: concrete + dim (0.6$\times$) + brightness jitter $\pm$20\%.
+      Extreme: noise + dim (0.4$\times$) + low contrast ($\gamma{=}1.8$) + color jitter $\pm$20\%.} \\
   \end{tabular}
 \end{table}
 
-% TODO: renders need to be improved
-Stairs are nearly immune to all perturbations because step edges
-provide strong geometric cues regardless of surface appearance.
-Gaps, by contrast, have no geometric edges---the boundary is
-visible only through surface texture---so perturbation effects
-are large and scale with difficulty.  On easy gaps (Row~0), stone tiles
-and gravel remain near baseline while featureless surfaces fail
-catastrophically; on hard gaps (Row~3) the same perturbations are
-amplified, with concrete dropping from 79\% to 12\% and combined
-perturbations approaching zero where Row~0 showed only moderate
-degradation.  Lighting and color shifts cause modest degradation,
-confirming DA2 is largely robust to photometric variation.
+The results reveal a clear obstacle-geometry hierarchy.  At the easier
+setting, stairs and hurdles are largely insensitive to appearance
+changes because strong geometric edges remain visible across textures
+and lighting.  Gaps are more sensitive because their boundary is
+visible mainly through surface texture, so performance depends more
+strongly on the quality of the depth estimate.
+
+At the harder setting, all three obstacle families degrade, including
+stairs and hurdles.  Featureless surfaces cause the largest failures,
+while lighting and color shifts have a smaller effect.  This pattern
+suggests DA2 is robust to photometric variation but still depends on
+texture when obstacle boundaries are weak.
+
 As Figure~\ref{fig:dsq_scatter} shows, DSQ is a useful failure
-indicator: featureless surfaces collapse both DSQ and success,
-but high DSQ alone does not guarantee full robustness on harder rows
-or under all unseen textures.
+indicator: featureless surfaces collapse both DSQ and success.
+However, high DSQ alone does not guarantee robustness, since some
+unseen textures still reduce success despite preserving coarse depth
+structure.

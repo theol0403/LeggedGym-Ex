@@ -13,17 +13,17 @@ the recovered depth signal rather than the policy architecture.
 Increasing model capacity and adding structured terrain texture closes
 most of the gap to the GT-depth baseline on the gap curriculum.
 
-The visual robustness experiments refine this result.  The
-DA2-based student is robust to lighting and color changes and
-transfers well to several unseen textured surfaces without
+The visual robustness experiments further refine this
+result.  The DA2-based student is robust to lighting and color changes
+and transfers well to several unseen textured surfaces without
 photorealistic rendering or explicit domain randomization.  But the
-method is not appearance-invariant in general: some unseen textures
-still reduce success, and featureless surfaces fail because monocular
-depth cannot recover reliable geometry there.  DSQ is a useful
-indicator of whether the visual pipeline preserves terrain structure,
-but it does not fully determine policy success.  Overall, the results
-support monocular depth as a viable bridge from RGB to locomotion, but
-not yet as a complete sim-to-real solution.
+method is not appearance-invariant in general: performance degrades on
+harder settings and collapses on featureless surfaces, where monocular
+depth cannot recover reliable geometry.  DSQ is a useful indicator of
+whether the visual pipeline preserves terrain structure, but it does
+not fully determine policy success.  Overall, the results support
+monocular depth as a plausible bridge from RGB to locomotion, but
+actual sim-to-real transfer remains unvalidated.
 
 \subsection{Limitations}
 
@@ -31,9 +31,10 @@ Several limitations constrain this conclusion.  First, all experiments
 are in simulation, so the central sim-to-real claim is still
 unverified on hardware.  Second, the task scope is modest: the
 obstacles are simpler than those in recent real-world parkour systems,
-and the visual robustness study covers only two gap rows and one stair
-row rather than the full curriculum.  Third, the method depends on a
-single off-the-shelf depth estimator.  DA2 degrades on weak-texture
+and the visual robustness study covers two difficulty levels across
+three families rather than the full curriculum.  Third, the method
+depends on a single off-the-shelf depth estimator.  DA2 degrades on
+weak-texture
 terrain, and high DSQ does not explain all failures on unseen
 textures.  Finally, the perception stack is still heavy for onboard
 deployment.  The current system is therefore best viewed as a proof of
