@@ -14,8 +14,8 @@ Increasing model capacity and adding structured terrain texture closes
 most of the gap to the GT-depth baseline on the gap curriculum.
 
 The visual robustness experiments further refine this
-result.  The DA2-based student is robust to lighting and color changes
-and transfers well to several unseen textured surfaces without
+result.  The DA2-based student tolerates moderate lighting and color
+changes and transfers to several unseen textured surfaces without
 photorealistic rendering or explicit domain randomization.  But the
 method is not appearance-invariant in general: performance degrades on
 harder settings and collapses on featureless surfaces, where monocular
@@ -36,9 +36,22 @@ three families rather than the full curriculum.  Third, the method
 depends on a single off-the-shelf depth estimator.  DA2 degrades on
 weak-texture
 terrain, and high DSQ does not explain all failures on unseen
-textures.  Finally, the perception stack is still heavy for onboard
-deployment.  The current system is therefore best viewed as a proof of
-concept rather than a deployable parkour pipeline.
+textures.  Fourth, DA2 processes each frame independently, so depth estimates may
+flicker between consecutive timesteps.  The GRU in the student encoder
+may partially smooth such temporal noise, but we did not measure
+frame-to-frame depth consistency or test temporally consistent depth
+models, leaving this an open question for deployment at high control
+rates.  Fifth, our visual robustness study covers texture, lighting,
+and color perturbations, but real-world deployment introduces
+additional failure modes that monocular depth estimators are known to
+struggle with: transparent or reflective surfaces, thin structures
+such as railings, motion blur during dynamic gaits, and close-range
+objects at the limits of the model's training distribution.  These are
+likely to arise in outdoor parkour environments and may compound the
+texture sensitivity already observed.  Finally, the perception stack
+is still heavy for onboard deployment.  The current system is
+therefore best viewed as a proof of concept rather than a deployable
+parkour pipeline.
 
 \subsection{Future Work}
 

@@ -13,10 +13,10 @@ Deploying vision policies from RGB therefore requires bridging the \emph{sim-to-
 Three strategies have emerged: (1)~\textbf{domain randomization}~\citep{tobin2017domain}, which randomizes visual properties; (2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which uses diffusion models for photorealistic training images; and (3)~\textbf{canonical representations}, which project both domains into a shared space via a foundation model.
 
 We pursue strategy~(3) using Depth~Anything~V2 (DA2)~\citep{yang2024depth}, a pre-trained monocular depth estimator trained on millions of diverse real images.
-Our premise is that if DA2 maps RGB into a depth space that is largely robust to appearance variation, then a student policy operating on estimated depth may inherit that robustness without photorealistic rendering or explicit domain randomization.
+Our premise is that if DA2 maps RGB into a depth space that preserves terrain geometry across visual conditions, then a student policy operating on estimated depth may inherit partial robustness to appearance variation without photorealistic rendering or explicit domain randomization.
 
 \paragraph{Thesis statement.}
-We hypothesize that pre-trained monocular depth estimation can provide a visually robust intermediate representation for vision-based quadruped parkour, allowing a student trained on estimated depth in simulation to generalize across visual domains. We evaluate this hypothesis entirely in simulation; real-world transfer remains future work.
+We hypothesize that pre-trained monocular depth estimation can provide a useful intermediate representation for vision-based quadruped parkour, enabling a student trained on estimated depth in simulation to tolerate a range of visual conditions without explicit domain randomization. We evaluate this hypothesis entirely in simulation; real-world transfer remains future work.
 
 \paragraph{Contributions.}
 \begin{itemize}[nosep,leftmargin=*]
@@ -24,5 +24,5 @@ We hypothesize that pre-trained monocular depth estimation can provide a visuall
     heightmaps to monocular depth for quadruped parkour.
   \item A demonstration that estimated depth enables basic parkour in simulation.
   \item Identification of depth signal quality---governed by model scale and terrain texture---as the key factor limiting performance.
-  \item A visual robustness study of DA2-based students under test-time appearance perturbations.
+  \item A visual robustness study showing that DA2-based students tolerate lighting and color shifts but depend on terrain texture for depth signal quality.
 \end{itemize}
