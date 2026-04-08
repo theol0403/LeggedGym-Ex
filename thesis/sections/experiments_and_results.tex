@@ -12,11 +12,10 @@ full course) and \emph{progress ratio} (mean fractional distance
 along the course before termination), both averaged over 256
 episodes.
 
-For visual robustness, we also report
-\emph{depth signal quality} (DSQ), defined as the scale- and
-offset-invariant Pearson correlation
-between ground-truth and DA2-estimated depth images, averaged over
-environments and time steps.
+For visual robustness, we also report \emph{depth signal quality}
+(DSQ), the scale- and offset-invariant Pearson correlation between
+ground-truth and DA2-estimated depth, averaged over environments and
+time steps.
 
 \begin{equation}
 	\mathrm{DSQ} = \frac{1}{T} \sum_{t=1}^{T}
@@ -37,14 +36,13 @@ environments and time steps.
 
 We first establish upper bounds for the privileged teacher and the
 ground-truth depth sensing student (GT-depth).
-The privileged teacher achieves near-perfect success across all gap difficulties, shown in Table~\ref{tab:baselines}.
+Table~\ref{tab:baselines} shows near-perfect teacher performance across
+all gap difficulties.
 
-The GT-depth student, receiving simulator depth images,
-achieves success on all rows, confirming the CNN--GRU
-architecture extracts sufficient geometry from a single depth viewpoint.
-A zero-depth ablation (all depth pixels set to zero)
-drops success to 8\%, verifying the policy relies on depth
-rather than exploiting proprioceptive heuristics.
+The GT-depth student also succeeds on all rows, showing the CNN--GRU
+architecture can act from a single depth view.  A zero-depth ablation
+drops success to 8\%, confirming that the policy uses depth rather
+than proprioceptive heuristics.
 
 \begin{table}[t]
 	\centering
@@ -67,15 +65,13 @@ rather than exploiting proprioceptive heuristics.
 \subsection{Parkour from Estimated Depth}
 \label{sec:da2_results}
 
-We next test whether parkour is possible from estimated depth.
-Starting from the GT-depth setup, we replace simulator depth with
-DA2-small.  As shown in Table~\ref{tab:da2_main}, DA2-small succeeds
+We next replace simulator depth with estimated depth.  As shown in
+Table~\ref{tab:da2_main}, DA2-small succeeds
 on the early rows but fails completely on Rows~2 and 3.  Switching to
 DA2-base reaches Row~3, but still falls well short of GT-depth on the
 hardest rows.
 
-The remaining limitation is the visual input. On untextured terrain,
-the gap boundary provides weak cues, so the depth estimate is
+On untextured terrain, the gap boundary provides weak cues, so the depth estimate is
 ambiguous. As Table~\ref{tab:da2_main} shows, adding a checkerboard
 terrain texture makes the gap geometry visible and closes most of the
 remaining gap to GT-depth. Figure~\ref{fig:da2_texture_comparison}
@@ -136,15 +132,12 @@ the untextured models and approaches the GT-depth baseline.
 \subsection{Visual Robustness}
 \label{sec:domain}
 
-We next test robustness to the appearance shifts that would arise in
-sim-to-real transfer by perturbing the trained student only at
-\emph{test time}.  All perturbations are applied within simulation;
-these results therefore measure within-sim robustness, not actual
-sim-to-real transfer.  Table~\ref{tab:domain_inv} reports success
-across six terrain configurations (three obstacle families $\times$
-two difficulty levels) for texture replacement, lighting/color changes,
-and combined perturbations, while Figure~\ref{fig:dsq_scatter} plots
-DSQ against policy success.
+To test appearance robustness, we perturb the trained student only at
+\emph{test time} in simulation.  Table~\ref{tab:domain_inv} reports
+success across six terrain configurations (three obstacle families
+$\times$ two difficulty levels) for texture replacement,
+lighting/color changes, and combined perturbations.
+Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 
 \begin{figure}[h]
 	\centering
@@ -194,12 +187,10 @@ DSQ against policy success.
 	\end{tabular}
 \end{table}
 
-The results reveal a clear obstacle-geometry hierarchy.  At the easier
-setting, stairs and hurdles are largely insensitive to appearance
-changes because strong geometric edges remain visible across textures
-and lighting.  Gaps are more sensitive because their boundary is
-visible mainly through surface texture, so performance depends more
-strongly on the quality of the depth estimate.
+At the easier setting, stairs and hurdles are largely insensitive to appearance
+changes because strong edges remain visible across textures and
+lighting.  Gaps are more sensitive because their boundary is visible
+mainly through surface texture.
 
 At the harder setting, all three obstacle families degrade, including
 stairs and hurdles.  Featureless surfaces cause the largest failures,

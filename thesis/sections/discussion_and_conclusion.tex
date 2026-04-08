@@ -4,22 +4,14 @@
 
 \subsection{Summary}
 
-We presented a teacher--student pipeline for vision-based quadruped
-parkour that uses monocular depth estimation as an intermediate
-representation.  The GT-depth baseline shows that the student
-architecture can solve the task when accurate geometry is available.
-The DA2 experiments show that the main bottleneck is the quality of
-the recovered depth signal rather than the policy architecture.
-Increasing model capacity and adding structured terrain texture closes
-most of the gap to the GT-depth baseline on the gap curriculum.
+We presented a teacher--student parkour pipeline that uses monocular
+depth estimates instead of a depth camera.  The GT-depth baseline
+shows that the student architecture is not the limiting factor; the
+main bottleneck is depth quality.  Larger DA2 models and structured
+terrain texture close most of the gap to the GT-depth baseline.
 
-The visual robustness experiments further refine this
-result.  The DA2-based student tolerates moderate lighting and color
-changes and transfers to several unseen textured surfaces without
-photorealistic rendering or explicit domain randomization.  But the
-method is not appearance-invariant in general: performance degrades on
-harder settings and collapses on featureless surfaces, where monocular
-depth cannot recover reliable geometry.
+The student tolerates moderate lighting and color shifts, but fails on
+featureless surfaces and some unseen textures.
 DSQ is a useful indicator of whether the visual pipeline preserves
 terrain structure, but it does not fully predict policy success.
 Overall, monocular depth appears to be a plausible bridge from RGB to
@@ -27,45 +19,26 @@ locomotion, but actual sim-to-real transfer remains unvalidated.
 
 \subsection{Limitations}
 
-Several limitations temper this conclusion.  All experiments are in
-simulation, so the core sim-to-real claim is still unverified on
-hardware.  The task scope is also modest: the obstacles are simpler
-than those in recent real-world parkour systems, and the robustness
-study covers only two difficulty levels across three obstacle families
-rather than the full curriculum.
+All experiments are in simulation, so hardware transfer is still
+untested.  The task is also narrow: the obstacles are simpler than
+those in recent real-world parkour systems, and the robustness study
+covers only two difficulty levels.
 
-The method also depends on a single off-the-shelf depth estimator.
-DA2 degrades on weak-texture terrain, and high DSQ does not explain
-every failure on unseen textures.
-
-DA2 processes each frame independently, so its depth estimates may
-flicker across timesteps.  The GRU in the student encoder may smooth
-some of that noise, but we did not measure temporal consistency or
-test video-based depth models.  That remains an open question for
-deployment at high control rates.
-
-Our robustness study covers texture, lighting, and color
-perturbations, but deployment would introduce other known failure
-modes for monocular depth: transparent or reflective surfaces, thin
-structures such as railings, motion blur during dynamic gaits, and
-close-range objects near the edge of the model's training
-distribution.  These conditions are plausible in outdoor parkour
-settings and may compound the texture sensitivity already observed.
-
-Finally, the perception stack is still heavy for onboard deployment.
-The current system is therefore best viewed as a proof of concept,
-not a deployable parkour pipeline.
+DA2 degrades on weak-texture terrain, and DSQ does not explain every failure on unseen textures.
+Because DA2 processes frames independently, its estimates may flicker.
+We did not measure temporal consistency or test video-based depth
+models.
+Deployment would also introduce failure modes absent here, including
+transparent or reflective surfaces, thin structures, motion blur, and
+close-range objects near the edge of the training distribution.
+Finally, the perception stack is still too heavy for onboard
+deployment.  The current system is best viewed as a proof of concept.
 
 \subsection{Future Work}
 
-The next step is real-world evaluation on the Unitree Go2.  This will
-test robustness under real camera noise, motion blur, exposure shifts,
-and outdoor lighting, and determine whether DSQ remains useful as a
-deployment diagnostic.
-
-A second direction is broader evaluation across stairs, hurdles, and
-more difficult compound courses.  On the modeling side, smaller or
-temporally consistent depth estimators could reduce compute cost and
+The next step is hardware evaluation on the Unitree Go2 under real
+camera noise, motion blur, exposure shifts, and outdoor lighting.
+Broader evaluation on harder courses would test generality.  Smaller
+or temporally consistent depth models could reduce compute and
 stabilize predictions, while joint adaptation of the depth estimator
-and student policy may improve robustness on harder textures and
-further close the gap to the GT-depth baseline.
+and student policy may improve robustness on harder textures.

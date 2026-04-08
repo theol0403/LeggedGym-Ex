@@ -36,9 +36,6 @@ training an RGB parkour policy using visual domain randomization with a
 fine-tuned MobileNetV2 backbone. In real-world trials, Jenkins
 succeeded on hurdles but failed on gaps, suggesting that domain
 randomization alone may not fully close the visual sim-to-real gap.
-We pursue a complementary strategy: instead of learning invariance
-through randomized exposure, we project RGB into a canonical depth
-space using a pre-trained estimator.
 
 \paragraph{Sim-to-real for vision.}
 Domain randomization~\citep{tobin2017domain} perturbs visual properties
@@ -50,8 +47,7 @@ generative models that produce photorealistic training images.
 with a teacher--student--bootstrap framework for humanoid
 loco-manipulation from RGB.
 All three approaches require substantial rendering or generation
-overhead. We instead project RGB into a canonical depth space using a
-pre-trained estimator.
+overhead.
 
 \paragraph{Monocular depth estimation.}
 MiDaS~\citep{ranftl2020towards} pioneered monocular
@@ -59,15 +55,13 @@ depth estimation across diverse datasets.
 Depth~Anything~V2 (DA2)~\citep{yang2024depth} achieves state-of-the-art
 zero-shot depth estimation using a vision transformer encoder trained
 on 142M images.
-DA2 offers both relative and metric variants;
-we use the metric model, which predicts absolute depth in meters.
-Figure~\ref{fig:da2_qualitative} illustrates the qualitative behavior
-of DA2 across diverse scenes and motivates its use here as a canonical
-visual representation.
+DA2 offers both relative and metric variants; we use the metric model,
+which predicts depth in meters.  Figure~\ref{fig:da2_qualitative}
+shows example outputs.
 
 \begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\linewidth]{figures/depth_anything_v2_demo.png}
-  \caption{Depth Anything V2 \cite{yang2024depth,depthanythingv2repo}.}
-  \label{fig:da2_qualitative}
+	\centering
+	\includegraphics[width=\linewidth]{figures/depth_anything_v2_demo.png}
+	\caption{Depth Anything V2 \cite{yang2024depth,depthanythingv2repo}.}
+	\label{fig:da2_qualitative}
 \end{figure}

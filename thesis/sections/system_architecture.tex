@@ -13,11 +13,11 @@ Actions $a_t \in \R^{12}$ are target joint positions, updated at 50\,Hz
 and converted to torques by a PD controller
 $\tau = K_p (a_t - q) - K_d \dot{q}$.
 
-The system follows the two-stage privileged distillation pipeline
-described in Section~\ref{sec:intro}: a teacher trains with
-ground-truth scandot heightmaps~\citep{agarwal2023legged}, then a
-student reproduces the teacher's behavior from GT depth or
-DA2-estimated depth via DAgger (Figure~\ref{fig:pipeline}).
+The system follows the two-stage pipeline from
+Section~\ref{sec:intro}: a teacher trains with ground-truth scandot
+heightmaps~\citep{agarwal2023legged}, then a student imitates it from
+GT depth or DA2-estimated depth via DAgger
+(Figure~\ref{fig:pipeline}).
 
 \begin{figure}[t]
   \centering
@@ -43,12 +43,10 @@ recovers the terrain latent $z \in \R^{32}$ from a depth image
 (Figure~\ref{fig:student_arch}).
 A CNN maps the depth image $d \in \R^{58 \times 87}$ to a 32-dim
 feature, which is concatenated with proprioception and compressed by
-an MLP.
-A GRU integrates these fused features across timesteps, producing $z$
-and a heading estimate $\hat{y} \in \R^{2}$.
-The teacher's actor MLP is reused, taking $[o_\text{prop};\, z]$ to
-output joint targets.
-During DAgger distillation, the student minimizes the loss in
+an MLP.  A GRU integrates these fused features across timesteps,
+producing $z$ and a heading estimate $\hat{y} \in \R^{2}$.
+The teacher's actor MLP is reused to map $[o_\text{prop};\, z]$ to
+joint targets.  During DAgger distillation, the student minimizes the loss in
 Eq.~\ref{eq:dagger_loss} while the teacher's actions are executed
 in the environment.
 
@@ -70,9 +68,8 @@ with gap widths from 0.24\,m to 0.50\,m.
 These obstacles are simpler than those in
 prior work~\citep{cheng2023parkour, zhuang2023robot,
 chane2025soloparkour}; our goal is to establish a baseline for
-evaluating the DA2 depth pipeline rather than to push the limits of
-agile locomotion.
-During teacher training, a curriculum advances
+evaluating the DA2 depth pipeline, not to push the limits of agile
+locomotion.  During teacher training, a curriculum advances
 robots to harder rows upon reaching a success threshold.
 
 \begin{figure}[t]
