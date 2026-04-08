@@ -31,8 +31,8 @@ DA2-estimated depth via DAgger (Figure~\ref{fig:pipeline}).
 
 The teacher policy $\pi_T$ maps proprioception, privileged physics
 parameters, and scandot heightmaps to joint targets.  Three parallel
-MLPs encode the observation groups into 32-dim latent vectors, which
-are concatenated with proprioception and fed through the actor MLP
+MLPs encode the observation groups into 32-dim latent vectors.
+These are concatenated with proprioception and fed through the actor MLP
 $\R^{n} \to \R^{12}$ to produce joint position offsets.
 
 \subsection{Student}
@@ -43,11 +43,12 @@ recovers the terrain latent $z \in \R^{32}$ from a depth image
 (Figure~\ref{fig:student_arch}).
 A CNN maps the depth image $d \in \R^{58 \times 87}$ to a 32-dim
 feature, which is concatenated with proprioception and compressed by
-an MLP.  A GRU integrates these fused features
-across timesteps, producing $z$ and a heading estimate
-$\hat{y} \in \R^{2}$.  The teacher's actor MLP is reused, taking
-$[o_\text{prop};\, z]$ to output joint targets.  During
-DAgger distillation, the student minimizes the loss in
+an MLP.
+A GRU integrates these fused features across timesteps, producing $z$
+and a heading estimate $\hat{y} \in \R^{2}$.
+The teacher's actor MLP is reused, taking $[o_\text{prop};\, z]$ to
+output joint targets.
+During DAgger distillation, the student minimizes the loss in
 Eq.~\ref{eq:dagger_loss} while the teacher's actions are executed
 in the environment.
 
@@ -70,7 +71,8 @@ These obstacles are simpler than those in
 prior work~\citep{cheng2023parkour, zhuang2023robot,
 chane2025soloparkour}; our goal is to establish a baseline for
 evaluating the DA2 depth pipeline rather than to push the limits of
-agile locomotion.  During teacher training, a curriculum advances
+agile locomotion.
+During teacher training, a curriculum advances
 robots to harder rows upon reaching a success threshold.
 
 \begin{figure}[t]

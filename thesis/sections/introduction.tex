@@ -3,20 +3,23 @@
 % ====================================================================
 
 Legged robots that traverse irregular terrain---stairs, hurdles, and gaps---must perceive geometry and coordinate vision and control at high rates.
-Training locomotion policies in simulation with reinforcement learning (RL) and transferring them to real hardware has proven effective for agile skills~\citep{hwangbo2019learning, lee2020learning, rudin2022learning}. Recent work~\citep{zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has extended this approach to parkour---climbing, jumping, and crawling---through teacher--student distillation.
-In these systems, a \emph{teacher} trains with privileged terrain information (e.g.\ ground-truth heightmaps), and a \emph{student} reproduces the teacher's behavior from onboard sensors.
+Training locomotion policies in simulation with reinforcement learning (RL) and transferring them to real hardware has proven effective for agile skills~\citep{hwangbo2019learning, lee2020learning, rudin2022learning}.
+Recent work~\citep{zhuang2023robot, cheng2023parkour, hoeller2024anymal, chane2025soloparkour} has extended this approach to parkour---climbing, jumping, and crawling---through teacher--student distillation.
+In these systems, a \emph{teacher} trains with privileged terrain information such as ground-truth heightmaps, and a \emph{student} reproduces the teacher's behavior from onboard sensors.
 
 A central assumption, however, is access to an onboard depth sensor.
-Depth-camera policies transfer well from simulation on platforms that provide depth sensing~\citep{miki2022learning, agarwal2023legged}, but not all robots do. The Unitree Go2, for instance, ships with RGB cameras and a LiDAR sensor, but no onboard depth camera~\citep{unitreego2}.
+Depth-camera policies transfer well from simulation on platforms that provide depth sensing~\citep{miki2022learning, agarwal2023legged}, but not all robots do.
+The Unitree Go2, for instance, ships with RGB cameras and a LiDAR sensor, but no onboard depth camera~\citep{unitreego2}.
 
 Deploying vision policies from RGB therefore requires bridging the \emph{sim-to-real gap}.
 Three strategies have emerged: (1)~\textbf{domain randomization}~\citep{tobin2017domain}, which randomizes visual properties; (2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which uses diffusion models for photorealistic training images; and (3)~\textbf{canonical representations}, which project both domains into a shared space via a foundation model.
 
 We pursue strategy~(3) using Depth~Anything~V2 (DA2)~\citep{yang2024depth}, a pre-trained monocular depth estimator trained on millions of diverse real images.
-Our premise is that if DA2 maps RGB into a depth space that preserves terrain geometry across visual conditions, then a student policy operating on estimated depth may inherit partial robustness to appearance variation without photorealistic rendering or explicit domain randomization.
+If DA2 preserves terrain geometry across visual conditions, then a student policy operating on estimated depth may inherit some robustness to appearance changes without photorealistic rendering or explicit domain randomization.
 
 \paragraph{Thesis statement.}
-We hypothesize that pre-trained monocular depth estimation can provide a useful intermediate representation for vision-based quadruped parkour, enabling a student trained on estimated depth in simulation to tolerate a range of visual conditions without explicit domain randomization. We evaluate this hypothesis entirely in simulation; real-world transfer remains future work.
+We hypothesize that pre-trained monocular depth estimation can provide a useful intermediate representation for vision-based quadruped parkour, enabling a student trained on estimated depth in simulation to tolerate a range of visual conditions without explicit domain randomization.
+We evaluate this hypothesis entirely in simulation, so real-world transfer remains future work.
 
 \paragraph{Contributions.}
 \begin{itemize}[nosep,leftmargin=*]

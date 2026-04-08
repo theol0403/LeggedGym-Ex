@@ -9,14 +9,13 @@ hardware~\citep{hwangbo2019learning, rudin2022learning}.
 \citet{chen2020learning} introduced the privileged
 teacher--student paradigm, where a teacher with access to ground-truth
 state is distilled into a sensorimotor student.
-\citet{lee2020learning} applied this to locomotion,
-training a student from proprioceptive history alone and achieving
-zero-shot sim-to-real transfer on rough terrain.
-\citet{kumar2021rma} introduced rapid motor adaptation,
-using a learned adaptation module to estimate privileged parameters
-online.
-\citet{miki2022learning} extended this framework to
-perceptive locomotion, incorporating exteroceptive depth inputs.
+\citet{lee2020learning} applied it to locomotion, training a student
+from proprioceptive history alone and achieving zero-shot sim-to-real
+transfer on rough terrain.
+\citet{kumar2021rma} introduced rapid motor adaptation, using a
+learned module to estimate privileged parameters online.
+\citet{miki2022learning} extended the framework to perceptive
+locomotion with exteroceptive depth inputs.
 
 \paragraph{Vision-based parkour.}
 \citet{agarwal2023legged} introduced the scandot
@@ -56,8 +55,10 @@ pre-trained estimator.
 
 \paragraph{Monocular depth estimation.}
 MiDaS~\citep{ranftl2020towards} pioneered monocular
-depth estimation across diverse datasets. Depth~Anything~V2 (DA2)~\citep{yang2024depth} achieves state-of-the-art zero-shot depth
-estimation using a vision transformer encoder trained on 142M images.
+depth estimation across diverse datasets.
+Depth~Anything~V2 (DA2)~\citep{yang2024depth} achieves state-of-the-art
+zero-shot depth estimation using a vision transformer encoder trained
+on 142M images.
 DA2 offers both relative and metric variants;
 we use the metric model, which predicts absolute depth in meters.
 Figure~\ref{fig:da2_qualitative} illustrates the qualitative behavior

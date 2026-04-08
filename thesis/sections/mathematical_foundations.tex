@@ -11,7 +11,8 @@ observation space $\mathcal{O}$, transition dynamics $T$, reward
 function $R$, and discount factor $\gamma$.
 The agent receives partial observation $o_t \in \mathcal{O}$
 and selects action $a_t \in \mathcal{A} = \R^{12}$ (target joint
-position offsets).  Observations decompose into three groups:
+position offsets).
+Observations decompose into three groups:
 \begin{itemize}
   \item \textbf{Proprioception} $o_\text{prop} \in \R^{53}$: base
     angular velocity, projected gravity, velocity and heading
@@ -52,7 +53,7 @@ the commanded velocity and heading, making forward progress, and
 reaching waypoints and course completion.  Penalty terms discourage
 early termination, collisions, unstable body motion, large torques and
 joint accelerations, abrupt action changes, and joint or torque limit
-violations. See the full reward function in Table \ref{tab:reward}.
+violations. Table~\ref{tab:reward} lists the full reward.
 
 \subsection{DAgger Distillation}
 \label{sec:dagger}
