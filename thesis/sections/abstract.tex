@@ -1,7 +1,7 @@
 \begin{abstract}
-	Vision-based quadruped parkour usually relies on onboard depth cameras, limiting deployment to robots with specialized sensors. We investigate whether a pre-trained \emph{monocular depth estimator} can replace depth cameras for locomotion by producing a canonical depth representation from RGB, without photorealistic rendering or domain randomization.
+	Vision-based quadruped parkour usually relies on onboard depth cameras, limiting deployment to robots with specialized sensors. We investigate whether a pre-trained \emph{monocular depth estimator} can replace depth cameras by producing a canonical depth representation from RGB, without photorealistic rendering or domain randomization.
 
-	We present a two-stage pipeline: a privileged teacher trained via PPO, distilled into a visual student via DAgger using Depth~Anything~V2 (DA2) depth images. In simulation, the
-	student traverses stairs, hurdles, and gaps under conditions characterized by a simple \emph{Depth Signal Quality} (DSQ) metric.
-	Visual robustness experiments show that DA2-based students tolerate moderate lighting and color perturbations within simulation, though real-world transfer remains future work.
+	We present a two-stage pipeline: a privileged teacher trained via PPO, distilled into a visual student via DAgger using Depth~Anything~V2 (DA2) depth images. In simulation, the student traverses stairs, hurdles, and gaps under conditions characterized by a simple \emph{Depth Signal Quality} (DSQ) metric.
+
+	Visual sensitivity experiments show that DA2 preserves performance under moderate lighting and color shifts in simulation, but degrades on featureless surfaces. Real-world transfer remains future work.
 \end{abstract}

@@ -5,13 +5,15 @@
 \subsection{Problem Formulation}
 
 We model the parkour task as a Partially Observable Markov Decision
-Process $(\mathcal{S}, \mathcal{A}, \mathcal{O}, T, R, \gamma)$
+Process (POMDP) $(\mathcal{S}, \mathcal{A}, \mathcal{O}, T, R, \gamma)$
 with state space $\mathcal{S}$, action space $\mathcal{A}$,
-observation space $\mathcal{O}$, transition dynamics $T$, reward
-function $R$, and discount factor $\gamma$.
+observation space $\mathcal{O}$, transition dynamics
+$T(s'\mid s,a)$, reward $R(s,a)$, and discount factor $\gamma \in [0,1)$.
+
 The agent receives partial observation $o_t \in \mathcal{O}$
-and selects target joint position offsets $a_t \in \mathcal{A} = \R^{12}$.
-Observations decompose into two groups:
+and selects target joint position offsets
+$a_t \in \mathcal{A} = \R^{12}$.
+Observations decompose into:
 \begin{itemize}
 	\item \textbf{Proprioception} $o_\text{prop} \in \R^{53}$: base
 	      angular velocity, projected gravity, velocity and heading
@@ -19,18 +21,30 @@ Observations decompose into two groups:
 	      actions, and foot contacts.
 	\item \textbf{Exteroception} $o_\text{ext}$: scandot
 	      heightmaps ($\R^{132}$) for the teacher, or depth images
-	      for the student.  Scandots~\citep{agarwal2023legged} are terrain
-	      height samples on a $12 \times 11$ grid in the robot's body frame.
-	      Each value records the height difference between the base and the
-	      terrain surface, clipped to $[-1, 1]$.
+	      for the student.  Scandots~\citep{agarwal2023legged} sample terrain
+	      height on a $12 \times 11$ grid in the robot's body frame,
+	      recording the height difference between the base and the
+	      surface, clipped to $[-1, 1]$.
 \end{itemize}
+
+The objective is to find a policy $\pi$ maximizing the expected
+discounted return
+$J(\pi) = \E_\pi\!\left[\sum_{t=0}^{\infty} \gamma^t R(s_t, a_t)\right]$.
+In a POMDP, the optimal policy generally depends on the full belief
+state.  In practice, we approximate this with a recurrent architecture
+(Section~\ref{sec:student}) that integrates observations over time.
 
 \subsection{PPO}
 \label{sec:ppo}
 
 The teacher policy $\pi_\theta$ is trained with Proximal Policy
-Optimization (PPO)~\citep{schulman2017proximal}, which maximizes a
-clipped surrogate objective:
+Optimization (PPO)~\citep{schulman2017proximal}.
+Policy gradient methods optimize $J(\pi_\theta)$ by estimating
+$\nabla_\theta J$ from trajectory samples, but naively updating
+$\theta$ with large steps can collapse performance.
+Trust Region Policy Optimization (TRPO)~\citep{schulman2015trust}
+constrains the KL divergence between successive policies; PPO
+approximates this constraint with a clipped surrogate:
 \begin{equation}
 	L^{\text{CLIP}} = \E_t\!\left[\min\!\left(
 		r_t \hat{A}_t,\;
@@ -39,21 +53,35 @@ clipped surrogate objective:
 	\label{eq:ppo}
 \end{equation}
 where $r_t = \pi_\theta(a_t|o_t) / \pi_{\theta_{\text{old}}}(a_t|o_t)$
-is the probability ratio and $\hat{A}_t$ is the
-GAE~\citep{schulman2016high} advantage estimate.
+is the probability ratio.
+The advantage estimate $\hat{A}_t$ controls the effect of the gradient.  GAE~\citep{schulman2016high} defines
+\begin{equation}
+	\hat{A}_t^{\text{GAE}(\gamma,\lambda)}
+	= \sum_{l=0}^{\infty} (\gamma\lambda)^l \,\delta_{t+l},
+	\quad
+	\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t),
+	\label{eq:gae}
+\end{equation}
+where $\delta_t$ is the one-step residual and $\lambda\in[0,1]$.
 
-The teacher uses a reward function that combines task progress with
-regularization for stable locomotion. Positive terms reward forward progress, and
-penalty terms discourage unstable body motion and large torques. Table~\ref{tab:reward} lists the full reward.
+When $\hat{A}_t > 0$ the clip prevents $r_t$ from exceeding
+$1+\epsilon$; when $\hat{A}_t < 0$ it prevents $r_t$ from dropping
+below $1-\epsilon$.
+
+
+The teacher's reward combines task progress with locomotion
+regularization; Table~\ref{tab:reward} lists all terms and scales.
 
 \subsection{DAgger Distillation}
 \label{sec:dagger}
 
-The student policy is trained via Dataset Aggregation
-(DAgger)~\citep{ross2011reduction}.  At each step the student observes
-$o_\text{prop}$ and a depth image and predicts $a_\text{student}$,
-but the teacher's action $a_\text{teacher}$ is executed in the
-environment.  The student minimizes:
+The student is trained via Dataset Aggregation
+(DAgger)~\citep{ross2011reduction}.  Behavioral cloning on a fixed
+expert dataset suffers error compounding, but DAgger reduces this by iteratively
+collecting data under the student's own distribution while labeling
+with the expert.  The student observes $o_\text{prop}$ and a depth
+image and predicts $a_\text{student}$, but the teacher's action
+$a_\text{teacher}$ is executed.  The loss is:
 \begin{equation}
 	\mathcal{L} =
 	\underbrace{\|a_\text{teacher} - a_\text{student}\|_2}_{\text{action loss}}
@@ -61,4 +89,35 @@ environment.  The student minimizes:
 	\label{eq:dagger_loss}
 \end{equation}
 where $\hat{y} \in \R^2$ is the student's predicted heading and
-$y_\text{oracle}$ is the ground-truth heading.
+$y_\text{oracle}$ is ground truth heading.
+
+\subsection{Monocular Depth Estimation}
+\label{sec:depth_math}
+
+Recovering depth from a single RGB image is an ill-posed problem:
+infinitely many 3D scenes can produce the same 2D projection.
+Monocular depth estimators resolve this ambiguity by learning
+geometric priors from large-scale data.  Given an image
+$I \in \R^{H \times W \times 3}$, the model predicts a depth map
+$\hat{d} = f_\phi(I) \in \R^{H \times W}$.
+
+\subsection{Depth Signal Quality}
+\label{sec:dsq_math}
+
+To measure how well the estimated depth preserves terrain geometry,
+we define Depth Signal Quality (DSQ) as the Pearson correlation
+between ground-truth and estimated depth, averaged over environments
+and time:
+\begin{equation}
+	\mathrm{DSQ} = \frac{1}{T} \sum_{t=1}^{T}
+	\frac{1}{N} \sum_{i=1}^{N}
+	\rho(d^{\mathrm{GT}}_i,\, d^{\mathrm{DA2}}_i),
+	\label{eq:dsq}
+\end{equation}
+where $\rho(\cdot,\cdot)$ denotes the Pearson correlation computed
+over all pixels $p$ within each frame.
+
+Pearson correlation is invariant to affine transformations of either
+argument, i.e. $\rho(\alpha x + \beta,\, y) = \rho(x, y)$ for any
+$\alpha > 0$.  This makes DSQ insensitive to the scale--shift
+ambiguity inherent in monocular depth.

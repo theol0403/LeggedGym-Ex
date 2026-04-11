@@ -2,32 +2,48 @@
 \label{sec:intro}
 % ====================================================================
 
-Legged robots traversing stairs, hurdles, and gaps must perceive
+Legged robots traversing stairs, hurdles, and gaps (known as legged parkour) must perceive
 geometry and coordinate vision with control at high rates.  RL
 policies trained in simulation have transferred agile locomotion to
 hardware~\citep{hwangbo2019learning, lee2020learning, rudin2022learning}.
 Recent work~\citep{zhuang2023robot, cheng2023parkour, hoeller2024anymal,
 	chane2025soloparkour} extends this to parkour through teacher--student
-distillation, where a teacher uses privileged terrain information (e.g. heightmaps) and
+distillation, where a teacher uses privileged terrain information (e.g.\ heightmaps) and
 a student imitates it from onboard sensors. However, while such policies using onboard depth cameras transfer well from simulation~\citep{miki2022learning,
-	agarwal2023legged}, some platforms such as the Unitree Go2 ship with only
+	agarwal2023legged}, some platforms including the Unitree Go2 ship with only
 RGB cameras and LiDAR ~\citep{unitreego2}.
 
-Deploying vision policies from RGB instead of depth requires bridging the \emph{sim-to-real gap}.
-Three strategies have emerged: (1)~\textbf{domain randomization}~\citep{tobin2017domain}, which randomizes visual properties; (2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which uses diffusion models for photorealistic training images; and (3)~\textbf{canonical representations}, which project both domains into a shared space via a foundation model.
+Deploying from RGB instead of depth requires bridging the
+\emph{sim-to-real gap}.  Three strategies have emerged:
+(1)~\textbf{domain randomization}~\citep{tobin2017domain}, which
+randomizes visual properties;
+(2)~\textbf{generative augmentation}~\citep{yu2024lucidsim}, which
+uses diffusion models for photorealistic training images; and
+(3)~\textbf{canonical representations}, which project both domains
+into a shared space via a foundation model.
 
-We pursue strategy~(3) using Depth~Anything~V2 (DA2)~\citep{yang2024depth}, a pre-trained monocular depth estimator trained on millions of diverse real images.
-If DA2 preserves terrain geometry across visual conditions, then a student trained on estimated depth may inherit some robustness to appearance changes without photorealistic rendering or explicit domain randomization.
+We pursue strategy~(3) using Depth~Anything~V2
+(DA2)~\citep{yang2024depth}, a monocular depth estimator trained on
+millions of diverse real images.  If DA2 preserves terrain geometry
+across visual conditions, a student trained on estimated depth may
+tolerate appearance changes without photorealistic rendering or
+explicit domain randomization.
 
 \paragraph{Thesis statement.}
-We hypothesize that pre-trained monocular depth estimation can provide a useful intermediate representation for vision-based quadruped parkour, enabling a student policy to tolerate a range of visual conditions without explicit domain randomization.
-
-We evaluate this hypothesis in simulation; real-world transfer remains future work.
+We hypothesize that pre-trained monocular depth estimation can serve
+as an intermediate representation for vision-based quadruped parkour,
+enabling a student policy to tolerate a range of visual conditions
+without explicit domain randomization.  We evaluate this hypothesis
+in simulation; real-world transfer remains future work.
 
 \paragraph{Contributions.}
 \begin{itemize}[nosep,leftmargin=*]
-	\item A two-stage teacher--student quadruped parkour pipeline from privileged heightmaps distilled to monocular depth.
-	\item A demonstration that estimated depth enables basic parkour in simulation.
-	\item Identification of depth signal quality as a key factor limiting performance.
-	\item A visual sensitivity study showing tolerance to moderate lighting and color shifts in simulation.
+	\item A two-stage teacher--student pipeline integrating DA2 into
+	      privileged distillation for quadruped parkour.
+	\item An empirical demonstration that monocular depth estimation
+	      enables parkour in simulation, with model scale and terrain
+	      texture identified as key factors.
+	\item A visual sensitivity study characterizing when DA2-based
+	      policies fail, with Depth Signal Quality (DSQ) as a
+	      diagnostic metric.
 \end{itemize}

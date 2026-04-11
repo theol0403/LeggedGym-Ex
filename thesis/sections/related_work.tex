@@ -3,33 +3,25 @@
 % ====================================================================
 
 \paragraph{RL for legged locomotion.}
-Modern quadruped controllers are typically learned via reinforcement
-learning in simulation and transferred to real
-hardware~\citep{hwangbo2019learning, rudin2022learning}.
-\citet{chen2020learning} introduced the privileged
-teacher--student paradigm, where a teacher with access to ground-truth
-simulator state is distilled into a sensorimotor student.
-\citet{lee2020learning} applied it to locomotion, training a student
-from proprioceptive history alone and achieving sim-to-real
-transfer on rough terrain.
-\citet{kumar2021rma} introduced rapid motor adaptation, using a
-learned module to estimate privileged parameters online.
-\citet{miki2022learning} extended the framework to perceptive
-locomotion with exteroceptive depth inputs.
+Modern quadruped controllers are learned in simulation and
+transferred to hardware~\citep{hwangbo2019learning, rudin2022learning}.
+\citet{chen2020learning} introduced the privileged teacher--student
+paradigm; \citet{lee2020learning} applied it to locomotion from
+proprioceptive history; \citet{kumar2021rma} added online adaptation
+of privileged parameters; and \citet{miki2022learning} extended it
+to perceptive locomotion with exteroceptive depth.
 
 \paragraph{Vision-based parkour.}
-\citet{agarwal2023legged} introduced the scandot
-representation for depth-based locomotion, distilling a
-privileged teacher into a visual student.
+\citet{agarwal2023legged} introduced the scandot representation,
+distilling a privileged teacher into a depth-based student.
 Extreme Parkour~\citep{cheng2023parkour} and Robot Parkour
-Learning~\citep{zhuang2023robot} build on this with CNN--GRU students
-that process depth images, demonstrating climbing, jumping, and
-crawling on real quadrupeds.
+Learning~\citep{zhuang2023robot} extend this with CNN--GRU students
+processing depth images on real quadrupeds.
 SoloParkour~\citep{chane2025soloparkour} replaces distillation with
 off-policy RL warm-started from privileged experience, and
-ANYmal Parkour~\citep{hoeller2024anymal} uses a hierarchical
-skill-selection policy.
-All five systems assume access to a depth camera at deployment.
+ANYmal Parkour~\citep{hoeller2024anymal} uses hierarchical
+skill selection.
+All five systems assume a depth camera at deployment.
 
 \citet{jenkins2024learning} is the closest work to ours,
 training an RGB parkour policy using visual domain randomization with a
@@ -38,20 +30,20 @@ succeeded on hurdles but failed on gaps, suggesting that domain
 randomization alone may not fully close the visual sim-to-real gap.
 
 \paragraph{Sim-to-real for vision.}
-Domain randomization~\citep{tobin2017domain} perturbs visual properties
-(textures, lighting, colors) so the policy learns invariance through
-exposure.
+Domain randomization~\citep{tobin2017domain} randomizes visual
+properties so the policy learns invariance through exposure.
 LucidSim~\citep{yu2024lucidsim} replaces randomization with
-generative models that produce photorealistic training images.
-\citet{xue2025opening} also uses photorealistic simulation for humanoid
-loco-manipulation from RGB.
-All three approaches require substantial rendering overhead.
+generative models for photorealistic training images, and
+\citet{xue2025opening} uses photorealistic simulation for humanoid
+loco-manipulation.  All three approaches require substantial
+rendering overhead; we sidestep this by using a pre-trained depth
+estimator as a canonical representation.
 
 \paragraph{Monocular depth estimation.}
 MiDaS~\citep{ranftl2020towards} pioneered monocular
 depth estimation.
 Depth~Anything~V2 (DA2)~\citep{yang2024depth} achieves state-of-the-art
-depth estimation using a vision transformer encoder trained
+depth estimation with a vision transformer trained
 on 142M images, able to predict depth in meters.
 Figure~\ref{fig:da2_qualitative}
 shows example outputs.

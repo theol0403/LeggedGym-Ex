@@ -19,20 +19,19 @@ locomotion, but actual sim-to-real transfer remains unvalidated.
 
 \subsection{Limitations}
 
-All experiments are in simulation, so hardware transfer is still
-untested.  The task is also narrow: the obstacles are simpler than
-those in recent real-world parkour systems, and the robustness study
-covers only two difficulty levels.
+All experiments are in simulation; hardware transfer is untested.
+The obstacles are simpler than those in prior
+work~\citep{cheng2023parkour, zhuang2023robot}, and the sensitivity
+study covers only two difficulty levels.
 
-DA2 degrades on weak-texture terrain, and DSQ does not explain every failure on unseen textures.
-Because DA2 processes frames independently, its estimates may flicker.
-We did not measure temporal consistency or test video-based depth
-models.
-Deployment would also introduce failure modes absent here, including
-transparent or reflective surfaces, thin structures, motion blur, and
-close-range objects near the edge of the training distribution.
-Finally, the perception stack is still too heavy for onboard
-deployment.  The current system is best viewed as a proof of concept.
+DA2 degrades on weak-texture terrain, and DSQ does not explain every
+failure on unseen textures.  Because DA2 processes frames
+independently, its estimates may flicker---we did not measure
+temporal consistency or test video-based depth models.  Deployment
+would introduce additional failure modes: transparent or reflective
+surfaces, thin structures, motion blur, and close-range objects.
+The perception stack is also too heavy for onboard inference.  The
+system is best viewed as a proof of concept.
 
 \subsection{Future Work}
 
@@ -41,4 +40,4 @@ camera noise, motion blur, exposure shifts, and outdoor lighting.
 Broader evaluation on harder courses would test generality.  Smaller
 or temporally consistent depth models could reduce compute and
 stabilize predictions, while joint adaptation of the depth estimator
-and student policy may improve robustness on harder textures.
+and student policy may improve performance on harder textures.

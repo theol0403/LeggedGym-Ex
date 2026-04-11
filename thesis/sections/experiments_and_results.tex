@@ -6,42 +6,25 @@ We evaluate the DA2 pipeline through three experiments:
 (1)~establishing upper-bound baselines with ground-truth sensing,
 (2)~closing the gap between estimated and ground-truth depth by
 varying model capacity and terrain texture, and
-(3)~testing visual robustness under visual perturbations.
+(3)~testing visual sensitivity under appearance perturbations.
 We report \emph{success rate} (fraction of episodes completing the
 full course) and \emph{progress ratio} (mean fractional distance
 along the course before termination), both averaged over 256
-episodes.
-
-For visual robustness, we also report \emph{depth signal quality}
-(DSQ), the scale- and offset-invariant Pearson correlation between
-ground-truth and DA2-estimated depth, averaged over environments and
-time steps.
-
-\begin{equation}
-	\mathrm{DSQ} = \frac{1}{T} \sum_{t=1}^{T}
-	\frac{1}{N} \sum_{i=1}^{N}
-	\frac{
-		\sum_p (d^{\mathrm{GT}}_{i,p} - \bar{d}^{\mathrm{GT}}_i)
-		(d^{\mathrm{DA2}}_{i,p} - \bar{d}^{\mathrm{DA2}}_i)
-	}{
-		\| d^{\mathrm{GT}}_i - \bar{d}^{\mathrm{GT}}_i \|_2 \;
-		\| d^{\mathrm{DA2}}_i - \bar{d}^{\mathrm{DA2}}_i \|_2
-	}
-	\label{eq:dsq}
-\end{equation}
+episodes.  For visual sensitivity, we also report DSQ
+(Section~\ref{sec:dsq_math}).
 
 % ====================================================================
 \subsection{Baselines}
 \label{sec:baselines}
 
-We first establish upper bounds for the privileged teacher and the
-ground-truth depth sensing student (GT-depth).
-Table~\ref{tab:baselines} shows near-perfect teacher performance across
-all gap difficulties.
-The GT-depth student also succeeds on all rows, showing the CNN--GRU
-architecture can act from a single depth view.  A zero-depth ablation
-drops success to 8\%, confirming that the policy uses depth rather
-than proprioceptive heuristics.
+We first establish upper bounds with the privileged teacher and
+a ground-truth depth student (GT-depth).
+Table~\ref{tab:baselines} shows near-perfect teacher performance
+across all gap difficulties.
+The GT-depth student also succeeds on all rows, confirming that the
+CNN--GRU architecture can act from a single depth view.  A
+zero-depth ablation drops success to 8\%, confirming the policy
+relies on depth rather than proprioceptive heuristics.
 
 \begin{table}[t]
 	\centering
@@ -64,15 +47,14 @@ than proprioceptive heuristics.
 \subsection{Parkour from Estimated Depth}
 \label{sec:da2_results}
 
-We next replace simulator depth with estimated depth.  As shown in
-Table~\ref{tab:da2_main}, DA2-small succeeds
-on the early rows but fails completely on Rows~2 and 3.  Switching to
-DA2-base reaches Row~3, but still falls well short of GT-depth on the
-hardest rows.
+We replace simulator depth with DA2 estimates.  As
+Table~\ref{tab:da2_main} shows, DA2-small succeeds
+on early rows but fails on Rows~2--3.  DA2-base reaches Row~3 but
+falls well short of GT-depth on harder rows.
 
 On untextured terrain, the gap boundary provides weak cues, so the depth estimate is
 ambiguous. As Table~\ref{tab:da2_main} shows, adding a checkerboard
-terrain texture makes the gap geometry visible and closes most of the
+texture makes the gap geometry visible and closes most of the
 remaining gap to GT-depth. Figure~\ref{fig:da2_texture_comparison}
 shows representative depth estimates across surface conditions.
 
@@ -106,53 +88,49 @@ the untextured models and approaches the GT-depth baseline.
 	\centering
 	\includegraphics[width=\linewidth]{figures/student_success_comparison.pdf}
 	\includegraphics[width=\linewidth]{figures/per_obstacle_success.pdf}
-	\caption{Success rate during student training. Breaking success down by
-		obstacle type shows that most of the gain comes from gap traversal;
-		stairs and hurdles are less sensitive to texture because their
-		geometry remains visible.}
+	\caption{Success rate during student training. Per-obstacle
+		breakdown shows most of the texture gain comes from gap
+		traversal; stairs and hurdles are less sensitive because
+		their geometry remains visible.}
 	\label{fig:student_success}
 \end{figure}
 
 
-% TODO: renders need to be improved
 \begin{figure*}[t]
 	\centering
 	\includegraphics[width=\textwidth]{figures/da2_texture_comparison.png}
-	\caption{Robot-view comparison across representative terrain
-		textures. Each panel shows rendered RGB (left) and the
-		corresponding DA2 depth estimate (right). Featureless terrain
-		produces the weakest obstacle localization and the lowest DSQ, while
-		checkerboard, grass, and wood all preserve substantially
-		more geometric structure.}
+	\caption{Robot-view comparison across terrain textures.
+		Each panel shows rendered RGB (left) and the corresponding
+		DA2 depth estimate (right). Featureless terrain produces the
+		weakest obstacle localization and the lowest DSQ; checkerboard,
+		grass, and wood preserve substantially more geometric structure.}
 	\label{fig:da2_texture_comparison}
 \end{figure*}
 
 % ====================================================================
-\subsection{Visual Robustness}
+\subsection{Visual Sensitivity}
 \label{sec:domain}
 
-To test appearance robustness, we perturb the trained student only at
-\emph{test time} in simulation.  Table~\ref{tab:domain_inv} reports
-success across six terrain configurations (three obstacle families
-$\times$ two difficulty levels) for texture replacement,
+To test appearance sensitivity, we perturb the trained student at
+\emph{test time only} in simulation.  Table~\ref{tab:domain_inv}
+reports success across six terrain configurations (three obstacle
+families $\times$ two difficulty levels) under texture replacement,
 lighting/color changes, and combined perturbations.
 Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 
 \begin{figure}[h]
 	\centering
 	\includegraphics[width=0.95\linewidth]{figures/dsq_scatter.pdf}
-	\caption{Success rate vs.\ DSQ across all six terrain configurations.
-		Color denotes obstacle type and difficulty; marker shape denotes
-		perturbation category.  Featureless surfaces cluster at
-		low DSQ with catastrophic failure; most textured conditions maintain
-		DSQ\,$>$\,0.85 but success varies by difficulty.}
+	\caption{Success rate vs.\ DSQ across all six terrain
+		configurations.  Color denotes obstacle type and difficulty;
+		marker shape denotes perturbation category.}
 	\label{fig:dsq_scatter}
 \end{figure}
 
 \begin{table}[h]
 	\centering
-	\caption{Visual robustness: test-time success~(\%)
-		under visual perturbations across obstacle types. }
+	\caption{Visual sensitivity: test-time success~(\%)
+		under appearance perturbations across obstacle types.}
 	\label{tab:domain_inv}
 	\small
 	\begin{tabular}{@{}p{2.6cm}rr|rr|rr@{}}
@@ -181,17 +159,15 @@ Figure~\ref{fig:dsq_scatter} plots DSQ against policy success.
 		\quad Extreme           & 34.0                        & 0.4                         & 99.6 & 66.8 & 89.5 & 19.1 \\
 		\bottomrule
 		\multicolumn{7}{@{}p{8.5cm}}{\footnotesize\textsuperscript{*}
-			Mild: concrete + dim (0.6$\times$) + brightness jitter $\pm$20\%.
+			Mild: concrete + dim (0.6$\times$).
 			Extreme: noise + dim (0.4$\times$) + low contrast ($\gamma{=}1.8$) + color jitter $\pm$20\%.}                  \\
 	\end{tabular}
 \end{table}
 
-At the easier setting, stairs and hurdles are largely insensitive to appearance
+On Row 0, stairs and hurdles are largely insensitive to appearance
 changes because strong edges remain visible across textures and
 lighting.  Gaps are more sensitive because their boundary is visible
-mainly through surface texture.
-
-At the harder setting, all three obstacle families degrade, including
+mainly through surface texture. On Row 3, all three obstacle families degrade, including
 stairs and hurdles.  Featureless surfaces cause the largest failures,
 while lighting and color shifts have a smaller effect.  This pattern
 suggests DA2 is robust to photometric variation but still depends on
