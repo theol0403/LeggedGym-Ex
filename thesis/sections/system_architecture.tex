@@ -15,16 +15,15 @@ $\tau = K_p (a_t - q) - K_d \dot{q}$.
 
 The system follows the two-stage pipeline from
 Section~\ref{sec:intro}: a teacher trains with ground-truth scandot
-heightmaps~\citep{agarwal2023legged}, then a student imitates it from
-GT depth or DA2-estimated depth via DAgger
-(Figure~\ref{fig:pipeline}).
+heightmaps~\citep{agarwal2023legged}, then a DAgger student imitates it from
+ground-truth (GT) or DA2-estimated depth (Figure~\ref{fig:pipeline}).
 
 \begin{figure}[t]
-  \centering
-  \input{figures/pipeline}
-  \caption{Two-stage training pipeline.  The teacher uses privileged
-    scandot observations; the student replaces these with either GT depth or DA2-inferred depth.}
-  \label{fig:pipeline}
+	\centering
+	\input{figures/pipeline}
+	\caption{Two-stage training pipeline.  The teacher uses privileged
+		scandot observations; the student replaces these with either GT depth or DA2-inferred depth.}
+	\label{fig:pipeline}
 \end{figure}
 
 \subsection{Teacher}
@@ -51,12 +50,12 @@ Eq.~\ref{eq:dagger_loss} while the teacher's actions are executed
 in the environment.
 
 \begin{figure}[t]
-  \centering
-  \input{figures/student_arch}
-  \caption{Student visual encoder.  The depth CNN and proprioception
-    are fused and processed by a GRU that produces the terrain latent
-  and heading estimate used by the teacher's actor MLP.}
-  \label{fig:student_arch}
+	\centering
+	\input{figures/student_arch}
+	\caption{Student visual encoder.  The depth CNN and proprioception
+		are fused and processed by a GRU that produces the terrain latent
+		and heading estimate used by the teacher's actor MLP.}
+	\label{fig:student_arch}
 \end{figure}
 
 \subsection{Terrain and Curriculum}
@@ -67,16 +66,16 @@ The simulator generates parkour terrains with three obstacle families
 with gap widths from 0.24\,m to 0.50\,m.
 These obstacles are simpler than those in
 prior work~\citep{cheng2023parkour, zhuang2023robot,
-chane2025soloparkour}; our goal is to establish a baseline for
+	chane2025soloparkour}; our goal is to establish a baseline for
 evaluating the DA2 depth pipeline, not to push the limits of agile
 locomotion.  During teacher training, a curriculum advances
 robots to harder rows upon reaching a success threshold.
 
 \begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/terrain_curriculum.png}
-  \caption{Parkour curriculum progression across obstacle families.
-    Difficulty increases from left to right by increasing step
-    count/height, hurdle size, and gap width.}
-  \label{fig:terrain_curriculum}
+	\centering
+	\includegraphics[width=\linewidth]{figures/terrain_curriculum.png}
+	\caption{Parkour curriculum progression across obstacle families.
+		Difficulty increases from left to right by increasing step
+		count/height, hurdle size, and gap width.}
+	\label{fig:terrain_curriculum}
 \end{figure}

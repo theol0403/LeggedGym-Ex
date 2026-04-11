@@ -8,9 +8,9 @@ learning in simulation and transferred to real
 hardware~\citep{hwangbo2019learning, rudin2022learning}.
 \citet{chen2020learning} introduced the privileged
 teacher--student paradigm, where a teacher with access to ground-truth
-state is distilled into a sensorimotor student.
+simulator state is distilled into a sensorimotor student.
 \citet{lee2020learning} applied it to locomotion, training a student
-from proprioceptive history alone and achieving zero-shot sim-to-real
+from proprioceptive history alone and achieving sim-to-real
 transfer on rough terrain.
 \citet{kumar2021rma} introduced rapid motor adaptation, using a
 learned module to estimate privileged parameters online.
@@ -19,7 +19,7 @@ locomotion with exteroceptive depth inputs.
 
 \paragraph{Vision-based parkour.}
 \citet{agarwal2023legged} introduced the scandot
-representation for egocentric depth-based locomotion, distilling a
+representation for depth-based locomotion, distilling a
 privileged teacher into a visual student.
 Extreme Parkour~\citep{cheng2023parkour} and Robot Parkour
 Learning~\citep{zhuang2023robot} build on this with CNN--GRU students
@@ -43,20 +43,17 @@ Domain randomization~\citep{tobin2017domain} perturbs visual properties
 exposure.
 LucidSim~\citep{yu2024lucidsim} replaces randomization with
 generative models that produce photorealistic training images.
-\citet{xue2025opening} combine photorealistic simulation
-with a teacher--student--bootstrap framework for humanoid
+\citet{xue2025opening} also uses photorealistic simulation for humanoid
 loco-manipulation from RGB.
-All three approaches require substantial rendering or generation
-overhead.
+All three approaches require substantial rendering overhead.
 
 \paragraph{Monocular depth estimation.}
 MiDaS~\citep{ranftl2020towards} pioneered monocular
-depth estimation across diverse datasets.
+depth estimation.
 Depth~Anything~V2 (DA2)~\citep{yang2024depth} achieves state-of-the-art
-zero-shot depth estimation using a vision transformer encoder trained
-on 142M images.
-DA2 offers both relative and metric variants; we use the metric model,
-which predicts depth in meters.  Figure~\ref{fig:da2_qualitative}
+depth estimation using a vision transformer encoder trained
+on 142M images, able to predict depth in meters.
+Figure~\ref{fig:da2_qualitative}
 shows example outputs.
 
 \begin{figure}[htbp]
