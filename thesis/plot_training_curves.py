@@ -22,7 +22,7 @@ plt.rcParams.update({
 
 FIGURES_DIR = Path('thesis/figures')
 ARCHIVE = Path('logs_archive')
-MAX_ITER = 10000
+MAX_ITER = 5000
 SMOOTH_W = 50   # smoothing window for student plots
 SMOOTH_PAD = 200  # extra padding past MAX_ITER for smoothing support
 

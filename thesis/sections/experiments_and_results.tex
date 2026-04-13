@@ -69,7 +69,7 @@ shows representative depth estimates across surface conditions.
 		\midrule
 		DA2-small          & 56.3  & 33.6  & ---   & ---   \\
 		DA2-base           & 68.4  & 83.2  & 26.6  & 0.8   \\
-		DA2-base + texture & 87.5  & 93.0  & 87.1  & 80.5  \\
+		DA2-base + texture & 64.8  & 64.1  & 68.0  & 44.9  \\
 		\midrule
 		GT-depth baseline  & 94.5  & 94.5  & 89.1  & 87.5  \\
 		\bottomrule
@@ -79,10 +79,7 @@ shows representative depth estimates across surface conditions.
 
 Figure~\ref{fig:student_success} shows the training dynamics. Reward
 rises steeply as the policies master flat terrain, then plateaus as
-the curriculum exposes harder obstacles. The textured model surpasses
-the untextured models and approaches the GT-depth baseline.
-
-% TODO: maybe progress ratio isn't right, why is depth lower?
+the curriculum exposes harder obstacles.
 
 \begin{figure}[htbp]
 	\centering

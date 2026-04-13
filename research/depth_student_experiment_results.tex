@@ -262,10 +262,24 @@ Checkpoint & Row 0 & Row 1 & Row 2 & Row 3 & Episodes \\
 \end{tabular}
 \end{center}
 
-\textbf{Note:} High inter-evaluation variance (especially with 64 episodes)
-makes individual checkpoints unreliable.  Checkpoint 7000 was selected as
-the best overall and confirmed with 256 episodes per row.  Row~3 went from
-0\% (BASE1@5000) to 80.5\% (BASE3-ext@7000).
+\textbf{Note:} The above results used \texttt{texture\_uv\_scale=10.0}, which made
+procedural textures tile so densely they appeared as near-solid colours from the
+robot's camera.  After correcting the UV scale to 4.0 (visible patterns), the
+retrained model (10{,}000 iterations, same hyperparameters) achieves:
+
+\begin{center}
+\begin{tabular}{l cccc}
+\toprule
+& Row 0 & Row 1 & Row 2 & Row 3 \\
+\midrule
+BASE3 @10000 (uv=4.0) & 64.8 & 64.1 & 68.0 & 44.9 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The drop is caused by DA2 interpreting bold texture patterns as spurious depth
+variation (DSQ decreases by $\approx$1.5\% Pearson correlation relative to
+invisible textures).  This is the honest result with correctly-scaled textures.
 
 \subsection{Final Comparison with GT-Depth Upper Bound}
 
@@ -278,16 +292,16 @@ Policy & Row 0 & Row 1 & Row 2 & Row 3 \\
 \midrule
 Teacher (GT scandots) & 98.5 & 100.0 & 99.0 & 98.5 \\
 GT-depth student     & 94.5 & 94.5 & 89.1 & 87.5 \\
-\best{BASE3-ext @7000} & \best{87.5} & \best{93.0} & \best{87.1} & \best{80.5} \\
-Gap to GT            & $-$7.0 & $-$1.5 & $-$2.0 & $-$7.0 \\
+\best{BASE3 @10000 (uv=4)} & \best{64.8} & \best{64.1} & \best{68.0} & \best{44.9} \\
+Gap to GT            & $-$29.7 & $-$30.4 & $-$21.1 & $-$42.6 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-All four rows are now within 7\,pp of the GT-depth upper bound.  Row~3
-(0.50\,m gaps) improved from 0.8\% (DA2-base alone) to 80.5\% (DA2-base +
-texture at 7{,}000 iterations), closing the majority of the gap to the
-GT-depth student's 87.5\%.
+The gap to GT-depth is substantially larger with correctly-scaled textures.
+Row~3 (0.50\,m gaps) improved from 0.8\% (DA2-base alone) to 44.9\% (DA2-base +
+texture at 10{,}000 iterations), but remains 42.6\,pp below the GT-depth
+student's 87.5\%.
 
 %======================================================================
 \section{Key Findings}
