@@ -34,7 +34,7 @@
 \setbeamerfont{frametitle}{size=\Large, series=\bfseries}
 \setbeamertemplate{frametitle}{\vspace{0.25cm}\insertframetitle\par}
 
-% Tri-color bar for normal frames (headline)
+% Tri-color bar for normal frames
 \setbeamertemplate{headline}{%
   \noindent\hbox to\paperwidth{%
     {\color{QueensBlue}\vrule height4pt width0.36\paperwidth}%
@@ -50,7 +50,6 @@
   \end{beamercolorbox}%
 }
 
-% Section divider: colored background + centered white title
 \newcommand{\sectionslide}[2]{%
   \begingroup
   \setbeamercolor{background canvas}{bg=#1}
@@ -82,12 +81,23 @@
 \newcommand{\DSQ}{\mathrm{DSQ}}
 \newcommand{\clip}{\mathrm{clip}}
 
+\newcommand{\visualplaceholder}[2]{%
+  \begingroup
+  \setlength{\fboxsep}{8pt}%
+  \noindent\fcolorbox{QueensBlue!80}{QueensBlue!5}{%
+    \parbox[c][0.18\textheight][c]{0.92\linewidth}{\centering
+      \small\textbf{#1}\par\vspace{0.45em}\scriptsize #2
+    }%
+  }%
+  \endgroup
+}
+
 % ==========================================================================
 % METADATA
 % ==========================================================================
 
 \title[Toward Visually Robust Quadruped Parkour]{Toward Visually Robust Quadruped Parkour\\via Monocular Depth Estimation}
-\subtitle{An experimental study of monocular depth for quadruped parkour}
+\subtitle{Background, methodology, and experiments on monocular depth for parkour}
 \author[Theo Lemay]{Theo Lemay\\\small MTHE 499 Thesis}
 \institute[Queen's]{Queen's University\\\small Supervisor: Prof.\ Joshua Marshall}
 \date{April 2026}
@@ -117,353 +127,391 @@
 \sectionslide{QueensRed}{Problem}
 
 % Script:
-% - Open with the deployment gap: most parkour papers assume a depth camera at test time.
-% - My question was whether a pretrained monocular depth model can provide the right geometry instead.
-% - The contribution is experimental and methodological: what I tried, what worked, what failed, and what that rules out.
-% - Transition: before the experiments, I need a clean mathematical model of the task.
-\begin{frame}{Problem and Thesis Question}
+% - Start by defining the object of study before discussing the thesis question.
+% - Parkour here means dynamic traversal of discrete obstacles, not just rough-terrain walking.
+% - The important ingredients are perception of geometry, timing, and precise foot placement.
+\begin{frame}{What Is Quadruped Parkour?}
   \begin{columns}[T,onlytextwidth]
-    \column{0.57\textwidth}
-    \begin{itemize}
-      \item Vision-based quadruped parkour usually deploys with an onboard \alert{depth camera}.
-      \item On Go2-class platforms, \alert{perception} is the bottleneck: deployment is easier from RGB than from specialized depth hardware.
-      \item I explored \alert{monocular depth as a canonical representation}, instead of relying on photorealistic rendering or heavy visual domain randomization.
-    \end{itemize}
-
-    \vspace{0.5em}
-    \begin{block}{Thesis Question}
-      Can a pretrained monocular depth estimator preserve enough terrain geometry for a distilled parkour policy to act reliably?
+    \column{0.44\textwidth}
+    \begin{block}{Working Definition}
+      \small
+      Quadruped parkour is \alert{dynamic locomotion over discrete obstacles}
+      such as stairs, hurdles, and gaps, where success depends on
+      \begin{itemize}
+        \item perceiving terrain geometry,
+        \item choosing the right footholds and timing,
+        \item staying stable through contact changes.
+      \end{itemize}
     \end{block}
 
-    \column{0.39\textwidth}
+    \column{0.26\textwidth}
     \centering
-    \includegraphics[width=0.94\linewidth]{parkour_obstacle_types.png}
+    \includegraphics[width=\linewidth]{parkour_obstacle_types.png}
+
+    \column{0.26\textwidth}
+    \visualplaceholder{Course or robot visual}{
+      Insert a simple schematic or photo sequence of a quadruped approaching,
+      crossing, and landing over one obstacle.}
   \end{columns}
-  \source{Thesis experiments in Genesis + legged\_gym; parkour setup adapted from recent quadruped parkour work.}
+  \source{Obstacle families used in the thesis: stairs, hurdles, and gaps.}
 \end{frame}
 
 % Script:
-% - Model the task as a POMDP so the talk has the right mathematical frame from the start.
-% - The key split is proprioception plus exteroception, with different exteroception for teacher and student.
-% - Emphasize that the student only gets partial information, so recurrence is not cosmetic; it is motivated by the model.
-% - Transition: with the task defined, the next question is how the policy is learned.
-\begin{frame}{Mathematical Setup}
+% - This slide now carries only the motivation and thesis question.
+% - Emphasize that I am not claiming a solved deployment pipeline; this is an experimental study.
+% - The main question is whether pretrained monocular depth can preserve useful geometry.
+\begin{frame}{Motivation and Thesis Question}
   \begin{columns}[T,onlytextwidth]
     \column{0.56\textwidth}
-    \small
-    We model parkour as a POMDP
-    \[
-      (\mathcal{S}, \mathcal{A}, \mathcal{O}, T, R, \gamma),
-      \qquad
-      J(\pi) = \E_{\pi}\!\left[\sum_{t=0}^{\infty} \gamma^t R(s_t,a_t)\right].
-    \]
-
     \begin{itemize}
-      \item Actions are joint target offsets: \(a_t \in \R^{12}\).
-      \item Observations split as \(o_t = (o_{\mathrm{prop}}, o_{\mathrm{ext}})\).
-      \item \(o_{\mathrm{prop}} \in \R^{53}\): IMU, commands, joint states, previous actions, foot contacts.
-      \item \(o_{\mathrm{ext}}\): \alert{scandot heightmaps} for the teacher, or a \alert{monocular depth image} for the student.
+      \item Most visual parkour systems deploy with an onboard \alert{depth camera}.
+      \item RGB is easier to deploy, but the visual sim-to-real gap is harder.
+      \item I studied whether \alert{monocular depth} can act as an intermediate representation.
     \end{itemize}
 
-    \column{0.40\textwidth}
-    \begin{block}{Teacher Observation}
-      \[
-        o^{T}_t = \bigl(o_{\mathrm{prop}},\ \text{scandots},\ \text{priv.\ params}\bigr)
-      \]
-      Direct terrain geometry during training.
-    \end{block}
+    \vspace{0.5em}
+    \begin{alertblock}{Thesis Question}
+      Can a pretrained monocular depth estimator preserve enough terrain geometry for a distilled quadruped parkour policy to act reliably?
+    \end{alertblock}
 
-    \begin{block}{Student Observation}
-      \[
-        o^{S}_t = \bigl(o_{\mathrm{prop}},\ \text{depth image}\bigr)
-      \]
-      Partial observation, so a recurrent encoder is justified.
+    \column{0.38\textwidth}
+    \begin{block}{Contribution Style}
+      \small
+      This thesis is mainly an \alert{experimental and methodological study}:
+      what I tried, what worked, what failed, and what that says about the role of perception.
     \end{block}
   \end{columns}
+\end{frame}
+
+% ==========================================================================
+\section{Background}
+% ==========================================================================
+
+\sectionslide{QueensGold}{Background}
+
+% Script:
+% - This is the first field-development slide.
+% - The progression is: learned agility, then terrain-aware locomotion, then perceptive locomotion from depth.
+% - These papers establish the control and perception foundations that visual parkour builds on.
+\begin{frame}{Key Development 1: From Agile Locomotion to Perceptive Locomotion}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.31\textwidth}
+    \begin{block}{Hwangbo et al.\ (2019)}
+      \small
+      Learned agile motor skills for quadrupeds in simulation and transferred them to hardware.
+    \end{block}
+
+    \column{0.31\textwidth}
+    \begin{block}{Lee et al.\ (2020)}
+      \small
+      Pushed learned locomotion onto challenging terrain using privileged training ideas.
+    \end{block}
+
+    \column{0.31\textwidth}
+    \begin{block}{Miki et al.\ (2022)}
+      \small
+      Made locomotion \alert{perceptive}: onboard depth sensing became part of the control loop.
+    \end{block}
+  \end{columns}
+
+  \vspace{0.7em}
+  \visualplaceholder{Visual strip from the foundation papers}{
+    Suggested visuals: a dynamic ANYmal sequence from Hwangbo 2019, a challenging-terrain figure from Lee 2020,
+    and a depth-camera perceptive locomotion visual from Miki 2022.}
+  \source{Key foundations cited in the thesis related-work section.}
+\end{frame}
+
+% Script:
+% - This is where visual parkour becomes a recognizable subfield.
+% - The important pattern is teacher-student training plus strong exteroception.
+% - These papers make clear that parkour success is tightly linked to terrain representation.
+\begin{frame}{Key Development 2: Visual Parkour Systems}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.31\textwidth}
+    \begin{block}{Agarwal et al.\ (2023)}
+      \small
+      Introduced egocentric vision with \alert{scandots} and a teacher--student pipeline for difficult terrain.
+    \end{block}
+
+    \column{0.31\textwidth}
+    \begin{block}{Zhuang (2023)\\Cheng (2024)}
+      \small
+      Robot Parkour Learning and Extreme Parkour pushed to fast, highly visual obstacle traversal on real quadrupeds.
+    \end{block}
+
+    \column{0.31\textwidth}
+    \begin{block}{Hoeller (2024)\\Chane-Sane (2025)}
+      \small
+      ANYmal Parkour and SoloParkour explored hierarchical control and privileged-experience training.
+    \end{block}
+  \end{columns}
+
+  \vspace{0.7em}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \visualplaceholder{Parkour visual from prior work}{
+      Suggested visual: a real-robot obstacle-course image or motion sequence from Cheng 2024 or Zhuang 2023.}
+
+    \column{0.48\textwidth}
+    \visualplaceholder{Representation / architecture visual}{
+      Suggested visual: scandot representation or teacher--student pipeline from Agarwal 2023.}
+  \end{columns}
+\end{frame}
+
+% Script:
+% - This slide narrows to the branch most relevant to my thesis.
+% - RGB transfer has been attempted with domain randomization and generated images.
+% - In parallel, monocular depth models became much stronger, which motivates my approach.
+\begin{frame}{Key Development 3: RGB Sim-to-Real and Monocular Depth}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.48\textwidth}
+    \begin{block}{RGB Transfer Strategies}
+      \small
+      \begin{itemize}
+        \item \textbf{Domain randomization:} Tobin et al.\ (2017)
+        \item \textbf{RGB parkour:} Jenkins (2024)
+        \item \textbf{Generated images:} Yu et al.\ (LucidSim, 2025)
+      \end{itemize}
+    \end{block}
+
+    \visualplaceholder{RGB sim-to-real visual}{
+      Suggested visual: domain-randomized vs generated parkour scenes from Jenkins 2024 or LucidSim.}
+
+    \column{0.46\textwidth}
+    \begin{block}{Monocular Depth Becomes Viable}
+      \small
+      \begin{itemize}
+        \item MiDaS / zero-shot depth transfer: Ranftl et al.\ (2022)
+        \item Large pretrained depth foundation models: Yang et al.\ (DA2, 2024)
+      \end{itemize}
+    \end{block}
+
+    \centering
+    \includegraphics[width=0.92\linewidth]{depth_anything_v2_demo.png}
+  \end{columns}
+  \source{My thesis sits at the intersection of parkour control, RGB transfer, and monocular depth estimation.}
+\end{frame}
+
+% Script:
+% - This slide is the bridge from related work to my own thesis.
+% - I am not replacing the parkour literature; I am inserting monocular depth into an already-successful teacher-student recipe.
+\begin{frame}{Where This Thesis Sits}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.30\textwidth}
+    \begin{block}{Parkour}
+      \small
+      Strong control pipelines already exist, but they usually assume rich terrain sensing.
+    \end{block}
+
+    \column{0.30\textwidth}
+    \begin{block}{RGB Deployment}
+      \small
+      RGB is attractive in practice, but direct visual transfer is still brittle.
+    \end{block}
+
+    \column{0.30\textwidth}
+    \begin{block}{Monocular Depth}
+      \small
+      Foundation models offer a geometry-oriented representation without training a parkour-specific visual encoder from scratch.
+    \end{block}
+  \end{columns}
+
+  \vspace{0.6em}
+  \begin{alertblock}{Thesis Positioning}
+    I study whether \alert{monocular depth + teacher--student parkour} is a useful experimental direction, and where that idea breaks.
+  \end{alertblock}
 \end{frame}
 
 % ==========================================================================
 \section{Method}
 % ==========================================================================
 
-\sectionslide{QueensGold}{Method}
+\sectionslide{QueensRed}{Method}
 
 % Script:
-% - This is the high-level pipeline slide.
-% - Stage 1 learns a strong teacher from privileged terrain geometry.
-% - Stage 2 distills that behavior into a student that only sees proprioception plus depth.
-% - Transition: after the pipeline, I will briefly define the two optimization objectives.
-\begin{frame}{Two-Stage Learning Pipeline}
+% - Keep the formal setup, but make it lighter.
+% - The main modeling idea is partial observability with different exteroceptive channels for teacher and student.
+\begin{frame}{Mathematical Model of the Task}
   \begin{columns}[T,onlytextwidth]
-    \column{0.54\textwidth}
+    \column{0.50\textwidth}
+    \begin{block}{POMDP}
+      \small
+      \[
+        (\mathcal{S}, \mathcal{A}, \mathcal{O}, T, R, \gamma),
+        \qquad
+        J(\pi)=\E_{\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t R(s_t,a_t)\right]
+      \]
+      with actions \(a_t \in \R^{12}\).
+    \end{block}
+
+    \begin{block}{Observation Split}
+      \small
+      \[
+        o_t=(o_{\mathrm{prop}},o_{\mathrm{ext}})
+      \]
+      Proprioception carries robot state; exteroception carries terrain geometry.
+    \end{block}
+
+    \column{0.44\textwidth}
+    \begin{block}{Teacher}
+      \small
+      \[
+        o_t^T=(o_{\mathrm{prop}},\text{scandots},\text{priv.\ params})
+      \]
+      Direct terrain geometry during training.
+    \end{block}
+
+    \begin{block}{Student}
+      \small
+      \[
+        o_t^S=(o_{\mathrm{prop}},\text{depth image})
+      \]
+      Partial observation, so a recurrent encoder is justified.
+    \end{block}
+  \end{columns}
+\end{frame}
+
+% Script:
+% - This is the method slide that should stay visual.
+% - I want the audience to remember the separation between control learning and perception transfer.
+\begin{frame}{Two-Stage Pipeline}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.56\textwidth}
     \centering
-    \scalebox{0.78}{\input{../thesis/figures/pipeline}}
-
-    \column{0.42\textwidth}
-    \small
-    \begin{enumerate}
-      \item \textbf{Teacher:} PPO with privileged scandot geometry and randomized physics.
-      \item \textbf{Student:} DAgger distillation on the \emph{student's} state distribution.
-      \item \textbf{Deployment question:} replace simulator depth with DA2-estimated monocular depth.
-    \end{enumerate}
-
-    \vspace{0.2em}
-    \begin{block}{Why this pipeline?}
-      It separates two bottlenecks:
-      \begin{itemize}
-        \item \textbf{Control:} can a depth-based student act at all?
-        \item \textbf{Perception:} does monocular depth preserve enough geometry?
-      \end{itemize}
-    \end{block}
-  \end{columns}
-  \source{Pipeline adapted from the thesis; PPO after Schulman et al. (2017), DAgger after Ross et al. (2011).}
-\end{frame}
-
-% Script:
-% - I only need to define what is optimized, not teach an RL course.
-% - For PPO, the main point is stable policy improvement through clipping.
-% - For DAgger, the main point is imitation on the student's own state distribution.
-% - Transition: once the control side is defined, I can explain the monocular depth side and DSQ.
-\begin{frame}{Training Objectives}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.49\textwidth}
-    \begin{block}{Teacher: PPO}
-      \footnotesize
-      \[
-        L^{\mathrm{CLIP}}
-        =
-        \E_t\!\left[
-          \min\!\left(
-            r_t \hat{A}_t,\;
-            \clip(r_t,1-\epsilon,1+\epsilon)\hat{A}_t
-          \right)
-        \right]
-      \]
-      \begin{itemize}
-        \item Large updates can collapse performance.
-        \item Clipping keeps policy improvement conservative.
-      \end{itemize}
-    \end{block}
-
-    \column{0.49\textwidth}
-    \begin{block}{Student: DAgger}
-      \footnotesize
-      \[
-        \mathcal{L}
-        =
-        \|a_{\mathrm{teacher}} - a_{\mathrm{student}}\|_2
-        +
-        \|y_{\mathrm{oracle}} - \hat{y}\|_2
-      \]
-      \begin{itemize}
-        \item Student predicts actions from proprioception + depth.
-        \item Teacher actions are executed, so labels stay reliable while the student explores.
-      \end{itemize}
-    \end{block}
-  \end{columns}
-
-  \vspace{0.2em}
-  \begin{alertblock}{Takeaway}
-    The teacher solves the control problem first; the student then isolates the perception-to-action transfer problem.
-  \end{alertblock}
-\end{frame}
-
-% Script:
-% - This is the main math contribution slide.
-% - DA2 gives a depth map from one RGB image, but monocular depth is only defined up to scale and shift.
-% - That is why DSQ is a correlation metric rather than an absolute depth error.
-% - Transition: with the metric defined, I can show what the experiments say.
-\begin{frame}{Monocular Depth and Depth Signal Quality}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.58\textwidth}
-    \small
-    Monocular depth estimation maps
-    \[
-      I \in \R^{H \times W \times 3}
-      \;\mapsto\;
-      \hat d = f_{\phi}(I) \in \R^{H \times W}.
-    \]
-
-    To measure whether estimated depth preserves terrain geometry, I define
-    \[
-      \DSQ
-      =
-      \frac{1}{T} \sum_{t=1}^{T}
-      \frac{1}{N} \sum_{i=1}^{N}
-      \rho\!\left(d_i^{\mathrm{GT}}, d_i^{\mathrm{DA2}}\right),
-    \]
-    where \(\rho\) is Pearson correlation over image pixels.
+    \scalebox{0.80}{\input{../thesis/figures/pipeline}}
 
     \column{0.38\textwidth}
-    \begin{block}{Why correlation?}
+    \begin{itemize}
+      \item \textbf{Teacher:} PPO with privileged geometry.
+      \item \textbf{Student:} DAgger from the student's own state distribution.
+      \item \textbf{Question:} replace simulator depth with DA2-estimated monocular depth.
+    \end{itemize}
+
+    \vspace{0.4em}
+    \begin{alertblock}{Main idea}
+      First solve control, then test whether perception preserves the geometry the controller needs.
+    \end{alertblock}
+  \end{columns}
+  \source{Teacher--student pipeline adapted from the thesis; PPO after Schulman et al.\ (2017), DAgger after Ross et al.\ (2011).}
+\end{frame}
+
+% Script:
+% - DSQ is the compact mathematical diagnostic of the thesis.
+% - The key reason for using correlation is monocular scale-shift ambiguity.
+\begin{frame}{Depth Signal Quality (DSQ)}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.56\textwidth}
+    \begin{block}{Definition}
+      \small
       \[
-        \rho(\alpha x + \beta,\ y) = \rho(x,y),
-        \qquad \alpha > 0
+        \DSQ
+        =
+        \frac{1}{T}\sum_{t=1}^{T}
+        \frac{1}{N}\sum_{i=1}^{N}
+        \rho\!\left(d_i^{\mathrm{GT}},d_i^{\mathrm{DA2}}\right)
       \]
-      so DSQ is insensitive to the scale--shift ambiguity inherent in monocular depth.
+      where \(\rho\) is Pearson correlation over pixels.
     \end{block}
 
-    \begin{block}{Interpretation}
-      \begin{itemize}
-        \item \textbf{High DSQ:} terrain shape is preserved.
-        \item \textbf{Low DSQ:} geometry is being lost before control even acts.
-      \end{itemize}
-    \end{block}
+    \begin{alertblock}{Why this metric?}
+      \small
+      Pearson correlation is invariant to positive affine transforms, so DSQ ignores the scale--shift ambiguity of monocular depth and focuses on \alert{preserved geometry}.
+    \end{alertblock}
+
+    \column{0.38\textwidth}
+    \visualplaceholder{DSQ explainer visual}{
+      Suggested visual: side-by-side depth frames labeled ``same shape, different scale'' versus ``geometry collapsed''.}
   \end{columns}
-  \source{DA2 after Yang et al. (2024); DSQ defined in the thesis as a geometry-preservation diagnostic.}
 \end{frame}
 
 % ==========================================================================
 \section{Results}
 % ==========================================================================
 
-\sectionslide{QueensRed}{Results}
+\sectionslide{QueensGold}{Results}
 
 % Script:
-% - Start with the ceiling to avoid over-interpreting later failures.
-% - The teacher is nearly perfect, and the GT-depth student is strong across all gap rows.
-% - The zero-depth ablation is important because it rules out the idea that the student is just using proprioceptive heuristics.
-% - Transition: now I can replace GT depth with DA2 depth and see where performance degrades.
-\begin{frame}{Baselines Establish the Ceiling}
+% - This slide organizes the experiments before I show any numbers.
+% - It also keeps the results sequence light.
+\begin{frame}{What I Tested}
   \begin{columns}[T,onlytextwidth]
-    \column{0.47\textwidth}
-    \centering
-    \small
-    \begin{tabular}{@{}lcccc@{}}
-      \toprule
-      & R0 & R1 & R2 & R3 \\
-      \midrule
-      Teacher & 98.5 & 100.0 & 99.0 & 98.5 \\
-      GT-depth & 94.5 & 94.5 & 89.1 & 87.5 \\
-      Zero-depth & 8.0 & 2.0 & 0.0 & 0.0 \\
-      \bottomrule
-    \end{tabular}
-
-    \vspace{0.4em}
-    \footnotesize Gap-course success rate (\%).
-
-    \column{0.49\textwidth}
-    \begin{block}{What this tells us}
-      \begin{itemize}
-        \item The \alert{student architecture is capable}: one depth view plus recurrence is enough to act.
-        \item The main bottleneck is \alert{depth quality}, not the downstream controller.
-        \item Removing depth almost completely destroys performance.
-      \end{itemize}
+    \column{0.31\textwidth}
+    \begin{block}{1. Baselines}
+      \small
+      Can the teacher and a GT-depth student solve the course?
     \end{block}
 
-    \begin{alertblock}{Interpretation}
-      If monocular depth fails later, that failure should be attributed mainly to the \emph{perception pipeline}, not to the control stack.
-    \end{alertblock}
+    \column{0.31\textwidth}
+    \begin{block}{2. Estimated Depth}
+      \small
+      What changes when ground-truth depth is replaced by DA2 depth?
+    \end{block}
+
+    \column{0.31\textwidth}
+    \begin{block}{3. Sensitivity}
+      \small
+      How robust is the visual pipeline to texture, lighting, and color changes?
+    \end{block}
   \end{columns}
+
+  \vspace{0.8em}
+  \visualplaceholder{Experiment layout visual}{
+    Suggested visual: one slide-friendly schematic showing teacher baseline, GT-depth student, DA2 student, and test-time perturbations.}
 \end{frame}
 
 % Script:
-% - This is the core empirical result slide.
-% - DA2-small is not enough, DA2-base helps, and adding texture closes much of the remaining gap.
-% - The image panel makes the mechanism intuitive: featureless gaps are hard because the boundary is weak in RGB, so DA2 has less geometry to recover.
-% - Transition: the next slide asks whether this behavior generalizes across appearance changes, and whether DSQ predicts failure.
-\begin{frame}{Estimated Depth: Model Size and Texture Matter}
+% - I only want a few numbers on this slide.
+% - The main message is that the control stack works, and perception quality is the limiting factor.
+\begin{frame}{Main Findings}
   \begin{columns}[T,onlytextwidth]
     \column{0.46\textwidth}
-    \centering
-    \small
-    \begin{tabular}{@{}lcccc@{}}
-      \toprule
-      Configuration & R0 & R1 & R2 & R3 \\
-      \midrule
-      DA2-small & 56.3 & 33.6 & --- & --- \\
-      DA2-base & 68.4 & 83.2 & 26.6 & 0.8 \\
-      DA2-base + texture & 64.8 & 64.1 & 68.0 & 44.9 \\
-      \midrule
-      GT-depth & 94.5 & 94.5 & 89.1 & 87.5 \\
-      \bottomrule
-    \end{tabular}
+    \begin{block}{Baseline message}
+      \small
+      Teacher and GT-depth student are strong; zero-depth almost fails completely.
+    \end{block}
 
-    \vspace{0.5em}
-    \begin{itemize}
-      \item Larger depth models help.
-      \item Texture especially helps \alert{gaps}.
-      \item Hard rows remain unsolved.
-    \end{itemize}
+    \begin{block}{Estimated-depth message}
+      \small
+      Larger DA2 models help, and texture helps the hardest obstacle class: \alert{gaps}.
+    \end{block}
 
-    \column{0.50\textwidth}
-    \centering
-    \begin{tabular}{cc}
-      \scriptsize Untextured & \scriptsize Checkerboard \\
-      \includegraphics[width=0.47\linewidth]{gap_untextured_rgb.png} &
-      \includegraphics[width=0.47\linewidth]{gap_textured_rgb.png} \\
-      \scriptsize DA2 output & \scriptsize DA2 output \\
-      \includegraphics[width=0.47\linewidth]{gap_untextured_da2.png} &
-      \includegraphics[width=0.47\linewidth]{gap_textured_da2.png} \\
-    \end{tabular}
+    \begin{alertblock}{Takeaway}
+      \small
+      The main bottleneck is \alert{perception quality}, not the downstream controller.
+    \end{alertblock}
 
-    \vspace{0.4em}
-    \footnotesize Featureless terrain weakens the visual cue that defines the gap boundary.
+    \column{0.48\textwidth}
+    \visualplaceholder{Simplified comparison chart}{
+      Suggested visual: a bar chart comparing GT-depth, DA2-base, and DA2-base + texture on the hardest gap row.
+      Key values from the thesis: GT-depth 87.5\%, DA2-base 0.8\%, DA2-base + texture 44.9\%.}
   \end{columns}
 \end{frame}
 
 % Script:
-% - This slide ties the experiments back to the math through DSQ.
-% - The student is fairly tolerant to moderate lighting and color changes, but not to featureless surfaces or some unseen textures.
-% - DSQ is useful because low DSQ often coincides with failure, but it is not a complete predictor.
-% - Transition: I’ll close with what these experiments actually taught me.
-\begin{frame}{Sensitivity Study and the Role of DSQ}
+% - This is the math-meets-results slide.
+% - The scatter shows that DSQ is useful, especially when geometry collapses, but it is not the whole story.
+\begin{frame}{Sensitivity and the Role of DSQ}
   \begin{columns}[T,onlytextwidth]
     \column{0.54\textwidth}
     \centering
     \includegraphics[width=0.96\linewidth]{dsq_scatter.pdf}
 
-    \column{0.42\textwidth}
-    \small
-    \begin{block}{Appearance perturbations}
-      \begin{itemize}
-        \item Realistic texture replacements
-        \item Featureless or noisy surfaces
-        \item Brightness, color, and combined shifts
-      \end{itemize}
-    \end{block}
-
-    \begin{alertblock}{Main pattern}
+    \column{0.40\textwidth}
+    \begin{block}{Observed pattern}
+      \small
       \begin{itemize}
         \item Lighting and color changes are often tolerable.
-        \item Featureless surfaces produce the largest failures.
-        \item High DSQ helps, but \alert{does not guarantee} success.
-      \end{itemize}
-    \end{alertblock}
-  \end{columns}
-  \source{DSQ-vs-success scatter computed over six terrain settings and multiple test-time perturbation categories.}
-\end{frame}
-
-% Script:
-% - I want this slide to sound intellectually honest rather than promotional.
-% - The strongest claims are about what the experiments support, and what they rule out.
-% - This is the slide that makes the thesis feel like a self-directed mathematical investigation rather than just a benchmark report.
-% - Transition: I’ll end by being explicit about the limitations and the next step.
-\begin{frame}{What the Experiments Ruled In and Ruled Out}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.48\textwidth}
-    \begin{block}{Ruled In}
-      \begin{itemize}
-        \item Monocular depth can support \alert{nontrivial parkour in simulation}.
-        \item The teacher--student pipeline is a useful way to isolate perception from control.
-        \item DSQ is a meaningful \alert{failure indicator} when geometry collapses.
+        \item Featureless surfaces cause the largest failures.
+        \item Low DSQ usually coincides with failure.
       \end{itemize}
     \end{block}
 
-    \column{0.48\textwidth}
-    \begin{alertblock}{Ruled Out / Still Open}
-      \begin{itemize}
-        \item Success is \alert{not} explained by proprioceptive heuristics alone.
-        \item Monocular depth is \alert{not yet robust enough} for hard, texture-poor cases.
-        \item Real-world transfer remains open; the thesis is a proof of concept, not a deployment claim.
-      \end{itemize}
+    \begin{alertblock}{Interpretation}
+      \small
+      DSQ is a useful \alert{diagnostic}, but high DSQ alone does not guarantee successful control.
     \end{alertblock}
   \end{columns}
-
-  \vspace{0.2em}
-  \begin{block}{Bottom line}
-    The main contribution is methodological and experimental: it identifies \emph{where} monocular depth helps, \emph{where} it breaks, and \emph{why} geometry preservation matters.
-  \end{block}
+  \source{DSQ-vs-success scatter computed over multiple obstacle settings and test-time perturbations.}
 \end{frame}
 
 % ==========================================================================
@@ -471,36 +519,34 @@
 % ==========================================================================
 
 % Script:
-% - End with limitations first, then the next step, so the final tone is honest but forward-looking.
-% - The key message is that this is a credible proof of concept with clear bottlenecks.
-% - If time is tight, the only sentence I need to land is: perception quality, not control, is the limiting factor.
-\begin{frame}{Limitations and Next Step}
+% - End with a short and honest synthesis.
+% - This should sound like an exploration that clarified the right question, not a claim of full deployment readiness.
+\begin{frame}{Takeaways and Limits}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
-    \begin{block}{Limitations}
+    \begin{block}{What I learned}
+      \small
       \begin{itemize}
-        \item All results are in \alert{simulation only}.
-        \item Obstacles are simpler than the hardest recent parkour benchmarks.
-        \item DA2 is still brittle on weak-texture surfaces.
-        \item DSQ explains many failures, but not all of them.
-        \item The current perception stack is too heavy for onboard deployment.
+        \item Monocular depth can support nontrivial parkour \alert{in simulation}.
+        \item Teacher--student training is a useful way to isolate perception from control.
+        \item Geometry preservation matters, and DSQ captures part of that story.
       \end{itemize}
     \end{block}
 
     \column{0.48\textwidth}
-    \begin{block}{Next Step}
+    \begin{block}{What remains open}
+      \small
       \begin{itemize}
-        \item Hardware evaluation on Unitree Go2.
-        \item Smaller or temporally consistent depth models.
-        \item Broader testing on harder courses and outdoor conditions.
-        \item Possibly adapt the perception model and policy jointly.
+        \item Real-world transfer is untested.
+        \item Texture-poor surfaces are still a major weakness.
+        \item The current depth stack is too heavy for onboard deployment.
       \end{itemize}
     \end{block}
   \end{columns}
 
-  \vspace{0.2em}
-  \begin{alertblock}{Final message}
-    The experiments suggest that \alert{perception quality}, not the student controller, is the dominant bottleneck in monocular parkour.
+  \vspace{0.4em}
+  \begin{alertblock}{Bottom line}
+    This thesis suggests that monocular depth is a plausible experimental direction for parkour, but perception quality remains the dominant bottleneck.
   \end{alertblock}
 \end{frame}
 
@@ -518,8 +564,7 @@
 \section{Backup}
 
 % Script:
-% - Use this only if someone asks what the recurrent student actually looks like.
-% - The key point is that recurrence produces a latent terrain representation and a heading estimate from depth plus proprioception.
+% - Use this only if someone asks about the recurrent student.
 \begin{frame}{Backup: Student Architecture}
   \begin{columns}[T,onlytextwidth]
     \column{0.58\textwidth}
@@ -527,6 +572,7 @@
     \scalebox{0.92}{\input{../thesis/figures/student_arch}}
 
     \column{0.38\textwidth}
+    \small
     \begin{itemize}
       \item CNN encodes the \(58 \times 87\) depth image.
       \item Proprioception is fused before the GRU.
@@ -537,27 +583,24 @@
 \end{frame}
 
 % Script:
-% - This slide is for technical questions about the optimization setup.
-% - I do not need every coefficient; I only need enough to show the design was deliberate.
+% - Keep this for implementation questions.
 \begin{frame}{Backup: Reward and Training Details}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
     \begin{block}{Teacher Reward Structure}
       \small
       \begin{itemize}
-        \item Task progress: velocity, heading, course progress, success bonus
+        \item Task progress and success bonuses
         \item Termination and collision penalties
-        \item Locomotion regularization: torque, power, action smoothness
-        \item Body stability: orientation, angular velocity, flat back
+        \item Torque, power, and smoothness regularization
+        \item Orientation and body-stability penalties
       \end{itemize}
     \end{block}
 
     \begin{block}{Control}
-      \begin{itemize}
-        \item 12 actuated joints
-        \item 50 Hz action rate
-        \item PD control with \(K_p = 30.0\), \(K_d = 0.75\)
-      \end{itemize}
+      \small
+      12 actuated joints, 50 Hz action rate, PD controller with
+      \(K_p = 30.0\) and \(K_d = 0.75\).
     \end{block}
 
     \column{0.48\textwidth}
@@ -589,15 +632,14 @@
 \end{frame}
 
 % Script:
-% - This is the visual backup for the texture argument.
-% - It is useful if someone asks what the depth model is actually seeing across surfaces.
-\begin{frame}{Backup: Qualitative Visual Examples}
+% - Use this if you want to discuss the actual texture effect.
+\begin{frame}{Backup: Qualitative Depth Examples}
   \centering
   \includegraphics[width=0.93\linewidth]{da2_texture_comparison.png}
 
   \vspace{0.4em}
   \small
-  Featureless terrain produces the weakest obstacle localization; structured textures preserve substantially more geometry.
+  Featureless terrain produces the weakest obstacle localization; structured textures preserve more usable geometry.
 \end{frame}
 
 \end{document}

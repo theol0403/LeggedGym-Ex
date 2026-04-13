@@ -1,0 +1,123 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+% ==========================================================================
+% THEME SETUP
+% ==========================================================================
+
+\usepackage{comment}
+
+% Queen's University colors
+\definecolor{QueensBlue}{HTML}{002452}
+\definecolor{QueensRed}{HTML}{B90E31}
+\definecolor{QueensGold}{HTML}{FABD0F}
+
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}{\textbullet}
+\usefonttheme[onlymath]{serif}
+
+% Colors
+\setbeamercolor{frametitle}{fg=QueensRed}
+\setbeamercolor{title}{fg=QueensGold}
+\setbeamercolor{author}{fg=QueensGold}
+\setbeamercolor{institute}{fg=QueensGold!80}
+\setbeamercolor{date}{fg=QueensGold!80}
+\setbeamercolor{structure}{fg=QueensBlue}
+\setbeamercolor{block title}{fg=white, bg=QueensBlue}
+\setbeamercolor{block body}{bg=QueensBlue!5}
+\setbeamercolor{alerted text}{fg=QueensRed}
+\setbeamercolor{section in head/foot}{fg=white, bg=QueensBlue}
+\setbeamercolor{section in head/foot shaded}{fg=QueensBlue!40, bg=QueensBlue}
+
+% Frame title
+\setbeamerfont{frametitle}{size=\Large, series=\bfseries}
+\setbeamertemplate{frametitle}{\vspace{0.3cm}\insertframetitle\par}
+
+% Tri-color bar for normal frames (headline)
+\setbeamertemplate{headline}{%
+  \noindent\hbox to\paperwidth{%
+    {\color{QueensBlue}\vrule height4pt width0.36\paperwidth}%
+    {\color{QueensGold}\vrule height4pt width0.28\paperwidth}%
+    {\color{QueensRed}\vrule height4pt width0.36\paperwidth}%
+  }%
+}
+
+
+% Footline: section navigation
+\setbeamertemplate{footline}{%
+  \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1.125ex]{section in head/foot}%
+    \hfill\insertsectionnavigationhorizontal{0.95\paperwidth}{}{\hfill}\hfill%
+  \end{beamercolorbox}%
+}
+
+% Section divider: colored background + centered white title
+% Usage: \sectionslide{QueensRed}{Title Text}
+\newcommand{\sectionslide}[2]{%
+  \begingroup
+  \setbeamercolor{background canvas}{bg=#1}
+  \begin{frame}[plain,c]
+    \centering{\Huge\bfseries\color{white}#2}
+  \end{frame}
+  \endgroup
+}
+
+% ==========================================================================
+% PACKAGES
+% ==========================================================================
+
+\usepackage{amsmath,amssymb}
+\PassOptionsToPackage{hyphens}{url}
+\usepackage{hyperref}
+\urlstyle{same}
+
+% Footnote-style source citation pinned to bottom of slide
+\newcommand{\source}[1]{\vfill{\tiny\color{gray}#1\par}}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\graphicspath{{figures/}{figures/ppt/}}
+
+% ==========================================================================
+% METADATA
+% ==========================================================================
+
+\title{}
+\author{}
+\date{}
+
+\begin{document}
+
+% ==========================================================================
+% TITLE SLIDE
+% ==========================================================================
+{
+\setbeamercolor{background canvas}{bg=QueensBlue}
+\setbeamerfont{title}{size=\LARGE, series=\bfseries}
+\setbeamercolor{title}{fg=white}
+\begin{frame}[plain,c]
+	\titlepage
+\end{frame}
+}
+
+% ==========================================================================
+\section{Problem Definition}
+% ==========================================================================
+
+\sectionslide{QueensRed}{Problem Definition}
+
+% --- Motivation ------------------------------------------------
+
+\begin{frame}{Motivation}
+\end{frame}
+
+
+
+% ==========================================================================
+% CLOSING
+% ==========================================================================
+
+\sectionslide{QueensBlue}{Thank you! \\[1em]Questions?}
+
+\end{document}

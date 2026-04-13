@@ -1,0 +1,696 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+% ==========================================================================
+% THEME SETUP
+% ==========================================================================
+
+\usepackage{comment}
+
+% Queen's University colors
+\definecolor{QueensBlue}{HTML}{002452}
+\definecolor{QueensRed}{HTML}{B90E31}
+\definecolor{QueensGold}{HTML}{FABD0F}
+
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}{\textbullet}
+\usefonttheme[onlymath]{serif}
+
+% Colors
+\setbeamercolor{frametitle}{fg=QueensRed}
+\setbeamercolor{title}{fg=QueensGold}
+\setbeamercolor{author}{fg=QueensGold}
+\setbeamercolor{institute}{fg=QueensGold!80}
+\setbeamercolor{date}{fg=QueensGold!80}
+\setbeamercolor{structure}{fg=QueensBlue}
+\setbeamercolor{block title}{fg=white, bg=QueensBlue}
+\setbeamercolor{block body}{bg=QueensBlue!5}
+\setbeamercolor{alerted text}{fg=QueensRed}
+\setbeamercolor{section in head/foot}{fg=white, bg=QueensBlue}
+\setbeamercolor{section in head/foot shaded}{fg=QueensBlue!40, bg=QueensBlue}
+
+% Frame title
+\setbeamerfont{frametitle}{size=\Large, series=\bfseries}
+\setbeamertemplate{frametitle}{\vspace{0.3cm}\insertframetitle\par}
+
+% Tri-color bar for normal frames (headline)
+\setbeamertemplate{headline}{%
+  \noindent\hbox to\paperwidth{%
+    {\color{QueensBlue}\vrule height4pt width0.36\paperwidth}%
+    {\color{QueensGold}\vrule height4pt width0.28\paperwidth}%
+    {\color{QueensRed}\vrule height4pt width0.36\paperwidth}%
+  }%
+}
+
+
+% Footline: section navigation
+\setbeamertemplate{footline}{%
+  \begin{beamercolorbox}[wd=\paperwidth, ht=2.5ex, dp=1.125ex]{section in head/foot}%
+    \hfill\insertsectionnavigationhorizontal{0.95\paperwidth}{}{\hfill}\hfill%
+  \end{beamercolorbox}%
+}
+
+% Section divider: colored background + centered white title
+% Usage: \sectionslide{QueensRed}{Title Text}
+\newcommand{\sectionslide}[2]{%
+  \begingroup
+  \setbeamercolor{background canvas}{bg=#1}
+  \begin{frame}[plain,c]
+    \centering{\Huge\bfseries\color{white}#2}
+  \end{frame}
+  \endgroup
+}
+
+% ==========================================================================
+% PACKAGES
+% ==========================================================================
+
+\usepackage{amsmath,amssymb}
+\PassOptionsToPackage{hyphens}{url}
+\usepackage{hyperref}
+\urlstyle{same}
+
+% Footnote-style source citation pinned to bottom of slide
+\newcommand{\source}[1]{\vfill{\tiny\color{gray}#1\par}}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+
+\graphicspath{{../thesis/figures/}{figures/}{figures/ppt/}}
+
+% Placeholder box for images to be added later
+\newcommand{\placeholder}[2][0.7\textheight]{%
+  \begin{center}
+    \colorbox{gray!12}{%
+      \parbox{0.85\linewidth}{\centering\vspace{#1}%
+        {\small\color{gray!60}#2}%
+        \vspace{#1}}%
+    }%
+  \end{center}
+}
+
+% Math shortcuts
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\DeclareMathOperator{\clip}{clip}
+
+% ==========================================================================
+% METADATA
+% ==========================================================================
+
+\title{Toward Visually Robust Quadruped Parkour\\[4pt]
+       via Monocular Depth Estimation}
+\author{Theo Lemay}
+\institute{MTHE 499 --- Supervisor: Prof.\ Joshua Marshall}
+\date{April 2026}
+
+\begin{document}
+
+% ==========================================================================
+% TITLE SLIDE
+% ==========================================================================
+% SCRIPT: "Good morning. My name is Theo Lemay, and today I'll be presenting
+% my thesis on using monocular depth estimation for quadruped parkour."
+{
+\setbeamercolor{background canvas}{bg=QueensBlue}
+\setbeamerfont{title}{size=\LARGE, series=\bfseries}
+\setbeamercolor{title}{fg=white}
+\begin{frame}[plain,c]
+	\titlepage
+\end{frame}
+}
+
+
+% ==========================================================================
+\section{Problem}
+% ==========================================================================
+
+\sectionslide{QueensRed}{Problem Definition}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Quadruped parkour means a four-legged robot autonomously
+% navigating obstacles --- stairs, hurdles, gaps --- using vision and agile
+% control. Here's what that looks like in recent work."
+\begin{frame}{What is Quadruped Parkour?}
+
+A legged robot autonomously traversing obstacles using
+\textbf{vision} and \textbf{agile control}.
+
+\vspace{6pt}
+
+% [PLACEHOLDER] Replace with a montage of robots doing parkour ---
+% e.g. ANYmal on stairs, Go1 jumping hurdles, Go2 leaping gaps.
+\placeholder[0.25\textheight]{Replace: montage of quadruped parkour
+(ANYmal, Go1/Go2 on obstacles)}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Two core challenges. First, the robot must coordinate 12 joints
+% at 50 Hz from limited sensing. Second, it must perceive terrain geometry
+% from vision --- and what it sees in simulation looks nothing like the
+% real world."
+\begin{frame}{Why is This Hard?}
+
+\begin{columns}[T]
+\begin{column}{0.48\linewidth}
+  \textbf{1.~Agile control}\\[4pt]
+  12 joints at 50\,Hz from partial observations
+
+  \vspace{8pt}
+  % [PLACEHOLDER] Robot in simulation
+  \placeholder[0.15\textheight]{Replace: simulation screenshot}
+\end{column}
+\begin{column}{0.48\linewidth}
+  \textbf{2.~The sim-to-real vision gap}\\[4pt]
+  Training images $\neq$ deployment images
+
+  \vspace{8pt}
+  % [PLACEHOLDER] Real-world photo of similar terrain
+  \placeholder[0.15\textheight]{Replace: real-world terrain photo}
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "The Unitree Go2 ships with RGB cameras but no depth sensor.
+% We asked: can a neural network that estimates depth from a single RGB
+% image replace a depth camera for parkour?"
+\begin{frame}{Our Question}
+
+\begin{center}
+\Large Can \textbf{monocular depth estimation} replace a depth camera\\
+for quadruped parkour?
+\end{center}
+
+\vspace{10pt}
+
+\begin{columns}[c]
+\begin{column}{0.45\linewidth}
+  % [PLACEHOLDER] Photo of Unitree Go2
+  \placeholder[0.15\textheight]{Replace: Go2 photo with camera locations}
+\end{column}
+\begin{column}{0.5\linewidth}
+  \begin{itemize}
+    \item Unitree Go2: RGB cameras, \textbf{no depth sensor}
+    \item Goal: train in estimated depth space, deploy from RGB
+  \end{itemize}
+\end{column}
+\end{columns}
+
+\end{frame}
+
+
+% ==========================================================================
+\section{Background}
+% ==========================================================================
+
+\sectionslide{QueensBlue}{Background}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "The field of learning locomotion for legged robots starts with
+% training in simulation and transferring to hardware. Hwangbo et al. showed
+% this works for ANYmal in 2019. Rudin et al. then made it scalable with
+% massively parallel simulation --- the legged_gym framework we build on."
+\begin{frame}{RL for Legged Locomotion}
+
+\begin{itemize}
+  \item \textbf{Hwangbo et al.\ (2019)} --- learned motor skills in sim,
+        transferred to ANYmal hardware
+  \item \textbf{Rudin et al.\ (2022)} --- massively parallel training
+        (4096 environments), the \texttt{legged\_gym} framework
+\end{itemize}
+
+\vspace{8pt}
+
+% [PLACEHOLDER] Figure from one of these papers showing sim-to-real
+\placeholder[0.2\textheight]{Replace: figure from Hwangbo or Rudin
+--- sim training $\to$ real robot}
+
+\source{Hwangbo et al., Science Robotics 2019; Rudin et al., CoRL 2022}
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "The key paradigm is teacher-student distillation. Chen et al.
+% introduced 'Learning by Cheating' --- train a teacher with privileged info,
+% then distill into a student with real sensors. Lee et al. applied this to
+% locomotion, and Miki et al. extended it to perceptive locomotion with depth."
+\begin{frame}{The Teacher--Student Paradigm}
+
+\begin{itemize}
+  \item \textbf{Chen et al.\ (2020)} ``Learning by Cheating'' --- privileged
+        distillation for autonomous driving
+  \item \textbf{Lee et al.\ (2020)} --- applied to locomotion from
+        proprioceptive history
+  \item \textbf{Miki et al.\ (2022)} --- perceptive locomotion with
+        exteroceptive depth on ANYmal
+\end{itemize}
+
+\vspace{8pt}
+
+% [PLACEHOLDER] Diagram showing teacher (privileged) -> student (sensors)
+\placeholder[0.15\textheight]{Replace: teacher-student concept diagram
+from one of these papers}
+
+\source{Chen et al., CoRL 2020; Lee et al., Science Robotics 2020;
+Miki et al., Science Robotics 2022}
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Building on this, several groups have achieved remarkable
+% vision-based parkour. Agarwal introduced scandots, Cheng demonstrated
+% extreme parkour on real hardware, Zhuang trained on the Go1, and Hoeller
+% used hierarchical skills on ANYmal. But every one of these systems assumes
+% a depth camera at deployment."
+\begin{frame}{Vision-Based Parkour}
+
+\begin{itemize}
+  \item \textbf{Agarwal et al.\ (2023)} --- scandots + depth-based student
+  \item \textbf{Cheng et al.\ (2024)} ``Extreme Parkour'' ---
+        CNN--GRU on real hardware
+  \item \textbf{Zhuang et al.\ (2023)} ``Robot Parkour Learning'' ---
+        depth camera on Go1
+  \item \textbf{Hoeller et al.\ (2024)} ``ANYmal Parkour'' ---
+        hierarchical skill selection
+\end{itemize}
+
+\vspace{4pt}
+\begin{center}
+\alert{All assume a depth camera at deployment.}
+\end{center}
+
+% [PLACEHOLDER] Grid of 4 images from these papers
+\placeholder[0.1\textheight]{Replace: 2$\times$2 grid of images from
+these four papers}
+
+\source{Agarwal et al., CoRL 2023; Cheng et al., ICRA 2024;
+Zhuang et al., CoRL 2023; Hoeller et al., Science Robotics 2024}
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "So how do you deploy from RGB? Three strategies have emerged.
+% Domain randomization varies visual properties during training. Generative
+% augmentation, like LucidSim, uses diffusion models for photorealistic images.
+% We pursue the third: canonical representations --- use a pretrained depth
+% model as a universal translator from any visual domain into depth space."
+\begin{frame}{Bridging the Sim-to-Real Vision Gap}
+
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}p{3.8cm}p{7.5cm}@{}}
+  \textbf{1.~Domain randomization}
+    & Vary visual properties during training \\
+  \textbf{2.~Generative augmentation}
+    & Diffusion models for photorealistic images (LucidSim) \\
+  \alert{\textbf{3.~Canonical representation}}
+    & \alert{Project both domains to shared depth space via DA2} \\
+\end{tabular}
+
+\vspace{12pt}
+
+% [PLACEHOLDER] Visual showing three approaches side by side
+\placeholder[0.12\textheight]{Replace: three-column visual
+--- DR | generative | canonical representation}
+
+\source{Tobin et al., IROS 2017; Yu et al., CoRL 2025}
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Depth Anything V2 is a vision transformer trained on 142 million
+% diverse images. It takes a single RGB image and produces a metric depth map.
+% Here are examples --- remarkably good geometry from just color."
+\begin{frame}{Depth Anything V2 (DA2)}
+
+\begin{columns}[c]
+\begin{column}{0.4\linewidth}
+  \begin{itemize}
+    \item Vision Transformer (ViT)
+    \item Trained on 142M images
+    \item RGB $\to$ metric depth map
+    \item Multiple model scales:\\
+          \textit{small}, \textit{base}, \textit{large}
+  \end{itemize}
+\end{column}
+\begin{column}{0.55\linewidth}
+  \includegraphics[width=\linewidth]{depth_anything_v2_demo.png}
+\end{column}
+\end{columns}
+
+\source{Yang et al., arXiv 2024}
+\end{frame}
+
+
+% ==========================================================================
+\section{Mathematics}
+% ==========================================================================
+
+\sectionslide{QueensGold}{Mathematical Framework}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "We formalize the problem as a POMDP. The robot receives partial
+% observations --- proprioception and some form of terrain sensing --- and
+% outputs 12 joint position offsets. The objective is to maximize expected
+% discounted return."
+\begin{frame}{Problem Formulation: POMDP}
+
+\textbf{Partially Observable Markov Decision Process}
+$(\mathcal{S},\, \mathcal{A},\, \mathcal{O},\, T,\, R,\, \gamma)$
+
+\vspace{10pt}
+
+\begin{columns}[T]
+\begin{column}{0.48\linewidth}
+  \textbf{Observations}
+  \begin{itemize}
+    \item Proprioception $o_\mathrm{prop} \in \R^{53}$\\
+          {\small angular vel., gravity, joints, contacts}
+    \item Exteroception $o_\mathrm{ext}$\\
+          {\small scandots $\R^{132}$ or depth image}
+  \end{itemize}
+\end{column}
+\begin{column}{0.48\linewidth}
+  \textbf{Actions}
+  \begin{itemize}
+    \item Joint offsets $a_t \in \R^{12}$
+    \item PD controller: $\tau = K_p(a_t - q) - K_d\dot{q}$
+  \end{itemize}
+
+  \vspace{8pt}
+  \textbf{Objective}
+  \[
+    J(\pi) = \E_\pi\!\left[\sum_{t=0}^{\infty} \gamma^t R(s_t, a_t)\right]
+  \]
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "The teacher is trained with PPO. The key idea: instead of
+% constraining the KL divergence like TRPO, PPO clips the probability ratio
+% to prevent destructive updates. The advantage is estimated with GAE, which
+% interpolates between high-bias and high-variance estimates via lambda."
+\begin{frame}{PPO: How the Teacher Learns}
+
+\textbf{Clipped surrogate objective}
+\[
+  L^{\mathrm{CLIP}} = \E_t\!\left[\min\!\left(
+    r_t\,\hat{A}_t,\;\;
+    \clip(r_t,\, 1{-}\epsilon,\, 1{+}\epsilon)\;\hat{A}_t
+  \right)\right]
+\]
+
+\vspace{4pt}
+{\small $r_t = \pi_\theta(a_t|o_t)\,/\,\pi_{\theta_\mathrm{old}}(a_t|o_t)$ \hfill
+Clip prevents large, destructive updates}
+
+\vspace{14pt}
+
+\textbf{Generalized Advantage Estimation (GAE)}
+\[
+  \hat{A}_t^{\,\mathrm{GAE}(\gamma,\lambda)}
+  = \sum_{l=0}^{\infty} (\gamma\lambda)^l\,\delta_{t+l},
+  \qquad
+  \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
+\]
+
+\vspace{4pt}
+{\small $\lambda$ interpolates: $\lambda{=}0$ (low variance, high bias)
+$\;\leftrightarrow\;$ $\lambda{=}1$ (high variance, low bias)}
+
+\source{Schulman et al., arXiv 2017; Schulman et al., ICLR 2016}
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "The student learns via DAgger. The problem with simple behavioral
+% cloning is error compounding --- small mistakes push you off the training
+% distribution and errors snowball. DAgger fixes this: the student acts in
+% the environment, but the teacher provides the correct labels. The loss has
+% two terms: matching the teacher's actions and predicting the correct heading."
+\begin{frame}{DAgger: How the Student Learns}
+
+\textbf{Problem with behavioral cloning:} errors compound under
+distribution shift.
+
+\vspace{10pt}
+
+\textbf{DAgger} --- student acts, teacher labels, iterate:
+\[
+  \mathcal{L} =
+  \underbrace{\|a_\mathrm{teacher} - a_\mathrm{student}\|_2}_{\text{action loss}}
+  \;+\;
+  \underbrace{\|y_\mathrm{oracle} - \hat{y}\|_2}_{\text{heading loss}}
+\]
+
+\vspace{10pt}
+
+{\small The student runs in the environment and collects its own observations,\\
+but the teacher's actions are executed --- eliminating distribution mismatch.}
+
+\source{Ross et al., AISTATS 2011}
+\end{frame}
+
+
+% ==========================================================================
+\section{System}
+% ==========================================================================
+
+\sectionslide{QueensRed}{System Architecture}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Here's the full pipeline. Stage 1: the teacher trains with PPO
+% using privileged scandot heightmaps. Stage 2: the student replaces scandots
+% with depth images and learns via DAgger, with the teacher's actor MLP
+% shared between both stages."
+\begin{frame}{Two-Stage Pipeline}
+
+\begin{center}
+\resizebox{0.82\linewidth}{!}{%
+\input{../thesis/figures/pipeline}%
+}
+\end{center}
+
+\vspace{4pt}
+{\small Stage 1: Teacher trains with privileged scandots (PPO)\\
+Stage 2: Student imitates from depth images (DAgger), shared actor MLP}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "The student's visual encoder: a CNN maps the depth image to a
+% 32-dimensional feature, fused with proprioception, then processed by a GRU
+% that integrates over time to produce the terrain latent and heading estimate."
+\begin{frame}{Student Visual Encoder}
+
+\begin{center}
+\resizebox{0.85\linewidth}{!}{%
+\input{../thesis/figures/student_arch}%
+}
+\end{center}
+
+\vspace{6pt}
+{\small Depth CNN $\to$ Fusion MLP $\to$ GRU $\to$ terrain latent $z \in \R^{32}$
++ heading $\hat{y} \in \R^{2}$}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "We test on three obstacle families --- stairs, hurdles, and gaps ---
+% at four difficulty levels each. These are simpler than prior work; our goal
+% is to isolate the vision question, not push agility."
+\begin{frame}{Terrain and Curriculum}
+
+\begin{center}
+\includegraphics[width=0.85\linewidth]{terrain_curriculum.png}
+\end{center}
+
+\vspace{2pt}
+{\small Three obstacle families $\times$ four difficulty levels.
+Deliberately simpler than prior work --- isolating the depth estimation question.}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Let me show you what this looks like in practice."
+\begin{frame}[plain,c]
+
+\begin{center}
+{\Large\bfseries Simulation Demo}
+
+\vspace{16pt}
+
+% [PLACEHOLDER] Embed video or animated GIF here
+\placeholder[0.2\textheight]{Video demo --- show simulation runs here}
+\end{center}
+
+\end{frame}
+
+
+% ==========================================================================
+\section{Results}
+% ==========================================================================
+
+\sectionslide{QueensBlue}{Experiments \& Results}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "First, we establish upper bounds. The teacher with privileged
+% scandots hits 99 percent. The GT-depth student --- trained on perfect
+% simulator depth --- reaches about 90 percent. A zero-depth ablation drops
+% to 8 percent, confirming the policy actually relies on depth, not
+% proprioceptive heuristics. The architecture works. Depth quality is the
+% bottleneck."
+\begin{frame}{Baselines: Upper Bounds}
+
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+  \toprule
+  & Row~0 & Row~1 & Row~2 & Row~3 \\
+  \midrule
+  Scandots teacher    & 98.5 & 100.0 & 99.0 & 98.5 \\
+  GT-depth student    & 94.5 &  94.5 & 89.1 & 87.5 \\
+  Zero-depth ablation &  8.0 &   2.0 &  0.0 &  0.0 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{12pt}
+
+\begin{center}
+The student architecture works.\\
+\textbf{Depth quality} is the bottleneck, not the network.
+\end{center}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Now we replace simulator depth with DA2 estimates. DA2-small fails
+% on hard gaps. DA2-base gets further but drops off sharply on rows 2 and 3.
+% The key finding: adding checkerboard texture to the terrain closes most of
+% the remaining gap. The depth estimator needs visual features to find obstacle
+% boundaries."
+\begin{frame}{Estimated Depth: Model Scale and Texture}
+
+\begin{columns}[T]
+\begin{column}{0.48\linewidth}
+\small
+\begin{tabular}{@{}lcccc@{}}
+  \toprule
+  & R0 & R1 & R2 & R3 \\
+  \midrule
+  DA2-small       & 56 & 34 & --- & --- \\
+  DA2-base        & 68 & 83 &  27 &   1 \\
+  DA2-base+tex    & 65 & 64 &  68 &  45 \\
+  \midrule
+  GT-depth        & 95 & 95 &  89 &  88 \\
+  \bottomrule
+\end{tabular}
+
+\vspace{8pt}
+Larger model + texture\\$\to$ closes gap to GT-depth
+\end{column}
+\begin{column}{0.5\linewidth}
+  \includegraphics[width=\linewidth]{da2_texture_comparison.png}
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "We introduced DSQ --- Depth Signal Quality --- as a diagnostic.
+% It's the Pearson correlation between ground-truth and estimated depth,
+% averaged over frames. Because Pearson correlation is affine invariant,
+% it naturally handles the scale ambiguity in monocular depth."
+\begin{frame}{Depth Signal Quality (DSQ)}
+
+A diagnostic metric: how well does estimated depth preserve terrain geometry?
+
+\vspace{10pt}
+
+\[
+  \mathrm{DSQ} = \frac{1}{T}\sum_{t=1}^{T}
+  \frac{1}{N}\sum_{i=1}^{N}
+  \rho\!\left(d_i^{\,\mathrm{GT}},\; d_i^{\,\mathrm{DA2}}\right)
+\]
+
+\vspace{10pt}
+
+{\small Pearson correlation is \textbf{affine invariant}:
+$\rho(\alpha x + \beta,\, y) = \rho(x,y)$\\[2pt]
+$\to$ naturally handles monocular scale--shift ambiguity}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Finally, we perturbed visual appearance at test time: texture
+% swaps, lighting changes, color shifts, and combined perturbations. The DSQ
+% scatter plot tells the story. Low DSQ means failure. But high DSQ alone
+% doesn't guarantee success --- some unseen textures still fool the policy.
+% Stairs and hurdles are robust because they have strong edges. Gaps are the
+% most fragile because their boundaries depend on surface texture."
+\begin{frame}{Visual Sensitivity}
+
+\begin{columns}[T]
+\begin{column}{0.52\linewidth}
+  \includegraphics[width=\linewidth]{dsq_scatter.pdf}
+\end{column}
+\begin{column}{0.44\linewidth}
+  \vspace{8pt}
+  \begin{itemize}
+    \item Stairs/hurdles: robust\\
+          {\small (strong geometric edges)}
+    \item Gaps: fragile\\
+          {\small (boundary depends on texture)}
+    \item Featureless $\to$ catastrophic
+    \item Lighting/color $\to$ moderate
+  \end{itemize}
+
+  \vspace{8pt}
+  {\small DSQ predicts failure well,\\
+  but high DSQ $\neq$ guaranteed success}
+\end{column}
+\end{columns}
+
+\end{frame}
+
+
+% ==========================================================================
+\section{Conclusion}
+% ==========================================================================
+
+\sectionslide{QueensGold}{Takeaways}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "So what did we learn? Monocular depth estimation is a plausible
+% bridge from RGB to locomotion. The bottleneck is depth quality, not the
+% student architecture. DA2 is robust to photometric variation --- lighting,
+% color --- but fragile on featureless or weak-texture surfaces. The next
+% step is real-world transfer on the Go2, along with temporal depth models
+% that might stabilize frame-to-frame predictions."
+\begin{frame}{What We Learned}
+
+\begin{enumerate}
+  \item Monocular depth is a \textbf{plausible bridge} from RGB to locomotion
+  \item Bottleneck = \textbf{depth quality}, not student architecture
+  \item Robust to photometric variation; \textbf{fragile on featureless surfaces}
+\end{enumerate}
+
+\vspace{14pt}
+
+\textbf{Future work}
+\begin{itemize}
+  \item Real-world transfer on Unitree Go2
+  \item Temporally consistent depth models
+  \item Joint adaptation of depth estimator + student policy
+\end{itemize}
+
+\end{frame}
+
+
+% ==========================================================================
+% CLOSING
+% ==========================================================================
+
+\sectionslide{QueensBlue}{Thank you! \\[1em]Questions?}
+
+\end{document}
