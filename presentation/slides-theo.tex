@@ -625,41 +625,10 @@
 \end{frame}
 
 
-% --------------------------------------------------------------------------
-% SCRIPT: "Finally, we perturbed visual appearance at test time: texture
-% swaps, lighting changes, color shifts, and combined perturbations. The DSQ
-% scatter plot tells the story. Low DSQ means failure. But high DSQ alone
-% doesn't guarantee success --- some unseen textures still fool the policy.
-% Stairs and hurdles are robust because they have strong edges. Gaps are the
-% most fragile because their boundaries depend on surface texture."
-\begin{frame}{Visual Sensitivity}
-
-	\begin{columns}[T]
-		\begin{column}{0.52\linewidth}
-			\includegraphics[width=\linewidth]{dsq_scatter.pdf}
-		\end{column}
-		\begin{column}{0.44\linewidth}
-			\vspace{8pt}
-			\begin{itemize}
-				\item Stairs/hurdles: robust\\
-				      {\small (strong geometric edges)}
-				\item Gaps: fragile\\
-				      {\small (boundary depends on texture)}
-				\item Featureless $\to$ catastrophic
-				\item Lighting/color $\to$ moderate
-			\end{itemize}
-
-			\vspace{8pt}
-			{\small DSQ predicts failure well,\\
-				but high DSQ $\neq$ guaranteed success}
-		\end{column}
-	\end{columns}
-
-\end{frame}
 
 \begin{frame}{Visual Sensitivity}
 \begin{columns}[T]
-\column{0.46\textwidth}
+\column{0.50\textwidth}
   Key findings across 6 terrain configurations:
   \begin{itemize}
     \setlength\itemsep{0.45em}
@@ -667,7 +636,7 @@
           shifts (strong edges persist across conditions)
     \item \textbf{Gaps}: texture-sensitive, boundary
           visible mainly through surface features
-    \item \textbf{Textureless}: catastrophic failure
+    \item \textbf{Textureless features}: catastrophic failure
     \item \textbf{Dim lighting} (0.3$\times$): moderate degradation only
     \item High DSQ alone does not guarantee robustness on unseen textures
   \end{itemize}
@@ -692,7 +661,7 @@
 \section{Conclusion}
 % ==========================================================================
 
-\sectionslide{QueensGold}{Takeaways}
+\sectionslide{QueensGold}{Conclusion}
 
 \begin{frame}{Discussion \& Limitations}
 \begin{columns}[T]
