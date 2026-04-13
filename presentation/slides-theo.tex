@@ -76,8 +76,9 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{multimedia}
 
-\graphicspath{{../thesis/figures/}{figures/}{figures/ppt/}}
+\graphicspath{{../thesis/figures/}{pictures/}{figures/}{figures/ppt/}}
 
 % Placeholder box for images to be added later
 \newcommand{\placeholder}[2][0.7\textheight]{%
@@ -121,15 +122,27 @@
 \end{frame}
 }
 
+% SCRIPT: "I want to start with a bit of personal motivation. In high school I competed
+% internationally in robotics --- I was the programmer, trying to make the robot move
+% autonomously. I kept running into Kalman filters, LQR, optimal control --- ideas I
+% could see were powerful but couldn't follow the math for. That frustration is actually
+% why I chose Applied Math. Now at the end of my degree I've learned those foundations,
+% and I wanted one last project to actually use them. So I bought a robot dog from China,
+% and this thesis is the result."
 \begin{frame}{Personal Motivation}
-	% TODO: format
-	* In high school, I used to compete internationally in robotics
-	* I was the programmer for the team, and was trying to make the robot function autonomously
-	* That lead me to try and understand kalman filters, lqr, etc, but I couldn't understand the math
-	* That's why I picked apple math!
-	* Now, at the end of my degree, I've learned the math foundations for robot control, and I wanted one last project to apply what I've learned
-	* So, I bought a robot dog from china, and this is some of my experiments with it!
-	% TODO: Insert image vex-robotics
+	\begin{columns}[T]
+		\column{0.54\textwidth}
+		\begin{itemize}
+			\setlength\itemsep{0.7em}
+			\item Programmer on high school robotics team\\
+			\item Tried to understand Kalman filters, LQR, optimal control, etc, but couldn't follow the math
+			\item That's why I chose Apple Math!
+			\item At the end of my degree, wanted one last project to actually use what I learned
+			\item So I bought a robot dog from China\ldots
+		\end{itemize}
+		\column{0.42\textwidth}
+		\includegraphics[width=\linewidth]{vex-robotics.jpg}
+	\end{columns}
 \end{frame}
 
 % ==========================================================================
@@ -151,14 +164,7 @@
 			\item Difficult because simulation-to-reality gap is large for vision-based control
 		\end{itemize}
 		\column{0.44\textwidth}
-		% PLACEHOLDER: photo or video still of a real quadruped (Go2 or ANYmal)
-		% mid-parkour over an obstacle. Suggested source: Extreme Parkour paper
-		% (Cheng et al. 2023) or ANYmal Parkour (Hoeller et al. 2024) project page.
-		% TODO: use what-is-parkour.jpg
-		\fbox{\parbox[c][5.5cm][c]{\linewidth}{\centering\color{gray}
-				\textit{[PLACEHOLDER]}\\[0.4em]
-				Photo/still: real quadruped\\
-				doing parkour (Go2 or ANYmal)}}
+		\includegraphics[width=\linewidth]{what-is-parkour.jpg}
 	\end{columns}
 	% SCRIPT: So first, what is quadruped parkour? We are talking about four-legged robots
 	% that need to cross discrete obstacles -- stairs, hurdles, and gaps -- in real time.
@@ -168,45 +174,34 @@
 	% with 12 leg joints simultaneously.
 \end{frame}
 
-\begin{frame}{Prior Work}
+% SCRIPT: "Recent work has pushed quadruped parkour to impressive levels on real hardware.
+% Agarwal et al. introduced the scandots representation and teacher-student distillation.
+% Extreme Parkour and Robot Parkour Learning both deployed CNN-GRU policies from onboard
+% depth cameras. ANYmal Parkour added hierarchical skill selection for multi-terrain
+% environments. The key assumption shared by all of them: a dedicated depth camera at
+% deployment. That's the constraint we're questioning."
+\begin{frame}{Prior Work: Vision-Based Parkour}
 	\begin{columns}[T]
 		\column{0.50\textwidth}
 		{\small
 			\begin{itemize}
-				\setlength\itemsep{0.55em}
-				      % TODO: split this slide into two, one just legged gym (with legged-gym.png), and the other containing the rest, using extreme-parkour.mp4. The legged gym one should move to the top of the background section.
-				\item \textbf{Legged Gym} \textcolor{gray}{\scriptsize[Rudin et al.\ 2022]}:
-				      scalable sim-to-real RL framework; foundation of this work
-				\item \textbf{Scandots} \textcolor{gray}{\scriptsize[Agarwal et al.\ 2023]}:
-				      privileged teacher (heightmap) distilled into a depth-camera student
-				\item \textbf{Extreme Parkour} \textcolor{gray}{\scriptsize[Cheng et al.\ 2023]}:
-				      CNN--GRU student from depth; real-robot deployment
-				\item \textbf{Robot Parkour Learning} \textcolor{gray}{\scriptsize[Zhuang et al.\ 2023]}:
-				      multi-skill parkour on hardware
-				      hierarchical skill selection
+				\setlength\itemsep{0.65em}
+				\item \textbf{Scandots} \textcolor{gray}{\scriptsize[Agarwal et al.\ 2023]}\\
+				      Heightmap teacher $\to$ depth-camera student
+				\item \textbf{Extreme Parkour} \textcolor{gray}{\scriptsize[Cheng et al.\ 2023]}\\
+				      CNN--GRU student; real-robot deployment
+				\item \textbf{Robot Parkour Learning} \textcolor{gray}{\scriptsize[Zhuang et al.\ 2023]}\\
+				      Multi-skill parkour on hardware
+				\item \textbf{ANYmal Parkour} \textcolor{gray}{\scriptsize[Hoeller et al.\ 2024]}\\
+				      Hierarchical skill selection
 			\end{itemize}
 		}
-		\vspace{0.5em}
+		\vspace{0.8em}
+		\alert{\small All assume a depth camera at deployment.}
 		\column{0.46\textwidth}
-		% PLACEHOLDER: figure from the Extreme Parkour paper (Cheng et al. 2023)
-		% showing the robot and obstacle course. Grab from their arXiv PDF or
-		% project page at https://extreme-parkour.github.io
-		\fbox{\parbox[c][5.5cm][c]{\linewidth}{\centering\color{gray}
-				\textit{[PLACEHOLDER]}\\[0.4em]
-				Figure from Extreme Parkour\\
-				(Cheng et al.\ 2023)}}
+		\movie[width=\linewidth,height=5.2cm,loop,poster]{}{pictures/extreme-parkour.mp4}
 	\end{columns}
-	\begin{center}
-		\alert{All assume a depth camera at deployment.}
-	\end{center}
-	\source{Rudin et al.\ 2022 \textbar{} Agarwal et al.\ 2023 \textbar{}
-		Cheng et al.\ 2023 \textbar{} Zhuang et al.\ 2023 \textbar{} Hoeller et al.\ 2024}
-	% SCRIPT: There has been significant progress in learning-based quadruped parkour. The
-	% Legged Gym framework made sim-to-real RL scalable. The Scandots paper introduced
-	% privileged teacher-student distillation. Extreme Parkour and Robot Parkour Learning
-	% deployed CNN-GRU policies on real robots. ANYmal Parkour added hierarchical skill
-	% selection. The common thread is that ALL of these systems use a dedicated depth
-	% camera at deployment. That's the assumption we are questioning.
+	\source{Agarwal et al.\ 2023 \textbar{} Cheng et al.\ 2023 \textbar{} Zhuang et al.\ 2023 \textbar{} Hoeller et al.\ 2024}
 \end{frame}
 
 
@@ -224,10 +219,8 @@
 	\vspace{10pt}
 
 	\begin{columns}[c]
-		\begin{column}{0.45\linewidth}
-			% TODO: use go2-camera
-			% [PLACEHOLDER] Photo of Unitree Go2
-			\placeholder[0.15\textheight]{Replace: Go2 photo with camera locations}
+		\begin{column}{0.55\linewidth}
+			\includegraphics[width=\linewidth]{go2-camera.png}
 		\end{column}
 		\begin{column}{0.5\linewidth}
 			\begin{itemize}
@@ -246,7 +239,28 @@
 
 \sectionslide{QueensBlue}{Background}
 
-% TODO: legged gym here, also have a picture for genesis sim. maybe two pictures and captions with their citation
+% SCRIPT: "Our work builds on two simulation frameworks. Legged Gym provides the RL
+% training infrastructure -- massively parallel environments that make sim-to-real
+% transfer practical. We use Genesis as our simulator, which runs GPU-accelerated
+% physics and generates the depth images we train the student on."
+\begin{frame}{Simulation Infrastructure}
+	\begin{columns}[c]
+		\begin{column}{0.48\linewidth}
+			\includegraphics[width=\linewidth]{legged-gym.jpg}
+			\vspace{4pt}
+			{\small \textbf{Legged Gym} \textcolor{gray}{\scriptsize[Rudin et al.\ 2022]}\\
+				Massively parallel sim-to-real RL framework}
+		\end{column}
+		\begin{column}{0.48\linewidth}
+			% SOURCE: Genesis simulator screenshot or figure.
+			% Save as presentation/pictures/genesis-sim.jpg
+			\placeholder[0.1\textheight]{Genesis simulator\\{\tiny add: pictures/genesis-sim.jpg}}
+			\vspace{4pt}
+			{\small \textbf{Genesis} GPU-accelerated physics simulator}
+		\end{column}
+	\end{columns}
+	\source{Rudin et al.\ 2022 \textbar{} Genesis, 2024}
+\end{frame}
 
 \begin{frame}{Bridging the Sim-to-Real Gap}
 	\begin{columns}[T]
@@ -260,27 +274,23 @@
 					      --- LucidSim]}\\
 			      Diffusion models for photorealistic images
 
-			\item \textbf{Canonical Representation} $\leftarrow$ \emph{this work}\\ % TODO: use scriptsize here
+			\item \textbf{Canonical Representation}\\
 			      Project both sim and real into a \textbf{shared depth space} via a
 			      pre-trained foundation model
 		\end{enumerate}
 		\column{0.46\textwidth}
-		% PLACEHOLDER: diagram showing sim RGB → DA2 → depth ← real RGB → DA2
-		% as a "bridge" figure. Either a custom TikZ diagram or a screenshot
-		% from the DA2 paper (Yang et al. 2024) showing real-world depth estimation.
-		% TODO: use lucidsim image
-		\fbox{\parbox[c][5.5cm][c]{\linewidth}{\centering\color{gray}
-				\textit{[PLACEHOLDER]}\\[0.4em]
-				Sim RGB / Real RGB $\xrightarrow{\text{DA2}}$ shared depth\\[0.3em]
-				(custom diagram or DA2 demo figure)}}
+		\includegraphics[width=\linewidth]{lucidsim.png}
+		\vspace{2pt}
+		{\tiny\color{gray} LucidSim: diffusion-rendered training images (Yu et al.\ 2024)}
 	\end{columns}
 	\source{Tobin et al.\ 2017 \textbar{} Yu et al.\ 2024 (LucidSim) \textbar{} Yang et al.\ 2024 (DA2)}
-	% SCRIPT: To deploy an RGB-only policy, you need to close the visual sim-to-real gap.
-	% Three strategies have emerged. Domain randomization randomizes appearances at train
-	% time. Generative augmentation uses diffusion models to produce photorealistic frames.
-	% This work takes a third approach: use a pre-trained depth estimator as a canonical
-	% representation, so both simulation and real images get projected into the same depth
-	% space -- without any domain randomization or photorealistic rendering.
+	% SCRIPT: "To deploy from RGB, you need to close the visual sim-to-real gap. Three
+	% strategies have emerged. Domain randomization trains with varied textures and lighting
+	% hoping the policy learns invariance. LucidSim, shown here, uses diffusion models to
+	% render photorealistic images for training. Our approach is different: instead of
+	% changing the training data, we use a pre-trained depth estimator as a canonical
+	% representation. Both simulation and real images get mapped into the same depth space --
+	% no photorealistic rendering, no domain randomization needed."
 \end{frame}
 
 % --------------------------------------------------------------------------
@@ -293,18 +303,36 @@
 		\begin{column}{0.4\linewidth}
 			\begin{itemize}
 				\item Vision Transformer (ViT)
-				\item Trained on 142M images
+				\item Trained on 142M real images
 				\item RGB $\to$ metric depth map
 				\item Multiple model scales:\\
 				      \textit{small}, \textit{base}, \textit{large}
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.55\linewidth}
-			\includegraphics[width=\linewidth]{depth_anything_v2_demo.png}
+			\includegraphics[width=\linewidth]{da2-demo.png}
 		\end{column}
 	\end{columns}
 
 	\source{Yang et al., arXiv 2024}
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Putting it all together: the two-stage distillation pipeline. In stage one,
+% a privileged teacher is trained with PPO using ground-truth scandot heightmaps ---
+% it achieves near-perfect performance because it can see the terrain directly.
+% In stage two, we train a visual student to imitate the teacher using DAgger, but
+% instead of heightmaps, it gets depth images from DA2. The teacher's actor MLP is
+% shared and frozen --- the student only needs to learn the visual encoder.
+% This is the key architectural idea: reuse the teacher's learned motor skills,
+% just replace the sensing modality."
+\begin{frame}{Two-Stage Distillation Pipeline}
+
+	\begin{center}
+		\includegraphics[width=0.52\linewidth]{two-stage.png}
+	\end{center}
+	% TODO: caption with extreme parkour citation
+
 \end{frame}
 
 
@@ -319,7 +347,7 @@
 % observations --- proprioception and some form of terrain sensing --- and
 % outputs 12 joint position offsets. The objective is to maximize expected
 % discounted return."
-\begin{frame}{Problem Formulation: POMDP}
+\begin{frame}{Problem Formulation}
 
 	\textbf{Partially Observable Markov Decision Process}
 	$(\mathcal{S},\, \mathcal{A},\, \mathcal{O},\, T,\, R,\, \gamma)$
@@ -358,7 +386,7 @@
 % constraining the KL divergence like TRPO, PPO clips the probability ratio
 % to prevent destructive updates. The advantage is estimated with GAE, which
 % interpolates between high-bias and high-variance estimates via lambda."
-\begin{frame}{PPO: How the Teacher Learns}
+\begin{frame}{PPO}
 
 	\textbf{Clipped surrogate objective}
 	\[
@@ -395,14 +423,10 @@
 % distribution and errors snowball. DAgger fixes this: the student acts in
 % the environment, but the teacher provides the correct labels. The loss has
 % two terms: matching the teacher's actions and predicting the correct heading."
-\begin{frame}{DAgger: How the Student Learns}
+\begin{frame}{DAgger Distillation}
 
-	\textbf{Problem with behavioral cloning:} errors compound under
-	distribution shift.
 
-	\vspace{10pt}
-
-	\textbf{DAgger} --- student acts, teacher labels, iterate:
+	Student acts, teacher labels, iterate:
 	\[
 		\mathcal{L} =
 		\underbrace{\|a_\mathrm{teacher} - a_\mathrm{student}\|_2}_{\text{action loss}}
@@ -412,8 +436,8 @@
 
 	\vspace{10pt}
 
-	{\small The student runs in the environment and collects its own observations,\\
-		but the teacher's actions are executed --- eliminating distribution mismatch.}
+	{\small The student runs in the environment and collects its own observations,
+		but the teacher's actions are executed.}
 
 	\source{Ross et al., AISTATS 2011}
 \end{frame}
@@ -425,24 +449,20 @@
 
 \sectionslide{QueensRed}{System Architecture}
 
-% --------------------------------------------------------------------------
-% SCRIPT: "Here's the full pipeline. Stage 1: the teacher trains with PPO
-% using privileged scandot heightmaps. Stage 2: the student replaces scandots
-% with depth images and learns via DAgger, with the teacher's actor MLP
-% shared between both stages."
-\begin{frame}{Two-Stage Pipeline}
-
-	\begin{center}
-		\resizebox{0.82\linewidth}{!}{%
-			\input{../thesis/figures/pipeline}%
-		}
-	\end{center}
-
-	\vspace{4pt}
-	{\small Stage 1: Teacher trains with privileged scandots (PPO)\\
-		Stage 2: Student imitates from depth images (DAgger), shared actor MLP}
-
-\end{frame}
+% % --------------------------------------------------------------------------
+% % SCRIPT: "Here's the full pipeline. Stage 1: the teacher trains with PPO
+% % using privileged scandot heightmaps. Stage 2: the student replaces scandots
+% % with depth images and learns via DAgger, with the teacher's actor MLP
+% % shared between both stages."
+% \begin{frame}{Two-Stage Pipeline}
+%
+% 	\begin{center}
+% 		\resizebox{0.72\linewidth}{!}{%
+% 			\input{../thesis/figures/pipeline}%
+% 		}
+% 	\end{center}
+%
+% \end{frame}
 
 % --------------------------------------------------------------------------
 % SCRIPT: "The student's visual encoder: a CNN maps the depth image to a
@@ -469,12 +489,12 @@
 \begin{frame}{Terrain and Curriculum}
 
 	\begin{center}
-		\includegraphics[width=0.85\linewidth]{terrain_curriculum.png}
+		\includegraphics[width=0.65\linewidth]{terrain_curriculum.png}
 	\end{center}
 
 	\vspace{2pt}
 	{\small Three obstacle families $\times$ four difficulty levels.
-		Deliberately simpler than prior work --- isolating the depth estimation question.}
+		}
 
 \end{frame}
 
