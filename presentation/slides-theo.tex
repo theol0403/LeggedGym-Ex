@@ -464,22 +464,50 @@
 %
 % \end{frame}
 
-% --------------------------------------------------------------------------
-% SCRIPT: "The student's visual encoder: a CNN maps the depth image to a
-% 32-dimensional feature, fused with proprioception, then processed by a GRU
-% that integrates over time to produce the terrain latent and heading estimate."
-\begin{frame}{Student Visual Encoder}
 
-	\begin{center}
-		\resizebox{0.85\linewidth}{!}{%
-			\input{../thesis/figures/student_arch}%
-		}
-	\end{center}
+\begin{frame}{Student Architecture \& DSQ Metric}
+\begin{columns}[T]
+\column{0.48\textwidth}
+  \textbf{Student visual encoder:}
+  \vspace{0.2em}
+  \begin{center}
+    \scalebox{0.78}{%
+      \input{../thesis/figures/student_arch.tex}%
+    }
+  \end{center}
+  {\small
+  \begin{itemize}
+    \item $58{\times}87$ depth $\to$ CNN $\to$ 32-dim features
+    \item GRU integrates temporally (belief state)
+    \item Reuses teacher's frozen actor MLP
+  \end{itemize}
+  }
 
-	\vspace{6pt}
-	{\small Depth CNN $\to$ Fusion MLP $\to$ GRU $\to$ terrain latent $z \in \R^{32}$
-		+ heading $\hat{y} \in \R^{2}$}
+\column{0.48\textwidth}
+  \textbf{Depth Signal Quality (DSQ):}
+  \[
+    \text{DSQ} = \frac{1}{T}\frac{1}{N}\sum_{t,i}
+      \rho\!\left(d^{\text{GT}}_i,\, d^{\text{DA2}}_i\right)
+  \]
+  where $\rho$ is Pearson correlation.
 
+  \vspace{0.5em}
+  \begin{itemize}
+    \setlength\itemsep{0.4em}
+    \item Averaged over environments and time steps
+    \item Affine-invariant: handles monocular scale-shift ambiguity
+    \item Low DSQ $\Leftrightarrow$ degraded depth estimate $\Leftrightarrow$ policy fails
+  \end{itemize}
+\end{columns}
+% SCRIPT: The student's visual encoder is a CNN-GRU. The CNN processes a 58x87
+% depth image -- small enough for fast inference -- into a 32-dimensional feature
+% vector. That's concatenated with proprioception, fed through a GRU for temporal
+% integration, and produces the terrain latent that the frozen actor MLP converts
+% to joint targets. We also introduce DSQ -- Depth Signal Quality -- as a diagnostic
+% metric. It's the Pearson correlation between ground-truth and DA2 estimated depth.
+% Pearson correlation is affine-invariant, which is important because monocular depth
+% estimators have an inherent scale-shift ambiguity -- they can't know the absolute
+% scale. DSQ being low is a reliable indicator that the policy will fail.
 \end{frame}
 
 % --------------------------------------------------------------------------
@@ -490,11 +518,46 @@
 
 	\begin{center}
 		\includegraphics[width=0.65\linewidth]{terrain_curriculum.png}
-	\end{center}
-
 	\vspace{2pt}
+
 	{\small Three obstacle families $\times$ four difficulty levels.
 		}
+	\end{center}
+
+\end{frame}
+
+
+
+% ==========================================================================
+\section{Results}
+% ==========================================================================
+
+\sectionslide{QueensBlue}{Experiments \& Results}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "First, we establish upper bounds. The teacher with privileged
+% scandots hits 99 percent. The GT-depth student --- trained on perfect
+% simulator depth --- reaches about 90 percent. A zero-depth ablation drops
+% to 8 percent, confirming the policy actually relies on depth, not
+% proprioceptive heuristics. The architecture works. Depth quality is the
+% bottleneck."
+\begin{frame}{Baselines: Teacher Upper Bounds}
+
+  \begin{center}
+			\begin{tabular}{@{}lcccc@{}}
+				\toprule
+				                    & R0   & R1    & R2   & R3   \\
+				\midrule
+				Scandots teacher    & 98.5 & 100.0 & 99.0 & 98.5 \\
+				GT-depth student    & 94.5 & 94.5  & 89.1 & 87.5 \\
+				Zero-depth ablation & 8.0  & 2.0   & 0.0  & 0.0  \\
+				\bottomrule
+			\end{tabular}
+			\vspace{10pt}
+			\includegraphics[width=0.6\linewidth]{teacher_training.png}
+
+			The teacher-student architecture works!
+    \end{center}
 
 \end{frame}
 
@@ -513,39 +576,17 @@
 
 \end{frame}
 
-
-% ==========================================================================
-\section{Results}
-% ==========================================================================
-
-\sectionslide{QueensBlue}{Experiments \& Results}
-
 % --------------------------------------------------------------------------
-% SCRIPT: "First, we establish upper bounds. The teacher with privileged
-% scandots hits 99 percent. The GT-depth student --- trained on perfect
-% simulator depth --- reaches about 90 percent. A zero-depth ablation drops
-% to 8 percent, confirming the policy actually relies on depth, not
-% proprioceptive heuristics. The architecture works. Depth quality is the
-% bottleneck."
-\begin{frame}{Baselines: Upper Bounds}
+% SCRIPT: "Before looking at the numbers, here's what DA2 actually sees on our
+% simulated terrain. Each pair of panels shows the robot's RGB view alongside
+% the DA2 depth estimate. No texture at all produces a nearly flat depth map ---
+% the gap boundary is invisible. Add checkerboard, grass, or wood, and the
+% geometry becomes clear. The DSQ score below each column quantifies this ---
+% featureless terrain scores 0.76, while textured surfaces reach 0.92 to 0.93."
+\begin{frame}{Depth Estimation on Simulated Terrain}
 
 	\begin{center}
-		\begin{tabular}{@{}lcccc@{}}
-			\toprule
-			                    & Row~0 & Row~1 & Row~2 & Row~3 \\
-			\midrule
-			Scandots teacher    & 98.5  & 100.0 & 99.0  & 98.5  \\
-			GT-depth student    & 94.5  & 94.5  & 89.1  & 87.5  \\
-			Zero-depth ablation & 8.0   & 2.0   & 0.0   & 0.0   \\
-			\bottomrule
-		\end{tabular}
-	\end{center}
-
-	\vspace{12pt}
-
-	\begin{center}
-		The student architecture works.\\
-		\textbf{Depth quality} is the bottleneck, not the network.
+		\includegraphics[width=1\linewidth]{da2_texture_comparison.png}
 	\end{center}
 
 \end{frame}
@@ -556,10 +597,10 @@
 % The key finding: adding checkerboard texture to the terrain closes most of
 % the remaining gap. The depth estimator needs visual features to find obstacle
 % boundaries."
-\begin{frame}{Estimated Depth: Model Scale and Texture}
+\begin{frame}{Estimated Depth Convergence}
 
 	\begin{columns}[T]
-		\begin{column}{0.48\linewidth}
+		\begin{column}{0.35\linewidth}
 			\small
 			\begin{tabular}{@{}lcccc@{}}
 				\toprule
@@ -574,39 +615,15 @@
 			\end{tabular}
 
 			\vspace{8pt}
-			Larger model + texture\\$\to$ closes gap to GT-depth
+      Adding texture was critical
 		\end{column}
-		\begin{column}{0.5\linewidth}
-			\includegraphics[width=\linewidth]{da2_texture_comparison.png}
+		\begin{column}{0.65\linewidth}
+			\includegraphics[width=\linewidth]{per_obstacle_success.png}
 		\end{column}
 	\end{columns}
 
 \end{frame}
 
-% --------------------------------------------------------------------------
-% SCRIPT: "We introduced DSQ --- Depth Signal Quality --- as a diagnostic.
-% It's the Pearson correlation between ground-truth and estimated depth,
-% averaged over frames. Because Pearson correlation is affine invariant,
-% it naturally handles the scale ambiguity in monocular depth."
-\begin{frame}{Depth Signal Quality (DSQ)}
-
-	A diagnostic metric: how well does estimated depth preserve terrain geometry?
-
-	\vspace{10pt}
-
-	\[
-		\mathrm{DSQ} = \frac{1}{T}\sum_{t=1}^{T}
-		\frac{1}{N}\sum_{i=1}^{N}
-		\rho\!\left(d_i^{\,\mathrm{GT}},\; d_i^{\,\mathrm{DA2}}\right)
-	\]
-
-	\vspace{10pt}
-
-	{\small Pearson correlation is \textbf{affine invariant}:
-		$\rho(\alpha x + \beta,\, y) = \rho(x,y)$\\[2pt]
-		$\to$ naturally handles monocular scale--shift ambiguity}
-
-\end{frame}
 
 % --------------------------------------------------------------------------
 % SCRIPT: "Finally, we perturbed visual appearance at test time: texture
@@ -640,6 +657,36 @@
 
 \end{frame}
 
+\begin{frame}{Visual Sensitivity}
+\begin{columns}[T]
+\column{0.46\textwidth}
+  Key findings across 6 terrain configurations:
+  \begin{itemize}
+    \setlength\itemsep{0.45em}
+    \item \textbf{Stairs \& hurdles}: robust to lighting and color
+          shifts (strong edges persist across conditions)
+    \item \textbf{Gaps}: texture-sensitive, boundary
+          visible mainly through surface features
+    \item \textbf{Textureless}: catastrophic failure
+    \item \textbf{Dim lighting} (0.3$\times$): moderate degradation only
+    \item High DSQ alone does not guarantee robustness on unseen textures
+  \end{itemize}
+
+\column{0.50\textwidth}
+  \includegraphics[width=\linewidth]{dsq_scatter.pdf}
+  \vspace{0.2em}
+\end{columns}
+% SCRIPT: We then perturbed the trained student at test time only -- no retraining.
+% Stairs and hurdles are largely robust because their edges remain visible under
+% most conditions. Gaps are the most texture-sensitive: the gap boundary is only
+% visible as a texture discontinuity, so featureless terrain collapses success.
+% Lighting changes alone cause only moderate degradation. The scatter plot shows
+% DSQ versus success across all conditions. You can see a clear correlation --
+% low DSQ predicts failure -- but the relationship isn't perfect: some unseen
+% textures maintain high DSQ but still reduce performance, suggesting the policy
+% has some sensitivity beyond just raw depth quality.
+\end{frame}
+
 
 % ==========================================================================
 \section{Conclusion}
@@ -647,32 +694,38 @@
 
 \sectionslide{QueensGold}{Takeaways}
 
-% --------------------------------------------------------------------------
-% SCRIPT: "So what did we learn? Monocular depth estimation is a plausible
-% bridge from RGB to locomotion. The bottleneck is depth quality, not the
-% student architecture. DA2 is robust to photometric variation --- lighting,
-% color --- but fragile on featureless or weak-texture surfaces. The next
-% step is real-world transfer on the Go2, along with temporal depth models
-% that might stabilize frame-to-frame predictions."
-\begin{frame}{What We Learned}
-
-	\begin{enumerate}
+\begin{frame}{Discussion \& Limitations}
+\begin{columns}[T]
+\column{0.48\textwidth}
+  \textbf{What we learned:}
+  \begin{itemize}
+    \setlength\itemsep{0.45em}
 		\item Monocular depth is a \textbf{plausible bridge} from RGB to locomotion
-		\item Bottleneck = \textbf{depth quality}, not student architecture
-		\item Robust to photometric variation; \textbf{fragile on featureless surfaces}
-	\end{enumerate}
+    \item Moderate robustness to photometric variation
+          \textbf{without domain randomization}
+    \item Bottleneck is \textbf{depth quality}, not student architecture
+    \item Gap traversal the hardest case
+  \end{itemize}
 
-	\vspace{14pt}
-
-	\textbf{Future work}
-	\begin{itemize}
-		\item Real-world transfer on Unitree Go2
-		\item Temporally consistent depth models
-		\item Joint adaptation of depth estimator + student policy
-	\end{itemize}
-
+\column{0.48\textwidth}
+  \textbf{Limitations \& future work:}
+  \begin{itemize}
+    \setlength\itemsep{0.45em}
+    \item Simulation only, no hardware validation yet
+    \item DA2-base too heavy for onboard inference
+    \item Frame-independent estimation, no temporal consistency
+    \item DA2 fails on transparent surfaces, thin structures,
+          close-range objects
+  \end{itemize}
+\end{columns}
+% SCRIPT: To summarize: monocular depth is a viable approach for sim-based quadruped
+% parkour. We get moderate photometric robustness for free, without any domain
+% randomization. The main bottleneck is depth quality -- if DA2 can't see the obstacle
+% boundary, the policy fails. The most important limitation is that we only validated
+% in simulation. Real hardware would introduce motion blur, exposure shifts, and real
+% depth scale ambiguity that we haven't tested. Future work would evaluate on a real Go2,
+% and potentially co-adapt the depth estimator and the policy end-to-end.
 \end{frame}
-
 
 % ==========================================================================
 % CLOSING
