@@ -22,7 +22,7 @@ plt.rcParams.update({
 
 FIGURES_DIR = Path('thesis/figures')
 ARCHIVE = Path('logs_archive')
-MAX_ITER = 5000
+MAX_ITER = 10000
 SMOOTH_W = 50   # smoothing window for student plots
 SMOOTH_PAD = 200  # extra padding past MAX_ITER for smoothing support
 
@@ -70,8 +70,7 @@ TEACHER = ARCHIVE / '01_teacher_primary/Mar26_05-05-21_teacher_genesis'
 GT_DEPTH = ARCHIVE / '29_gt_depth_student/Mar26_16-47-15_student_genesis'
 
 DA2_BASE_TEX_CHAIN = [
-    ARCHIVE / '09_da2_base_texture_5k/Mar29_04-31-55_BASE3_da2_base_texture',
-    ARCHIVE / '03_da2_base_texture_BEST/Mar29_13-36-08_BASE3_da2_base_texture',
+    Path('logs/go2_parkour_depth_est_student/Apr11_16-03-28_BASE3_da2_base_texture'),
 ]
 DA2_BASE_CHAIN = [
     ARCHIVE / '10_da2_base_first_5k/Mar28_20-24-29_BASE1_da2_base',

@@ -1,0 +1,190 @@
+{
+  "config": {
+    "force_family": "gap",
+    "force_row": 0,
+    "episodes": 256,
+    "num_envs": 48
+  },
+  "results": [
+    {
+      "success_rate": 0.6875000002328306,
+      "progress_ratio": 0.7541362058836967,
+      "episodes": 256,
+      "depth_signal_quality": 0.906574770502982,
+      "student": "DA2-base+tex",
+      "perturbation": "baseline",
+      "elapsed_s": 379.3236720561981
+    },
+    {
+      "success_rate": 0.5625,
+      "progress_ratio": 0.6899241713108495,
+      "episodes": 256,
+      "depth_signal_quality": 0.7732456649093321,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_none",
+      "elapsed_s": 153.4424648284912
+    },
+    {
+      "success_rate": 0.3515625,
+      "progress_ratio": 0.5676030922913924,
+      "episodes": 256,
+      "depth_signal_quality": 0.7522274322140303,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_solid_red",
+      "elapsed_s": 339.9212996959686
+    },
+    {
+      "success_rate": 0.67578125,
+      "progress_ratio": 0.7507957166526467,
+      "episodes": 256,
+      "depth_signal_quality": 0.783389880575917,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_solid_blue",
+      "elapsed_s": 368.42779064178467
+    },
+    {
+      "success_rate": 0.7890625,
+      "progress_ratio": 0.8216727087274194,
+      "episodes": 256,
+      "depth_signal_quality": 0.8710814352693229,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_noise",
+      "elapsed_s": 373.36431312561035
+    },
+    {
+      "success_rate": 0.6835937501164153,
+      "progress_ratio": 0.7471955959335901,
+      "episodes": 256,
+      "depth_signal_quality": 0.9056310773119052,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_bricks",
+      "elapsed_s": 365.5018560886383
+    },
+    {
+      "success_rate": 0.70703125,
+      "progress_ratio": 0.765538081410341,
+      "episodes": 256,
+      "depth_signal_quality": 0.8859915685696035,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_concrete",
+      "elapsed_s": 372.42555379867554
+    },
+    {
+      "success_rate": 0.8125,
+      "progress_ratio": 0.8371427663660143,
+      "episodes": 256,
+      "depth_signal_quality": 0.9093342709172633,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_wood",
+      "elapsed_s": 382.7120358943939
+    },
+    {
+      "success_rate": 0.7734375,
+      "progress_ratio": 0.8102024390245788,
+      "episodes": 256,
+      "depth_signal_quality": 0.895007835608136,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_grass",
+      "elapsed_s": 381.98777174949646
+    },
+    {
+      "success_rate": 0.6875,
+      "progress_ratio": 0.7482322691357695,
+      "episodes": 256,
+      "depth_signal_quality": 0.8983621396362894,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_stone_tiles",
+      "elapsed_s": 367.49502825737
+    },
+    {
+      "success_rate": 0.73828125,
+      "progress_ratio": 0.79604741348885,
+      "episodes": 256,
+      "depth_signal_quality": 0.7689819940364214,
+      "student": "DA2-base+tex",
+      "perturbation": "tex_gravel",
+      "elapsed_s": 378.51591205596924
+    },
+    {
+      "success_rate": 0.712062257273188,
+      "progress_ratio": 0.7670702875994059,
+      "episodes": 257,
+      "depth_signal_quality": 0.8317326413810469,
+      "student": "DA2-base+tex",
+      "perturbation": "light_dim",
+      "elapsed_s": 378.25920581817627
+    },
+    {
+      "success_rate": 0.66015625,
+      "progress_ratio": 0.7303032850613818,
+      "episodes": 256,
+      "depth_signal_quality": 0.9037839117449081,
+      "student": "DA2-base+tex",
+      "perturbation": "light_bright",
+      "elapsed_s": 361.1217861175537
+    },
+    {
+      "success_rate": 0.6328125001164153,
+      "progress_ratio": 0.7187191520351917,
+      "episodes": 256,
+      "depth_signal_quality": 0.7816199849319829,
+      "student": "DA2-base+tex",
+      "perturbation": "light_low_gamma",
+      "elapsed_s": 362.92133927345276
+    },
+    {
+      "success_rate": 0.6731517512046873,
+      "progress_ratio": 0.7386997274851521,
+      "episodes": 257,
+      "depth_signal_quality": 0.904481457125756,
+      "student": "DA2-base+tex",
+      "perturbation": "jitter_brightness_mild",
+      "elapsed_s": 366.1505491733551
+    },
+    {
+      "success_rate": 0.6406250001164153,
+      "progress_ratio": 0.7183524542488158,
+      "episodes": 256,
+      "depth_signal_quality": 0.894354711764094,
+      "student": "DA2-base+tex",
+      "perturbation": "jitter_brightness_strong",
+      "elapsed_s": 363.67557072639465
+    },
+    {
+      "success_rate": 0.73046875,
+      "progress_ratio": 0.7788602445507422,
+      "episodes": 256,
+      "depth_signal_quality": 0.8860529684346472,
+      "student": "DA2-base+tex",
+      "perturbation": "jitter_color_mild",
+      "elapsed_s": 373.88130021095276
+    },
+    {
+      "success_rate": 0.6640625001164153,
+      "progress_ratio": 0.734196183795575,
+      "episodes": 256,
+      "depth_signal_quality": 0.8602669586160386,
+      "student": "DA2-base+tex",
+      "perturbation": "jitter_color_strong",
+      "elapsed_s": 368.5622093677521
+    },
+    {
+      "success_rate": 0.7031250002328306,
+      "progress_ratio": 0.7668218478793278,
+      "episodes": 256,
+      "depth_signal_quality": 0.8725269687520038,
+      "student": "DA2-base+tex",
+      "perturbation": "combined_mild",
+      "elapsed_s": 376.2170510292053
+    },
+    {
+      "success_rate": 0.6835937502328306,
+      "progress_ratio": 0.7555792233906686,
+      "episodes": 256,
+      "depth_signal_quality": 0.8653906213481035,
+      "student": "DA2-base+tex",
+      "perturbation": "combined_extreme",
+      "elapsed_s": 372.31005787849426
+    }
+  ]
+}

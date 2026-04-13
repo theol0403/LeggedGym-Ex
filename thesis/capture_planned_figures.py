@@ -36,6 +36,7 @@ from PIL import Image
 from legged_gym.envs.go2.go2_parkour_teacher.go2_parkour_teacher_config import Go2ParkourTeacherCfg
 from legged_gym.perception import create_depth_estimator
 from legged_gym.utils.parkour_terrain import ParkourLaneBuilder
+from legged_gym.utils.terrain_textures import generate_texture_image
 
 
 FAMILY_LABELS = {
@@ -46,7 +47,7 @@ FAMILY_LABELS = {
 
 MODEL_RUNS = {
     False: {"load_run": "Mar29_08-06-01_BASE1_da2_base", "ckpt": 7000},
-    True: {"load_run": "Mar29_13-36-08_BASE3_da2_base_texture", "ckpt": 7000},
+    True: {"load_run": "Apr11_16-03-28_BASE3_da2_base_texture", "ckpt": 10000},
 }
 
 TEXTURE_COMPARISON_COLUMNS = [
@@ -86,7 +87,6 @@ FIGURE_VERTICAL_GAIN = {
 
 _GENESIS_INITIALIZED = False
 _TERRAIN_RENDER_CACHE: dict[tuple[str, int], np.ndarray] = {}
-_TEXTURE_CACHE: dict[str, np.ndarray] = {}
 _DEPTH_ESTIMATOR = None
 _DOMAIN_INVARIANCE_RESULTS = None
 
@@ -149,142 +149,10 @@ def _crop_first_obstacle(
     return height_field_raw[px0:px1, py0:py1].copy(), (x0, x1, y0, y1)
 
 
-def _texture_image(mode: str) -> np.ndarray:
-    cached = _TEXTURE_CACHE.get(mode)
-    if cached is not None:
-        return cached
-
-    tex_size = 512
-
-    if mode == "checkerboard":
-        img = np.full((tex_size, tex_size, 3), [178, 174, 170], dtype=np.uint8)
-        spacing = 32
-        for i in range(0, tex_size, spacing):
-            img[i : i + 2, :] = [118, 114, 110]
-            img[:, i : i + 2] = [118, 114, 110]
-        noise = np.random.RandomState(42).randint(-10, 11, img.shape, dtype=np.int16)
-        img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-    elif mode == "concrete":
-        rng = np.random.RandomState(44)
-        img = np.full((tex_size, tex_size, 3), [194, 192, 188], dtype=np.uint8)
-        grid_spacing = 56
-        for i in range(0, tex_size, grid_spacing):
-            img[i : i + 3, :] = [150, 150, 146]
-            img[:, i : i + 3] = [150, 150, 146]
-        noise = rng.normal(0, 6, img.shape).astype(np.int16)
-        img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-        for _ in range(180):
-            cx, cy = rng.randint(0, tex_size, 2)
-            radius = rng.randint(2, 5)
-            shade = np.full(3, rng.randint(122, 154), dtype=np.uint8)
-            yy, xx = np.ogrid[-radius : radius + 1, -radius : radius + 1]
-            mask = xx * xx + yy * yy <= radius * radius
-            y0, y1 = max(0, cy - radius), min(tex_size, cy + radius + 1)
-            x0, x1 = max(0, cx - radius), min(tex_size, cx + radius + 1)
-            local_mask = mask[y0 - (cy - radius) : y1 - (cy - radius), x0 - (cx - radius) : x1 - (cx - radius)]
-            img[y0:y1, x0:x1][local_mask] = shade
-    elif mode == "wood":
-        rng = np.random.RandomState(45)
-        img = np.zeros((tex_size, tex_size, 3), dtype=np.uint8)
-        phase = np.cumsum(rng.normal(0, 0.02, tex_size))
-        for y in range(tex_size):
-            freq = 0.15 + 0.05 * np.sin(y * 0.01)
-            wave = np.sin(np.arange(tex_size) * freq + phase + y * 0.3)
-            intensity = ((wave * 0.5 + 0.5) * 40).astype(np.int16)
-            img[y, :, 0] = np.clip(160 + intensity, 0, 255)
-            img[y, :, 1] = np.clip(120 + intensity, 0, 255)
-            img[y, :, 2] = np.clip(80 + (intensity * 0.5).astype(np.int16), 0, 255)
-        noise = rng.randint(-5, 6, img.shape, dtype=np.int16)
-        img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-    elif mode == "grass":
-        rng = np.random.RandomState(46)
-        img = np.full((tex_size, tex_size, 3), [80, 140, 60], dtype=np.uint8)
-        noise_r = rng.normal(0, 12, (tex_size, tex_size)).astype(np.int16)
-        noise_g = rng.normal(0, 20, (tex_size, tex_size)).astype(np.int16)
-        noise_b = rng.normal(0, 10, (tex_size, tex_size)).astype(np.int16)
-        img[:, :, 0] = np.clip(img[:, :, 0].astype(np.int16) + noise_r, 0, 255)
-        img[:, :, 1] = np.clip(img[:, :, 1].astype(np.int16) + noise_g, 0, 255)
-        img[:, :, 2] = np.clip(img[:, :, 2].astype(np.int16) + noise_b, 0, 255)
-        for _ in range(40):
-            cx, cy = rng.randint(0, tex_size, 2)
-            radius = rng.randint(8, 20)
-            yy, xx = np.ogrid[-radius : radius + 1, -radius : radius + 1]
-            mask = xx * xx + yy * yy <= radius * radius
-            y0, y1 = max(0, cy - radius), min(tex_size, cy + radius + 1)
-            x0, x1 = max(0, cx - radius), min(tex_size, cx + radius + 1)
-            local_mask = mask[y0 - (cy - radius) : y1 - (cy - radius), x0 - (cx - radius) : x1 - (cx - radius)]
-            patch = rng.normal(0, 5, (local_mask.sum(), 3)).astype(np.int16)
-            img[y0:y1, x0:x1][local_mask] = np.clip(
-                np.array([110, 95, 55]) + patch, 0, 255
-            ).astype(np.uint8)
-    elif mode == "stone_tiles":
-        rng = np.random.RandomState(47)
-        tile_size, mortar_w = 48, 3
-        mortar_color = np.array([105, 100, 95], dtype=np.uint8)
-        img = np.full((tex_size, tex_size, 3), mortar_color, dtype=np.uint8)
-        for ty in range(0, tex_size, tile_size):
-            for tx in range(0, tex_size, tile_size):
-                grey = rng.randint(150, 200)
-                color = np.array([grey, grey - 2, grey - 5], dtype=np.int16)
-                y0 = ty + mortar_w
-                x0 = tx + mortar_w
-                y1 = min(ty + tile_size, tex_size)
-                x1 = min(tx + tile_size, tex_size)
-                if y0 < y1 and x0 < x1:
-                    tile_noise = rng.randint(-8, 9, (y1 - y0, x1 - x0, 3), dtype=np.int16)
-                    img[y0:y1, x0:x1] = np.clip(color + tile_noise, 0, 255).astype(np.uint8)
-    elif mode == "gravel":
-        rng = np.random.RandomState(48)
-        img = np.full((tex_size, tex_size, 3), [160, 155, 150], dtype=np.uint8)
-        for _ in range(2500):
-            cx, cy = rng.randint(0, tex_size, 2)
-            radius = rng.randint(2, 7)
-            grey = rng.randint(100, 220)
-            color = np.array([grey, grey - 3, grey - 6], dtype=np.int16)
-            yy, xx = np.ogrid[-radius : radius + 1, -radius : radius + 1]
-            mask = xx * xx + yy * yy <= radius * radius
-            y0, y1 = max(0, cy - radius), min(tex_size, cy + radius + 1)
-            x0, x1 = max(0, cx - radius), min(tex_size, cx + radius + 1)
-            local_mask = mask[y0 - (cy - radius) : y1 - (cy - radius), x0 - (cx - radius) : x1 - (cx - radius)]
-            img[y0:y1, x0:x1][local_mask] = np.clip(color, 0, 255).astype(np.uint8)
-    elif mode == "noise":
-        rng = np.random.RandomState(123)
-        img = rng.randint(0, 256, (tex_size, tex_size, 3), dtype=np.uint8)
-    elif mode == "bricks":
-        img = np.full((tex_size, tex_size, 3), [180, 100, 70], dtype=np.uint8)
-        brick_h, brick_w, mortar = 32, 64, 2
-        for row in range(0, tex_size, brick_h):
-            img[row : row + mortar, :] = [160, 160, 155]
-            offset = (brick_w // 2) if ((row // brick_h) % 2) else 0
-            for col in range(offset, tex_size, brick_w):
-                img[row : row + brick_h, col : col + mortar] = [160, 160, 155]
-        noise = np.random.RandomState(42).randint(-10, 11, img.shape, dtype=np.int16)
-        img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-    elif mode.startswith("solid_"):
-        color_map = {
-            "solid_red": [200, 60, 60],
-            "solid_green": [60, 180, 60],
-            "solid_blue": [60, 60, 200],
-            "solid_yellow": [200, 200, 60],
-            "solid_white": [240, 240, 240],
-            "solid_dark": [40, 40, 40],
-        }
-        img = np.full((tex_size, tex_size, 3), color_map.get(mode, [180, 180, 180]), dtype=np.uint8)
-    else:
-        img = np.full((tex_size, tex_size, 3), [180, 180, 180], dtype=np.uint8)
-
-    _TEXTURE_CACHE[mode] = img
-    return img
-
-
 def _create_texture_surface(mode: str):
     return gs.surfaces.Rough(
-        diffuse_texture=gs.textures.ImageTexture(image_array=_texture_image(mode)),
+        diffuse_texture=gs.textures.ImageTexture(image_array=generate_texture_image(mode)),
     )
-
-
-def _create_checker_surface():
-    return _create_texture_surface("checkerboard")
 
 
 def _create_solid_surface():
@@ -297,8 +165,6 @@ def _create_solid_surface():
 def _surface_for_texture_mode(texture_mode: str | None, add_texture: bool):
     if not add_texture or texture_mode is None:
         return _create_solid_surface()
-    if texture_mode == "checkerboard":
-        return _create_checker_surface()
     return _create_texture_surface(texture_mode)
 
 
@@ -415,10 +281,10 @@ def _render_lane_panel(family: str, row: int) -> np.ndarray:
                 horizontal_scale=Go2ParkourTeacherCfg.terrain.horizontal_scale,
                 vertical_scale=Go2ParkourTeacherCfg.terrain.vertical_scale * FIGURE_VERTICAL_GAIN[family],
                 height_field=crop_raw,
-                uv_scale=8.0,
+                uv_scale=4.0,
                 visualization=True,
             ),
-            surface=_create_checker_surface(),
+            surface=_create_texture_surface("checkerboard"),
         )
         camera_entity = scene.add_camera(
             res=TERRAIN_RESOLUTION,
@@ -488,7 +354,7 @@ def _render_hurdle_box_panel(row: int) -> np.ndarray:
                 visualization=True,
                 fixed=True,
             ),
-            surface=_create_checker_surface(),
+            surface=_create_texture_surface("checkerboard"),
         )
         scene.add_entity(
             gs.morphs.Box(
@@ -750,7 +616,7 @@ def _render_robot_view_rgb(
                 horizontal_scale=Go2ParkourTeacherCfg.terrain.horizontal_scale,
                 vertical_scale=Go2ParkourTeacherCfg.terrain.vertical_scale,
                 height_field=terrain.height_field_raw,
-                uv_scale=10.0,
+                uv_scale=4.0,
                 visualization=True,
             ),
             surface=_surface_for_texture_mode(texture_mode, textured),
@@ -866,7 +732,7 @@ def _render_pose_rgb(
                 horizontal_scale=Go2ParkourTeacherCfg.terrain.horizontal_scale,
                 vertical_scale=Go2ParkourTeacherCfg.terrain.vertical_scale,
                 height_field=terrain.height_field_raw,
-                uv_scale=10.0,
+                uv_scale=4.0,
                 visualization=True,
             ),
             surface=_surface_for_texture_mode(texture_mode, textured),

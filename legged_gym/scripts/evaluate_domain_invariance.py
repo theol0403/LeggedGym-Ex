@@ -36,18 +36,12 @@ from legged_gym.utils.student_depth_ablation import apply_student_depth_ablation
 STUDENTS = {
     "DA2-base+tex": {
         "task": "go2_parkour_depth_est_student",
-        "load_run": "Mar29_13-36-08_BASE3_da2_base_texture",
-        "ckpt": 7000,
+        "load_run": "Apr11_16-03-28_BASE3_da2_base_texture",
+        "ckpt": 10000,
         "env_overrides": {
             "sensor.depth_estimation.model_size": "base",
             "sensor.depth_noise_level": 0.0,
         },
-    },
-    "ResNet-RGB": {
-        "task": "go2_parkour_resnet_rgb_scandot_student",
-        "load_run": "Apr01_23-47-30_resnet_rgb_scandot_student_genesis",
-        "ckpt": 4500,
-        "env_overrides": {},
     },
 }
 

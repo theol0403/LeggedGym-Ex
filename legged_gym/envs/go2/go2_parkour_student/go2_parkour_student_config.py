@@ -130,7 +130,6 @@ class Go2ParkourDepthEstStudentCfg(Go2ParkourStudentCfg):
 
     class terrain(Go2ParkourStudentCfg.terrain):
         add_texture = True
-        texture_uv_scale = 10.0
 
     class sensor(LeggedRobotCfg.sensor):
         add_depth = False

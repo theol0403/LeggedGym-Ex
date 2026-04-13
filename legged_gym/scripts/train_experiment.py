@@ -513,7 +513,7 @@ EXPERIMENTS = {
         "env_overrides": {
             "sensor.depth_noise_level": 0.0,
             "terrain.add_texture": True,
-            "terrain.texture_uv_scale": 10.0,
+
         },
         "train_overrides": {
             "algorithm.actor_lr_scale": 0.1,
@@ -551,7 +551,7 @@ EXPERIMENTS = {
             "sensor.depth_noise_level": 0.0,
             "env.student_depth_shape": [2, 58, 87],
             "terrain.add_texture": True,
-            "terrain.texture_uv_scale": 10.0,
+
         },
         "train_overrides": {
             "algorithm.actor_lr_scale": 0.1,
@@ -571,7 +571,7 @@ EXPERIMENTS = {
         "env_overrides": {
             "sensor.depth_noise_level": 0.0,
             "terrain.add_texture": True,
-            "terrain.texture_uv_scale": 10.0,
+
         },
         "train_overrides": {
             "algorithm.actor_lr_scale": 0.1,
@@ -660,7 +660,7 @@ EXPERIMENTS = {
             "sensor.depth_noise_level": 0.0,
             "sensor.depth_estimation.model_size": "base",
             "terrain.add_texture": True,
-            "terrain.texture_uv_scale": 10.0,
+
         },
         "train_overrides": {
             "algorithm.actor_lr_scale": 0.1,
@@ -679,7 +679,7 @@ EXPERIMENTS = {
             "sensor.depth_noise_level": 0.0,
             "sensor.depth_estimation.model_size": "base",
             "terrain.add_texture": True,
-            "terrain.texture_uv_scale": 10.0,
+
         },
         "train_overrides": {
             "algorithm.actor_lr_scale": 0.1,

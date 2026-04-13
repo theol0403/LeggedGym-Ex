@@ -1,6 +1,7 @@
 from legged_gym import *
 from legged_gym.perception import DepthEstimatorError, create_depth_estimator
 from legged_gym.simulator.simulator import Simulator
+from legged_gym.utils.terrain_textures import generate_texture_image
 import cv2 as cv
 import torch
 import torch.nn.functional as F
@@ -1083,7 +1084,7 @@ class GenesisSimulator(Simulator):
         )
         entity_kwargs = {}
         if getattr(self._cfg.terrain, "add_texture", False):
-            terrain_kwargs["uv_scale"] = getattr(self._cfg.terrain, "texture_uv_scale", 10.0)
+            terrain_kwargs["uv_scale"] = getattr(self._cfg.terrain, "texture_uv_scale", 4.0)
             entity_kwargs["surface"] = self._create_terrain_surface()
         self._gs_terrain = self._scene.add_entity(
             gs.morphs.Terrain(**terrain_kwargs),
@@ -1094,134 +1095,8 @@ class GenesisSimulator(Simulator):
     
     def _create_terrain_surface(self):
         """Create a textured surface for terrain to give DA2 visual depth cues."""
-        # Generate a procedural checkerboard/grid texture as numpy array
-        tex_size = 512
         mode = getattr(self._cfg.terrain, "texture_mode", "checkerboard")
-
-        if mode == "checkerboard":
-            img = np.zeros((tex_size, tex_size, 3), dtype=np.uint8)
-            img[:] = [180, 175, 170]
-            grid_spacing = 32
-            for i in range(0, tex_size, grid_spacing):
-                img[i:i+2, :] = [120, 115, 110]
-                img[:, i:i+2] = [120, 115, 110]
-            noise = np.random.RandomState(42).randint(-15, 16, img.shape, dtype=np.int16)
-            img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-        elif mode.startswith("solid_"):
-            color_map = {
-                "solid_red": [200, 60, 60],
-                "solid_green": [60, 180, 60],
-                "solid_blue": [60, 60, 200],
-                "solid_yellow": [200, 200, 60],
-                "solid_white": [240, 240, 240],
-                "solid_dark": [40, 40, 40],
-            }
-            color = color_map.get(mode, [180, 180, 180])
-            img = np.full((tex_size, tex_size, 3), color, dtype=np.uint8)
-        elif mode == "random_color":
-            import time
-            rng = np.random.RandomState(int(time.time()) % 2**31)
-            color = rng.randint(30, 230, size=3).tolist()
-            img = np.full((tex_size, tex_size, 3), color, dtype=np.uint8)
-        elif mode == "noise":
-            rng = np.random.RandomState(123)
-            img = rng.randint(0, 256, (tex_size, tex_size, 3), dtype=np.uint8)
-        elif mode == "bricks":
-            img = np.full((tex_size, tex_size, 3), [180, 100, 70], dtype=np.uint8)
-            brick_h, brick_w, mortar = 32, 64, 2
-            for row in range(0, tex_size, brick_h):
-                img[row:row+mortar, :] = [160, 160, 155]
-                offset = (brick_w // 2) if ((row // brick_h) % 2) else 0
-                for col in range(offset, tex_size, brick_w):
-                    img[row:row+brick_h, col:col+mortar] = [160, 160, 155]
-            noise = np.random.RandomState(42).randint(-10, 11, img.shape, dtype=np.int16)
-            img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-        elif mode == "concrete":
-            rng = np.random.RandomState(44)
-            img = np.full((tex_size, tex_size, 3), [170, 168, 165], dtype=np.uint8)
-            noise = rng.normal(0, 10, img.shape).astype(np.int16)
-            img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-            # Scattered dark aggregate spots
-            for _ in range(300):
-                cx, cy = rng.randint(0, tex_size, 2)
-                r = rng.randint(2, 5)
-                shade = rng.randint(100, 145, 3)
-                yy, xx = np.ogrid[-r:r+1, -r:r+1]
-                mask = xx*xx + yy*yy <= r*r
-                y0, y1 = max(0, cy-r), min(tex_size, cy+r+1)
-                x0, x1 = max(0, cx-r), min(tex_size, cx+r+1)
-                m = mask[y0-(cy-r):y1-(cy-r), x0-(cx-r):x1-(cx-r)]
-                img[y0:y1, x0:x1][m] = shade
-        elif mode == "wood":
-            rng = np.random.RandomState(45)
-            img = np.zeros((tex_size, tex_size, 3), dtype=np.uint8)
-            phase = np.cumsum(rng.normal(0, 0.02, tex_size))
-            for y in range(tex_size):
-                freq = 0.15 + 0.05 * np.sin(y * 0.01)
-                wave = np.sin(np.arange(tex_size) * freq + phase + y * 0.3)
-                intensity = ((wave * 0.5 + 0.5) * 40).astype(np.int16)
-                img[y, :, 0] = np.clip(160 + intensity, 0, 255)
-                img[y, :, 1] = np.clip(120 + intensity, 0, 255)
-                img[y, :, 2] = np.clip(80 + (intensity * 0.5).astype(np.int16), 0, 255)
-            noise = rng.randint(-5, 6, img.shape, dtype=np.int16)
-            img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-        elif mode == "grass":
-            rng = np.random.RandomState(46)
-            img = np.full((tex_size, tex_size, 3), [80, 140, 60], dtype=np.uint8)
-            noise_r = rng.normal(0, 12, (tex_size, tex_size)).astype(np.int16)
-            noise_g = rng.normal(0, 20, (tex_size, tex_size)).astype(np.int16)
-            noise_b = rng.normal(0, 10, (tex_size, tex_size)).astype(np.int16)
-            img[:, :, 0] = np.clip(img[:, :, 0].astype(np.int16) + noise_r, 0, 255)
-            img[:, :, 1] = np.clip(img[:, :, 1].astype(np.int16) + noise_g, 0, 255)
-            img[:, :, 2] = np.clip(img[:, :, 2].astype(np.int16) + noise_b, 0, 255)
-            for _ in range(40):
-                cx, cy = rng.randint(0, tex_size, 2)
-                r = rng.randint(8, 20)
-                yy, xx = np.ogrid[-r:r+1, -r:r+1]
-                mask = xx*xx + yy*yy <= r*r
-                y0, y1 = max(0, cy-r), min(tex_size, cy+r+1)
-                x0, x1 = max(0, cx-r), min(tex_size, cx+r+1)
-                m = mask[y0-(cy-r):y1-(cy-r), x0-(cx-r):x1-(cx-r)]
-                patch = rng.normal(0, 5, (m.sum(), 3)).astype(np.int16)
-                img[y0:y1, x0:x1][m] = np.clip(
-                    np.array([110, 95, 55]) + patch, 0, 255
-                ).astype(np.uint8)
-        elif mode == "stone_tiles":
-            rng = np.random.RandomState(47)
-            tile_size, mortar_w = 48, 3
-            mortar_color = np.array([105, 100, 95], dtype=np.uint8)
-            img = np.full((tex_size, tex_size, 3), mortar_color, dtype=np.uint8)
-            for ty in range(0, tex_size, tile_size):
-                for tx in range(0, tex_size, tile_size):
-                    grey = rng.randint(150, 200)
-                    color = np.array([grey, grey - 2, grey - 5], dtype=np.int16)
-                    y0 = ty + mortar_w
-                    x0 = tx + mortar_w
-                    y1 = min(ty + tile_size, tex_size)
-                    x1 = min(tx + tile_size, tex_size)
-                    if y0 < y1 and x0 < x1:
-                        tile_noise = rng.randint(-8, 9, (y1-y0, x1-x0, 3), dtype=np.int16)
-                        img[y0:y1, x0:x1] = np.clip(
-                            color + tile_noise, 0, 255
-                        ).astype(np.uint8)
-        elif mode == "gravel":
-            rng = np.random.RandomState(48)
-            img = np.full((tex_size, tex_size, 3), [160, 155, 150], dtype=np.uint8)
-            for _ in range(2500):
-                cx, cy = rng.randint(0, tex_size, 2)
-                r = rng.randint(2, 7)
-                grey = rng.randint(100, 220)
-                color = np.array([grey, grey - 3, grey - 6], dtype=np.int16)
-                yy, xx = np.ogrid[-r:r+1, -r:r+1]
-                mask = xx*xx + yy*yy <= r*r
-                y0, y1 = max(0, cy-r), min(tex_size, cy+r+1)
-                x0, x1 = max(0, cx-r), min(tex_size, cx+r+1)
-                m = mask[y0-(cy-r):y1-(cy-r), x0-(cx-r):x1-(cx-r)]
-                img[y0:y1, x0:x1][m] = np.clip(color, 0, 255).astype(np.uint8)
-        else:
-            # Fallback: plain grey
-            img = np.full((tex_size, tex_size, 3), [180, 175, 170], dtype=np.uint8)
-
+        img = generate_texture_image(mode)
         return gs.surfaces.Rough(
             diffuse_texture=gs.textures.ImageTexture(image_array=img),
         )

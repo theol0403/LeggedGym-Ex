@@ -36,7 +36,7 @@ class LeggedRobotCfg(BaseConfig):
         restitution = 0. # coefficient of restitution of the terrain
         # Visual texture for terrain (helps monocular depth estimation)
         add_texture = False  # apply a tiling texture to terrain surface
-        texture_uv_scale = 10.0  # how many times the texture tiles across the terrain
+        texture_uv_scale = 4.0  # UV tiling factor; 4.0 gives visible patterns from robot camera
         texture_mode = "checkerboard"  # checkerboard, solid_red/green/blue/yellow/white/dark, random_color, noise, bricks, concrete, wood, grass, stone_tiles, gravel
         # Lighting configuration for domain invariance experiments
         ambient_light = (0.1, 0.1, 0.1)
