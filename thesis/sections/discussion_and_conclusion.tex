@@ -41,3 +41,8 @@ Broader evaluation on harder courses would test generality.  Smaller
 or temporally consistent depth models could reduce compute and
 stabilize predictions, while joint adaptation of the depth estimator
 and student policy may improve performance on harder textures.
+Finally, replacing DAgger distillation with warm-start RL as in
+SoloParkour~\citep{chane2025soloparkour} could let the student
+discover behaviors that are optimal under its own depth observations
+rather than imitating the teacher's privileged-scandot policy, which
+may be suboptimal when transferred to a noisier sensing modality.

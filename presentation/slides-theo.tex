@@ -76,7 +76,7 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
-\usepackage{multimedia}
+\usepackage{media9}
 
 \graphicspath{{../thesis/figures/}{pictures/}{figures/}{figures/ppt/}}
 
@@ -199,7 +199,16 @@
 		\vspace{0.8em}
 		\alert{\small All assume a depth camera at deployment.}
 		\column{0.46\textwidth}
-		\movie[width=\linewidth,height=5.2cm,loop,poster]{}{pictures/extreme-parkour.mp4}
+		\includemedia[
+			width=\linewidth,height=5.2cm,
+			activate=onclick,
+			addresource=pictures/extreme-parkour.mp4,
+			flashvars={
+				source=pictures/extreme-parkour.mp4
+				&loop=true
+				&autoPlay=true
+			}
+		]{}{VPlayer.swf}
 	\end{columns}
 	\source{Agarwal et al.\ 2023 \textbar{} Cheng et al.\ 2023 \textbar{} Zhuang et al.\ 2023 \textbar{} Hoeller et al.\ 2024}
 \end{frame}
@@ -252,11 +261,9 @@
 				Massively parallel sim-to-real RL framework}
 		\end{column}
 		\begin{column}{0.48\linewidth}
-			% SOURCE: Genesis simulator screenshot or figure.
-			% Save as presentation/pictures/genesis-sim.jpg
-			\placeholder[0.1\textheight]{Genesis simulator\\{\tiny add: pictures/genesis-sim.jpg}}
+			\includegraphics[width=\linewidth]{genesis.jpg}
 			\vspace{4pt}
-			{\small \textbf{Genesis} GPU-accelerated physics simulator}
+			{\small \textbf{Genesis} \textcolor{gray}{\scriptsize[Genesis Authors, 2024]}\\GPU-accelerated physics simulator}
 		\end{column}
 	\end{columns}
 	\source{Rudin et al.\ 2022 \textbar{} Genesis, 2024}
@@ -331,7 +338,8 @@
 	\begin{center}
 		\includegraphics[width=0.52\linewidth]{two-stage.png}
 	\end{center}
-	% TODO: caption with extreme parkour citation
+	\vspace{2pt}
+	{\small Adapted from Extreme Parkour \textcolor{gray}{\scriptsize[Cheng et al.\ 2023]}}
 
 \end{frame}
 
@@ -562,19 +570,26 @@
 \end{frame}
 
 % --------------------------------------------------------------------------
-% SCRIPT: "Let me show you what this looks like in practice."
-\begin{frame}[plain,c]
+% SCRIPT: "Let me show you what this looks like in practice. This is the teacher
+% policy running with privileged scandot access --- it can see the terrain geometry
+% directly, which is why it clears the gap so cleanly."
+\begin{frame}{Teacher Policy Demo}
 
 	\begin{center}
-		{\Large\bfseries Simulation Demo}
-
-		\vspace{16pt}
-
-		% [PLACEHOLDER] Embed video or animated GIF here
-		\placeholder[0.2\textheight]{Video demo --- show simulation runs here}
+		\includemedia[
+			width=0.85\linewidth,height=0.80\textheight,
+			activate=onclick,
+			addresource=pictures/teacher_1env_back_d3_tex.mp4,
+			flashvars={
+				source=pictures/teacher_1env_back_d3_tex.mp4
+				&loop=true
+				&autoPlay=true
+			}
+		]{}{VPlayer.swf}
 	\end{center}
 
 \end{frame}
+
 
 % --------------------------------------------------------------------------
 % SCRIPT: "Before looking at the numbers, here's what DA2 actually sees on our
@@ -587,6 +602,21 @@
 
 	\begin{center}
 		\includegraphics[width=1\linewidth]{da2_texture_comparison.png}
+	\end{center}
+
+\end{frame}
+
+% --------------------------------------------------------------------------
+% SCRIPT: "Here's how the three students trained. The GT-depth student converges
+% fastest and reaches the highest reward --- that's our upper bound. DA2-base with
+% texture tracks closely behind. DA2-base without texture lags significantly,
+% confirming that texture is the key factor. The distillation loss tells the same
+% story --- GT-depth achieves the lowest action imitation error, with textured DA2
+% closing most of the gap."
+\begin{frame}{Student Training Dynamics}
+
+	\begin{center}
+		\includegraphics[width=0.88\linewidth]{student_success_comparison.png}
 	\end{center}
 
 \end{frame}
@@ -626,6 +656,27 @@
 
 
 
+% --------------------------------------------------------------------------
+% SCRIPT: "And here is the DA2 student --- same course, but now using only an
+% RGB camera and Depth Anything V2 estimates. The policy transfers remarkably
+% well on textured terrain. This is the result we set out to achieve."
+\begin{frame}{DA2 Student Demo}
+
+	\begin{center}
+		\includemedia[
+			width=0.85\linewidth,height=0.80\textheight,
+			activate=onclick,
+			addresource=pictures/da2student_1env_front_d0_tex.mp4,
+			flashvars={
+				source=pictures/da2student_1env_front_d0_tex.mp4
+				&loop=true
+				&autoPlay=true
+			}
+		]{}{VPlayer.swf}
+	\end{center}
+
+\end{frame}
+
 \begin{frame}{Visual Sensitivity}
 \begin{columns}[T]
 \column{0.50\textwidth}
@@ -657,6 +708,44 @@
 \end{frame}
 
 
+% SCRIPT: "Here are the numbers behind that scatter plot. The baseline with
+% checkerboard texture is at the top. Realistic textures like stone tiles hold
+% up well, but concrete and gravel degrade gaps significantly. The critical
+% failure mode is featureless terrain --- gaps drop to zero. Lighting and color
+% shifts are surprisingly mild. The combined perturbations show compounding:
+% mild combination is manageable, extreme combination is catastrophic for gaps."
+\begin{frame}{Visual Sensitivity}
+
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}l rr rr rr@{}}
+  \toprule
+  & \multicolumn{2}{c}{Gaps} & \multicolumn{2}{c}{Stairs}
+  & \multicolumn{2}{c}{Hurdles} \\
+  \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+  Perturbation        & R0   & R3   & R0   & R3   & R0   & R3   \\
+  \midrule
+  Baseline            & 96   & 94   & 100  & 92   & 97   & 95   \\
+  \midrule
+  Stone tiles         & 93   & 79   & 100  & 97   & 95   & 91   \\
+  Concrete            & 79   & 12   & 100  & 26   & 96   & 73   \\
+  No texture          & 17   &  0   & 100  & 22   & 91   & 18   \\
+  \midrule
+  Dim (0.3$\times$)   & 83   & 58   & 100  & 94   & 100  & 96   \\
+  Color $\pm$30\%     & 79   & 32   & 100  & 95   & 97   & 88   \\
+  \midrule
+  Combined (mild)     & 77   &  8   & 100  & 15   & 97   & 79   \\
+  Combined (extreme)  & 34   &  0   & 100  & 67   & 90   & 19   \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{4pt}
+
+\end{frame}
+
+
 % ==========================================================================
 \section{Conclusion}
 % ==========================================================================
@@ -665,22 +754,21 @@
 
 \begin{frame}{Discussion \& Limitations}
 \begin{columns}[T]
-\column{0.48\textwidth}
+\column{0.5\textwidth}
   \textbf{What we learned:}
   \begin{itemize}
     \setlength\itemsep{0.45em}
-		\item Monocular depth is a \textbf{plausible bridge} from RGB to locomotion
-    \item Moderate robustness to photometric variation
-          \textbf{without domain randomization}
-    \item Bottleneck is \textbf{depth quality}, not student architecture
+		\item Monocular depth is a plausible bridge from RGB to locomotion
+    \item Moderate robustness to photometric variation without domain randomization
+    \item Bottleneck is depth quality, not student architecture
     \item Gap traversal the hardest case
   \end{itemize}
 
-\column{0.48\textwidth}
+\column{0.5\textwidth}
   \textbf{Limitations \& future work:}
   \begin{itemize}
     \setlength\itemsep{0.45em}
-    \item Simulation only, no hardware validation yet
+    \item Simulation only, no hardware validation yet. Needs physics domain randomization.
     \item DA2-base too heavy for onboard inference
     \item Frame-independent estimation, no temporal consistency
     \item DA2 fails on transparent surfaces, thin structures,
@@ -695,6 +783,7 @@
 % depth scale ambiguity that we haven't tested. Future work would evaluate on a real Go2,
 % and potentially co-adapt the depth estimator and the policy end-to-end.
 \end{frame}
+
 
 % ==========================================================================
 % CLOSING

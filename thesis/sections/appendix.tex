@@ -2,60 +2,11 @@
 \section{Hyperparameters}
 \label{sec:hyperparameters}
 
-This appendix lists the training hyperparameters used in the
-experiments.  Unless noted otherwise, values are shared across all
-runs.
-
-\subsection{Reward Function}
-
-Table~\ref{tab:reward} lists the reward terms and scale factors used
-for teacher training.  The reward at each step is
-$r_t = \sum_i w_i \, r_i(s_t, a_t)$, where $w_i$ is the scale and
-$r_i$ is the per-term reward signal.
-
-\begin{table}[h]
-	\centering
-	\caption{Teacher reward terms and scales.}
-	\label{tab:reward}
-	\small
-	\begin{tabular}{@{}lr@{}}
-		\toprule
-		Term                         & Scale                      \\
-		\midrule
-		\multicolumn{2}{@{}l}{\textit{Task progress}}             \\
-		\quad Tracking goal velocity & 3.0                        \\
-		\quad Tracking goal heading  & 1.5                        \\
-		\quad Progress along course  & 2.0                        \\
-		\quad Waypoint reached bonus & 20.0                       \\
-		\quad Success bonus          & 40.0                       \\
-		\midrule
-		\multicolumn{2}{@{}l}{\textit{Termination \& collision}}  \\
-		\quad Termination            & $-$50.0                    \\
-		\quad Collision              & $-$2.0                     \\
-		\quad Feet stumble           & $-$1.0                     \\
-		\quad Feet edge              & $-$2.0                     \\
-		\midrule
-		\multicolumn{2}{@{}l}{\textit{Locomotion regularization}} \\
-		\quad Torques                & $-$2.0$\times 10^{-4}$     \\
-		\quad Joint power            & $-$2.0$\times 10^{-4}$     \\
-		\quad Joint acceleration     & $-$2.0$\times 10^{-7}$     \\
-		\quad Action rate            & $-$0.01                    \\
-		\quad Action smoothness      & $-$0.01                    \\
-		\quad Joint position limits  & $-$2.0                     \\
-		\quad Torque limits          & $-$0.2                     \\
-		\midrule
-		\multicolumn{2}{@{}l}{\textit{Body stability}}            \\
-		\quad Linear velocity $z$    & $-$0.5                     \\
-		\quad Angular velocity $xy$  & $-$0.05                    \\
-		\quad Orientation            & $-$0.5                     \\
-		\quad Flat back              & $-$3.0                     \\
-		\bottomrule
-	\end{tabular}
-\end{table}
-
-\subsection{Training Hyperparameters}
-
-PPO and DAgger training hyperparameters are listed in Tables~\ref{tab:ppo_params} and \ref{tab:dagger_params}, respectively.  Control parameters and domain randomization ranges are listed in Table~\ref{tab:control_dr}.
+Tables~\ref{tab:ppo_params}--\ref{tab:reward} list the PPO and DAgger
+training hyperparameters, PD control and domain randomization
+parameters, and reward terms used in all experiments unless noted
+otherwise.  The per-step reward is
+$r_t = \sum_i w_i \, r_i(s_t, a_t)$ with unitless scales $w_i$.
 
 \begin{table}[h]
 	\centering
@@ -64,25 +15,22 @@ PPO and DAgger training hyperparameters are listed in Tables~\ref{tab:ppo_params
 	\small
 	\begin{tabular}{@{}lr@{}}
 		\toprule
-		Parameter                  & Value                \\
+		Parameter                & Value                \\
 		\midrule
-		Environments               & 4096                 \\
-		Steps per env per update   & 48                   \\
-		Mini-batches               & 4                    \\
-		Learning epochs per update & 5                    \\
-		Learning rate              & $1 \times 10^{-3}$   \\
-		LR schedule                & adaptive (target KL) \\
-		Desired KL                 & 0.01                 \\
-		Discount $\gamma$          & 0.99                 \\
-		GAE $\lambda$              & 0.95                 \\
-		Clip $\epsilon$            & 0.2                  \\
-		Entropy coefficient        & 0.01                 \\
-		Value loss coefficient     & 1.0                  \\
-		Max gradient norm          & 1.0                  \\
+		Environments             & 4096                 \\
+		Steps per env per update & 48                   \\
+		Mini-batches             & 4                    \\
+		Learning epochs          & 5                    \\
+		Learning rate            & $1 \times 10^{-3}$   \\
+		LR schedule              & adaptive (target KL) \\
+		Desired KL               & 0.01                 \\
+		Discount $\gamma$        & 0.99                 \\
+		GAE $\lambda$            & 0.95                 \\
+		Clip $\epsilon$          & 0.2                  \\
+		Entropy coefficient      & 0.01                 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
-
 
 \begin{table}[h]
 	\centering
@@ -91,47 +39,75 @@ PPO and DAgger training hyperparameters are listed in Tables~\ref{tab:ppo_params
 	\small
 	\begin{tabular}{@{}lr@{}}
 		\toprule
-		Parameter                    & Value              \\
+		Parameter                & Value              \\
 		\midrule
-		Environments                 & 48                 \\
-		Steps per env per update     & 120                \\
-		BPTT window                  & 24                 \\
-		Learning rate                & $2 \times 10^{-3}$ \\
-		Actor LR scale (DA2 student) & 0.1                \\
-		LR schedule (DA2 student)    & cosine             \\
-		Action loss coefficient      & 1.0                \\
-		Yaw loss coefficient         & 1.0                \\
-		Yaw threshold (MTS)          & 0.6                \\
-		Max gradient norm            & 1.0                \\
+		Environments             & 48                 \\
+		Steps per env per update & 120                \\
+		BPTT window              & 24                 \\
+		Learning rate            & $2 \times 10^{-3}$ \\
+		Actor LR scale (DA2)     & 0.1                \\
+		LR schedule (DA2)        & cosine             \\
+		Yaw loss coefficient     & 1.0                \\
+		Yaw threshold (MTS)      & 0.6                \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
-
-
-\begin{table}[tbhp!]
+\begin{table}[h]
 	\centering
 	\caption{PD control and domain randomization parameters.}
 	\label{tab:control_dr}
 	\small
 	\begin{tabular}{@{}lr@{}}
 		\toprule
-		Parameter                    & Value                 \\
+		Parameter              & Value             \\
 		\midrule
-		\multicolumn{2}{@{}l}{\textit{PD controller}}        \\
-		\quad $K_p$                  & 30.0                  \\
-		\quad $K_d$                  & 0.75                  \\
-		\quad Action scale           & 0.25                  \\
-		\quad Control dt             & 0.02\,s (50\,Hz)      \\
+		$K_p$ / $K_d$          & 30.0 / 0.75       \\
+		Action scale           & 0.25              \\
+		Control dt             & 0.02\,s (50\,Hz)  \\
 		\midrule
-		\multicolumn{2}{@{}l}{\textit{Domain randomization}} \\
-		\quad Friction range         & [0.2, 1.7]            \\
-		\quad Added base mass        & [$-$1.0, 1.0]\,kg     \\
-		\quad CoM displacement $xyz$ & $\pm$0.03\,m          \\
-		\quad $K_p$ / $K_d$ scale    & [0.8, 1.2]            \\
-		\quad Push interval          & 15\,s                 \\
-		\quad Max push velocity      & 1.0\,m/s              \\
+		Friction range         & [0.2, 1.7]        \\
+		Added base mass        & [$-$1.0, 1.0]\,kg \\
+		CoM displacement $xyz$ & $\pm$0.03\,m      \\
+		$K_p$ / $K_d$ scale    & [0.8, 1.2]        \\
+		Push interval          & 15\,s             \\
+		Max push velocity      & 1.0\,m/s          \\
 		\bottomrule
 	\end{tabular}
 \end{table}
 
+\begin{table}[h]
+	\centering
+	\caption{Teacher reward terms and scales.}
+	\label{tab:reward}
+	\small
+	\begin{tabular}{@{}lr@{}}
+		\toprule
+		Term                   & Scale                  \\
+		\midrule
+		Tracking goal velocity & 3.0                    \\
+		Tracking goal heading  & 1.5                    \\
+		Progress along course  & 2.0                    \\
+		Waypoint reached bonus & 20.0                   \\
+		Success bonus          & 40.0                   \\
+		\midrule
+		Termination            & $-$50.0                \\
+		Collision              & $-$2.0                 \\
+		Feet stumble           & $-$1.0                 \\
+		Feet edge              & $-$2.0                 \\
+		\midrule
+		Torques                & $-$2.0$\times 10^{-4}$ \\
+		Joint power            & $-$2.0$\times 10^{-4}$ \\
+		Joint acceleration     & $-$2.0$\times 10^{-7}$ \\
+		Action rate            & $-$0.01                \\
+		Action smoothness      & $-$0.01                \\
+		Joint position limits  & $-$2.0                 \\
+		Torque limits          & $-$0.2                 \\
+		\midrule
+		Linear velocity $z$    & $-$0.5                 \\
+		Angular velocity $xy$  & $-$0.05                \\
+		Orientation            & $-$0.5                 \\
+		Flat back              & $-$3.0                 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
